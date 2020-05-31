@@ -1,0 +1,121 @@
+{
+    "border": {
+        "h": 7071,
+        "w": 7071
+    },
+    "bot": {
+        "count": 0,
+        "names": [],
+        "skins": [],
+        "spawn": 32
+    },
+    "chat": {
+        "cooldown": 1000,
+        "enabled": true,
+        "filter": [],
+        "maxLength": 64
+    },
+    "ejected": {
+        "alloc": 65536,
+        "boost": 780,
+        "count": 30,
+        "dispersion": 0.3,
+        "loss": 43,
+        "size": 38
+    },
+    "game": {
+        "frequency": 25,
+        "mode": "FFA",
+        "name": "An unnamed server",
+        "threads": 1
+    },
+    "minion": {
+        "count": 0,
+        "spawn": 32
+    },
+    "mothercell": {
+        "alloc": 1024,
+        "boost": 90,
+        "count": 0,
+        "pellets": 96,
+        "size": 149,
+        "speed": 1,
+        "tick": 20
+    },
+    "oversize": {
+        "kill": false,
+        "multi": 0.75,
+        "restart": true
+    },
+    "pellet": {
+        "alloc": 65536,
+        "count": 100,
+        "size": 10
+    },
+    "player": {
+        "allowSkinInName": true,
+        "autoSize": 1500,
+        "count": 1024,
+        "decayMin": 1500,
+        "decayMult": 0.001,
+        "dispose": 100,
+        "eatMulti": 1.140175425099138,
+        "eatOverlapDiv": 3,
+        "ejectDelay": 2,
+        "maxCells": 16,
+        "mergeNewVersion": false,
+        "mergeTime": 30,
+        "mergeTimeIncrease": 0.02,
+        "minEjectSize": 60,
+        "minSplitSize": 60,
+        "moveMult": 1,
+        "nameLength": 16,
+        "noCollideDelay": 14,
+        "noMergeDelay": 0.5,
+        "spawn": 32,
+        "splitBoost": 780,
+        "splitCap": 255,
+        "splitDistance": 40,
+        "splitSizeDiv": 1.414213562373095
+    },
+    "quadtree": {
+        "maxItems": 16,
+        "maxLevel": 16
+    },
+    "socket": {
+        "maxConnections": 100,
+        "maxConnectionsPerIP": 2,
+        "originRegex": ".*",
+        "port": 3000,
+        "ssl": false
+    },
+    "spawn": {
+        "decreasePerTry": false,
+        "fromEjectedChance": 0.8,
+        "protection": 40,
+        "tries": 128
+    },
+    "ssl_options": {
+        "ca_file_name": "",
+        "cert_file_name": "",
+        "dh_params_file_name": "",
+        "key_file_name": "",
+        "passphrase": "",
+        "ssl_prefer_low_memory_usage": 0
+    },
+    "viewport": {
+        "roamScale": 0.4,
+        "roamSpeed": 32,
+        "viewMin": 1,
+        "viewScale": 1
+    },
+    "virus": {
+        "alloc": 65536,
+        "boost": 780,
+        "count": 30,
+        "feedTimes": 7,
+        "monotone": false,
+        "pushing": false,
+        "size": 100
+    }
+}
