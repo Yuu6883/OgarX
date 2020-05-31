@@ -1,5 +1,6 @@
 .vs*
 x64*
+config.json*
 
 # Prerequisites
 *.d
