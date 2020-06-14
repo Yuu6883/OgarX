@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #pragma warning(push, 0)      
 #include <uwebsockets/App.h>
 #pragma warning(pop)
 #include <nlohmann/json.hpp>
 
-#include "Rect.hpp"
+#include "Geometry.hpp"
 #include "Logger.hpp"
 
 #include <map>

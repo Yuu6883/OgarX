@@ -1,4 +1,4 @@
-#include "SocketServer.hpp"
+﻿#include "SocketServer.hpp"
 
 #define HANDLER(duplicate) if (CFG.socket.ssl) { ssl_handler.duplicate; } else { handler.duplicate; }
 

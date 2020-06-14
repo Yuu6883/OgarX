@@ -140,14 +140,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Cells\Cell.hpp" />
     <ClInclude Include="Connection\SocketServer.hpp" />
+    <ClInclude Include="Game\Player.hpp" />
+    <ClInclude Include="Game\World.hpp" />
+    <ClInclude Include="Primitives\Circle.hpp" />
     <ClInclude Include="Primitives\Config.hpp" />
     <ClInclude Include="Primitives\Logger.hpp" />
     <ClInclude Include="Primitives\QuadTree.hpp" />
-    <ClInclude Include="Primitives\Rect.hpp" />
+    <ClInclude Include="Primitives\Geometry.hpp" />
+    <ClInclude Include="Primitives\SparsedMap.hpp" />
+    <ClInclude Include="Primitives\ThreadPool.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Connection\SocketServer.cpp" />
+    <ClCompile Include="Game\World.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Primitives\QuadTree.cpp" />
   </ItemGroup>

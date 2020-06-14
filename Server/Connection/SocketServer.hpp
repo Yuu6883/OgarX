@@ -15,9 +15,9 @@ using std::string;
 using std::thread;
 using std::string_view;
 
-class Player;
-class Minion;
-class PlayerBot;
+struct Player;
+struct Minion;
+struct PlayerBot;
 
 enum class ErrorCode : short {
     NONE = 0,

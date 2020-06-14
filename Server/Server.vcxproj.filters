@@ -24,21 +24,42 @@
     <ClInclude Include="Primitives\Config.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Primitives\Rect.hpp">
+    <ClInclude Include="Primitives\QuadTree.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Primitives\QuadTree.hpp">
+    <ClInclude Include="Primitives\SparsedMap.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Primitives\Circle.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Cells\Cell.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\World.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\Player.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Primitives\ThreadPool.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Primitives\Geometry.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Connection\SocketServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Primitives\QuadTree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\World.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
