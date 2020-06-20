@@ -130,7 +130,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -143,20 +143,20 @@
     <ClInclude Include="Cells\Cell.hpp" />
     <ClInclude Include="Connection\SocketServer.hpp" />
     <ClInclude Include="Game\Player.hpp" />
-    <ClInclude Include="Game\World.hpp" />
-    <ClInclude Include="Primitives\Circle.hpp" />
+    <ClInclude Include="Game\Viewport.hpp" />
+    <ClInclude Include="Game\Game.hpp" />
+    <ClInclude Include="Primitives\QuadItems.hpp" />
     <ClInclude Include="Primitives\Config.hpp" />
     <ClInclude Include="Primitives\Logger.hpp" />
     <ClInclude Include="Primitives\QuadTree.hpp" />
     <ClInclude Include="Primitives\Geometry.hpp" />
-    <ClInclude Include="Primitives\SparsedMap.hpp" />
     <ClInclude Include="Primitives\ThreadPool.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Connection\SocketServer.cpp" />
-    <ClCompile Include="Game\World.cpp" />
+    <ClCompile Include="Game\Game.cpp" />
+    <ClCompile Include="Game\Player.cpp" />
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="Primitives\QuadTree.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -15,13 +15,12 @@ bool SocketServer::open(unsigned int threads) {
 		WARN("Socket Server thread capped to thread::hardware_concurrency(): " << threads);
 	}
 
-	std::mutex m;
-	std::condition_variable cv;
-
 	DEBUG(threads << " SocketServer" << (threads > 1 ? "s" : "") << " opening at port " << CFG.socket.port);
 
 	struct UserData {};
 
+	std::mutex m;
+	std::condition_variable cv;
 	for (unsigned int i = 0; i < threads; i++) {
 		socket_threads.push_back(new thread([&] {
 

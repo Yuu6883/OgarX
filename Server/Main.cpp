@@ -1,16 +1,13 @@
-﻿#include "Game/World.hpp"
-#include "Connection/SocketServer.hpp"
+﻿#include "Connection/SocketServer.hpp"
+#include "Game/Game.hpp"
 
 int main() {
-	SocketServer server;
+	Game game;
+
+	SocketServer server(&game);
 	server.open();
-
-	World world;
-
-	world.update();
-
-	string input;
-	while (std::cin >> input && input != "exit") INFO("User entered: " << input);
+	// Blocks
+	game.start();
 
 	server.close();
 	return EXIT_SUCCESS;

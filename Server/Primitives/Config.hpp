@@ -45,7 +45,7 @@ static inline JSON JSON_CONFIG = R"(
         "name": "An unnamed server",
         "mode": "FFA",
         "threads": 1,
-        "frequency": 25
+        "frequency": 20
     },
     "spawn": {
         "protection": 40,
@@ -90,10 +90,10 @@ static inline JSON JSON_CONFIG = R"(
         "splitSizeDiv": 1.414213562373095,
         "splitDistance": 40,
         "splitBoost": 780,
-        "noCollideDelay": 14,
-        "noMergeDelay": 0.5,
+        "noCollideDelay": 540,
+        "noMergeDelay": 20,
         "mergeNewVersion": false,
-        "mergeTime": 30,
+        "mergeTime": 1200,
         "mergeTimeIncrease": 0.02,
         "decayMult": 0.001,
         "decayMin": 1500

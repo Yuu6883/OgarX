@@ -15,6 +15,7 @@ using std::string;
 using std::thread;
 using std::string_view;
 
+struct Game;
 struct Player;
 struct Minion;
 struct PlayerBot;
@@ -32,10 +33,12 @@ enum class  SocketServerState: unsigned char{
 };
 
 struct SocketServer {
+    SocketServer(Game* game) : game(game) {};
     bool open(unsigned int threads = 1);
     bool close();
     size_t thread_num() const { return socket_threads.size(); };
 protected:
+    Game* game;
     pair<ErrorCode, string> verify(unsigned int ipv4, string_view origin);
 
     list<Player*> clients;
