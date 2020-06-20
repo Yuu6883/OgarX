@@ -30,7 +30,7 @@ After some simple calculation, we can find each player cell takes at least 1 + 4
     * `is_delta_x` indicates if x is delta compressed. Read 1 byte as delta x if is_delta_x is 1; else read 2 bytes as the actual x;
     * `sign_x` stores the sign bit of x
     * `ext_x` stores the extended bit of x. This expands range of delta x to -511 to +511 (10 bits) or actual x to -131072 to +131072 (18 bits).
-    * The rest 5 bits shares the same idea, but size doesn't have an extended bit so delta only reanges from -255 to +255 which is good to cover most cases.
+    * The rest 5 bits shares the same idea, but size doesn't have an extended bit so delta only ranges from -255 to +255 which is good to cover most cases.
 
     Great now we are only using 6 bytes (id 2 bytes, delta flags 1 byte, x-y-size each 1 byte) in best case which is around 90% of time. 10% of time we have to use 3 extra bytes (9 btyes per cell) because delta bits are all 0.
 
@@ -55,9 +55,10 @@ These packets are simple: eat packet takes 8 bytes (cell id: uint32, eatenBy tar
 We can integrate the eat and delete packets into the octree compression, with 2 extra bits indicating the packet type. So we will only have 4 children instead of 8 in the lowest level. But wait! We have 5 states now (None, Add, Update, Eat, and Delete), and I only have 2 bits to encode the state. A simple solution is just to encode delete state as Eat(cell id, 0), so the state number is reduced to 4. For the diagram below, None=00, Add=01, Eat=10, Update=11.
 
 ### TL;DR
-**Here's a demo on how it works**
+**Deserialization Demo**
+![](https://github.com/Yuu6883/Ogar69/blob/master/img/protocol69.png?raw=true)
 
-This is relatively bad example since the octree nodes are taking 12 bytes, but if there're way more cells, it will stay the same compared to old protocol growing 4 more bytes per cell than protocol 69. Since this is just a writeup without actual implementation yet, I can only estimate the bandwidth save to be around 25% to 45%.
+This is a relatively bad example since the octree nodes are taking 12 bytes, but if there're way more cells, it will stay the same compared to old protocol growing 4 more bytes per cell than protocol 69. Since this is just a writeup without actual implementation yet, I can only estimate the bandwidth save to be around 25% to 45%.
 
 If you made it this far, congratulates! You must be a big fan of algorithm. Feel free to contact me (try to find me on Discord or something) if you think this protocol has flaws or you can improve it or you just want to discuss this with me.
 
