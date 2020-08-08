@@ -62,7 +62,7 @@ struct QueryShape {
 #define isLeaf(quad) quad->branches == nullptr
 #define hasSplit(quad) quad->branches != nullptr
 
-// T is the type of shape we want to store in this node
+// T is the type of shape we want to store in this node, cleanup is for taking care of the data inside the tree
 template<typename T, bool cleanup>
 class QuadTree {
 

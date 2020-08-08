@@ -1,5 +1,5 @@
 #pragma once
-
+#define _CRT_SECURE_NO_WARNINGS
 #pragma warning(push, 0)      
 #include <uwebsockets/App.h>
 #pragma warning(pop)
@@ -20,14 +20,6 @@ struct Player;
 struct Minion;
 struct PlayerBot;
 
-enum class ErrorCode : short {
-    NONE = 0,
-    INVALID_IP = 4000,
-    CONNECTION_MAXED,
-    UNKNOWN_ORIGIN,
-    IP_LIMITED
-};
-
 enum class  SocketServerState: unsigned char{
     OPEN, OPENING, CLOSE
 };
@@ -39,7 +31,7 @@ struct SocketServer {
     size_t thread_num() const { return socket_threads.size(); };
 protected:
     Game* game;
-    pair<ErrorCode, string> verify(unsigned int ipv4, string_view origin);
+    pair<unsigned short, string> verify(string_view ip, string_view origin);
 
     list<Player*> clients;
     list<Minion*> minions;

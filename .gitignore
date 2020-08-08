@@ -1,3 +1,6 @@
+# Node omega
+node_modules/*
+
 .vs*
 x64*
 config.json*

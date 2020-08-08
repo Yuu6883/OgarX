@@ -89,7 +89,6 @@ Game::~Game() {
 
 	delete[] cells;
 	delete[] players;
-	delete[] typeCounts;
 }
 
 void Game::start() {
@@ -120,12 +119,12 @@ void Game::command(string_view message) {
 
 void Game::stop() {
 
-	if (!uv_is_active((uv_handle_t*)interval.get())) {
-		WARN("Game udpate interval not running");
+	if (!uv_is_active((uv_handle_t*) interval.get())) {
+		WARN("Game udpate interval not active");
 		return;
 	}
 
-	if (uv_is_closing((uv_handle_t*)interval.get())) {
+	if (uv_is_closing((uv_handle_t*) interval.get())) {
 		WARN("Game udpate interval closing");
 		return;
 	}
@@ -137,7 +136,29 @@ void Game::stop() {
 }
 
 void Game::update(unsigned int dt) {
+
 	// Handle player input
+	for (unsigned int i = 0; i < MAX_PLAYER; i++) {
+		Player& player = players[i];
+		if (!player.exist) continue;
+
+		// Update cells list for each player in linear time
+		auto c_iter = player.cellIDs.begin();
+		while (c_iter != player.cellIDs.end()) {
+			if (!cells[*c_iter].exist) c_iter = player.cellIDs.erase(c_iter);
+			c_iter++;
+		}
+
+		// Lock input when the values are being read
+		std::unique_lock<std::mutex> lock(player.input.m);
+
+		unsigned int attempt = std::min(CFG.player.splitCap, static_cast<unsigned int>(player.input.splitAttempts));
+		while (attempt--) {
+			player.input.splitAttempts--;
+			// Split player cells
+
+		}
+	}
 
 	// Add new pellets
 	// Add new Virus
@@ -196,7 +217,7 @@ void Game::update(unsigned int dt) {
 	rigidChecks.clear();
 	// Detect collision/eat
 	for (unsigned int th = 0; th < CFG.game.threads; th++) {
-		pool.enqueue([] {
+		pool.enqueue([this, th] {
 		});
 	}
 	pool.finish();

@@ -27,9 +27,8 @@ struct Game {
 	QuadTree<Cell, false> core;
 	shared_ptr<QuadTree<CellData, true>> core_copy;
 
-	Cell* cells = new Cell[MAX_CELLS];
-	Player* players;
-	unsigned short* typeCounts = new unsigned short[MAX_TYPES];
+	Cell*   cells   = new Cell[MAX_CELLS];
+	Player* players; // Initialized in ctor because Player is unknown class here
 
 	unsigned char  next_player_id = 0;
 	unsigned short next_cell_id = 0;

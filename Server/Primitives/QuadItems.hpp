@@ -9,7 +9,6 @@ struct CircleItemBase : public QuadItem<Circle, cleanup> {
 	using Point::x;
 	using Point::y;
 	using Circle::r;
-protected:
 
 	/* If this cirle is inside a Rect */
 	bool inside(const Rect& range) const {

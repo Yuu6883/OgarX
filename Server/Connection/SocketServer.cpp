@@ -31,22 +31,23 @@ bool SocketServer::open(unsigned int threads) {
 			HANDLER(maxPayloadLength = 10 * 1024);
 			HANDLER(maxBackpressure = 10 * 1024 * 1024);
 
-			HANDLER(open = [&](auto* ws, auto* req) {
-				string_view origin = req->getHeader("origin");
-				string_view ip_buffer = ws->getRemoteAddress();
-
-				unsigned int ipv4 = ip_buffer.size() == 4 ? *((unsigned int*)ip_buffer.data()) : 0;
-				auto error = verify(ipv4, origin);
-
-				int code = static_cast<int>(error.first);
-				string message = error.second;
-
-				DEBUG("Received connection");
-				if (error.first != ErrorCode::NONE) {
-					uWS::Loop::get()->defer([&] { ws->end(code, message); });
+			HANDLER(upgrade = [&](auto* res, auto* req, auto* context) {
+				auto pair = verify(res->getRemoteAddressAsText(), req->getHeader("origin"));
+				if (pair.first) {
+					res->writeStatus(std::to_string(pair.first));
+					res->end(pair.second);
 				} else {
-					// TODO: connection
+					res->upgrade<UserData>({},
+						req->getHeader("sec-websocket-key"),
+						req->getHeader("sec-websocket-protocol"),
+						req->getHeader("sec-websocket-extensions"),
+					context);
 				}
+			});
+
+			HANDLER(open = [&](auto* ws) {
+				DEBUG("Received connection");
+				// TODO: connection
 			});
 
 			HANDLER(message = [&](auto* ws, string_view buffer, uWS::OpCode opCode) {
@@ -106,6 +107,6 @@ bool SocketServer::close() {
 	return true;
 }
 
-pair<ErrorCode, string> SocketServer::verify(unsigned int ipv4, string_view origin) {
-	return { ErrorCode::INVALID_IP, "Bruh error" };
+pair<unsigned short, string> SocketServer::verify(string_view ip, string_view origin) {
+	return { 500, "Bruh error" };
 };

@@ -6,7 +6,7 @@
 
 using std::pair;
 
-static const float PI = atan(1) * 4;
+static const float PI = atan(1.f) * 4;
 
 #define MAX_PLAYER 250
 #define VIRUS  255

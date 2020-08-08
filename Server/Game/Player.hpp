@@ -49,17 +49,19 @@ struct Player {
 	Player() : game(nullptr), loop(nullptr), 
 		interval(make_unique<uv_timer_t>()),
 		last_core(nullptr), core_copy(nullptr) {};
-	~Player();
 
-	void init(Game* game, uv_loop_t* loop);
+	// Called in player eventloop
+	void init(unsigned char id, Game* game, uv_loop_t* loop);
+	// Called in player eventloop
 	void update();
-	string_view buffer();
+	// Called in game eventloop
+	void unload();
 
 	PlayerState state = PlayerState::DEAD;
 
 	bool exist = false;
 	unsigned char id = 0;
-	unsigned int cellCount = 0;
+	list<unsigned short> cellIDs;
 
 	InputData input;
 	Viewport viewport;
