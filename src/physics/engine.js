@@ -18,6 +18,9 @@ const DefaultSettings = {
     PELLET_SIZE: 10,
     VIRUS_COUNT: 30,
     VIRUS_SIZE: 100,
+    VIRUS_FEED_TIMES: 7,
+    VIRUS_SPLIT_BOOST: 780,
+    VIRUS_MONOTONE_POP: false,
     MOTHER_CELL_COUNT: 0,
     MOTHER_CELL_SIZE: 149,
     PLAYER_SPEED: 1,
@@ -44,6 +47,8 @@ const DefaultSettings = {
     EJECT_DELAY: 75, // ms
     WORLD_RESTART_MULT: 0.75,
     WORLD_KILL_OVERSIZE: false,
+    EAT_OVERLAP: 3,
+    EAT_MULT: 1.140175425099138
 }
 
 const MOTHER_CELL_TYPE = 252;
@@ -90,7 +95,9 @@ module.exports = class Engine {
         // Load wasm module
         const module = await WebAssembly.instantiate(
             fs.readFileSync(CORE_PATH), { env: { 
-                memory: this.memory
+                memory: this.memory,
+                log_ptr: console.log,
+                log_f: console.log
             }});
 
         this.wasm = module.instance.exports;
@@ -114,25 +121,32 @@ module.exports = class Engine {
 
     tick(dt = 1) {
 
-        // Spawn new cells
-        if (this.counters[PELLET_TYPE].size < this.options.PELLET_COUNT) {
-            const point = this.getSafeSpawnPoint(this.options.PELLET_SIZE);
-            this.newCell(point[0], point[1], this.options.PELLET_SIZE, PELLET_TYPE);
+        // Spawn "some" new cells
+        for (let i = 0; i < 10; i++) {
+            if (this.counters[PELLET_TYPE].size < this.options.PELLET_COUNT) {
+                const point = this.getSafeSpawnPoint(this.options.PELLET_SIZE);
+                this.newCell(point[0], point[1], this.options.PELLET_SIZE, PELLET_TYPE);
+            } else break;
         }
 
-        if (this.counters[VIRUS_TYPE].size < this.options.VIRUS_COUNT) {
-            const point = this.getSafeSpawnPoint(this.options.VIRUS_SIZE);
-            this.newCell(point[0], point[1], this.options.VIRUS_SIZE, VIRUS_TYPE);
+        for (let i = 0; i < 10; i++) {
+            if (this.counters[VIRUS_TYPE].size < this.options.VIRUS_COUNT) {
+                const point = this.getSafeSpawnPoint(this.options.VIRUS_SIZE);
+                this.newCell(point[0], point[1], this.options.VIRUS_SIZE, VIRUS_TYPE);
+            } else break;
         }
 
-        if (this.counters[MOTHER_CELL_TYPE].size < this.options.MOTHER_CELL_COUNT) {
-            const point = this.getSafeSpawnPoint(this.options.MOTHER_CELL_SIZE);
-            this.newCell(point[0], point[1], this.options.MOTHER_CELL_SIZE, MOTHER_CELL_TYPE);
+        for (let i = 0; i < 10; i++) {
+            if (this.counters[MOTHER_CELL_TYPE].size < this.options.MOTHER_CELL_COUNT) {
+                const point = this.getSafeSpawnPoint(this.options.MOTHER_CELL_SIZE);
+                this.newCell(point[0], point[1], this.options.MOTHER_CELL_SIZE, MOTHER_CELL_TYPE);
+            } else break;
         }
 
         // Boost cells, reset flags, increment age
         this.wasm.update(0, this.treePtr, dt);
 
+        const initial = Math.round(25 * this.options.PLAYER_MERGE_TIME);
         // Move cells based on controller
         for (const id in this.game.controls) {
             const controller = this.game.controls[id];
@@ -143,7 +157,6 @@ module.exports = class Engine {
 
                 // Calculate can merge
                 if (this.options.PLAYER_MERGE_TIME > 0) {
-                    const initial = Math.round(25 * this.options.PLAYER_MERGE_TIME);
                     const increase = Math.round(25 * cell.r * this.options.PLAYER_MERGE_INCREASE);
                     cell.merge = cell.age >= Math.max(this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER ? 
                         Math.max(initial, increase) : initial + increase);
@@ -184,7 +197,7 @@ module.exports = class Engine {
         }
 
         // Bound & bounce cells
-        this.wasm.bound(0, this.treePtr, 
+        this.wasm.edge_check(0, this.treePtr,
             -this.options.MAP_HW, this.options.MAP_HW,
             -this.options.MAP_HH, this.options.MAP_HH);
 
@@ -196,13 +209,45 @@ module.exports = class Engine {
         }
 
         // Serialize quadtree, preparing for collision/eat resolution
-        this.stackPtr = this.tree.serialize(this.treeBuffer) + this.treePtr;
+        this.serialize();
+
+        const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
+            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
 
         // Magic goes here
         this.wasm.resolve(0, this.treePtr, this.treePtr, this.stackPtr, 
-            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY);
+            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE);
 
-        // Handle pop, update quadtree, remove dead cells
+        // Handle pop, update quadtree, remove item
+        for (const cell of this.cells) {
+            if (!cell.exists) continue;
+            if (cell.updated) this.tree.update(cell);
+            else if (cell.shouldRemove) {
+                this.tree.remove(cell);
+                this.counters[cell.type].delete(cell.id);
+                this.cellCount--;
+            } else if (cell.popped) {
+                // TODO: pop the cell OR split virus
+                if (cell.type == VIRUS_TYPE) {
+                    cell.r = this.options.VIRUS_SIZE;
+                    this.tree.update(cell);
+                    const angle = Math.atan2(cell.boostX, cell.boostY);
+                    this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
+                        Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
+                } else {
+                    const splits = this.distributeCellMass(cell);
+                    for (const mass of splits) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        this.splitFromCell(cell, Math.sqrt(mass * 100),
+                            Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                    }
+                }
+            }
+        }
+
+        // Serialize again
+        this.serialize();
 
         const __now = this.__tick;
         // Handle inputs
@@ -279,6 +324,11 @@ module.exports = class Engine {
             if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
                 if (this.options.WORLD_KILL_OVERSIZE) {
                     // TODO: kill the player and the cells
+                    for (const cell_id of this.counters[id]) {
+                        this.tree.remove(this.cells[cell_id]);
+                        this.counters[id].delete(cell_id);
+                        this.cellCount--;
+                    }
                 } else {
                     this.shouldRestart = true;
                 }
@@ -293,7 +343,8 @@ module.exports = class Engine {
                 this.counters[id].clear();
             }
 
-
+            controller.handle.onUpdate();
+            if (!this.counters[id].size) controller.handle.onDead();
         }
     }
 
@@ -310,6 +361,42 @@ module.exports = class Engine {
         const x = cell.x + this.options.PLAYER_SPLIT_DIST * boostX;
         const y = cell.y + this.options.PLAYER_SPLIT_DIST * boostY;
         this.newCell(x, y, size, cell.type, boostX, boostY, boost);
+    }
+
+    /**
+     * @param {Cell} cell
+     * @returns {number[]}
+     */
+    distributeCellMass(cell) {
+        let cellsLeft = this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
+        if (cellsLeft <= 0) return [];
+        let splitMin = this.options.PLAYER_MIN_SPLIT_SIZE;
+        splitMin = splitMin * splitMin / 100;
+        const cellMass = cell.r * cell.r / 100;
+        if (this.options.VIRUS_MONOTONE_POP) {
+            const amount = Math.min(Math.floor(cellMass / splitMin), cellsLeft);
+            const perPiece = cellMass / (amount + 1);
+            return new Array(amount).fill(perPiece);
+        }
+        if (cellMass / cellsLeft < splitMin) {
+            let amount = 2, perPiece = NaN;
+            while ((perPiece = cellMass / (amount + 1)) >= splitMin && amount * 2 <= cellsLeft)
+                amount *= 2;
+            return new Array(amount).fill(perPiece);
+        }
+        const splits = [];
+        let nextMass = cellMass / 2;
+        let massLeft = cellMass / 2;
+        while (cellsLeft > 0) {
+            if (nextMass / cellsLeft < splitMin) break;
+            while (nextMass >= massLeft && cellsLeft > 1)
+                nextMass /= 2;
+            splits.push(nextMass);
+            massLeft -= nextMass;
+            cellsLeft--;
+        }
+        nextMass = massLeft / cellsLeft;
+        return splits.concat(new Array(cellsLeft).fill(nextMass));
     }
 
     /**
@@ -360,9 +447,7 @@ module.exports = class Engine {
         return this.randomPoint(size);
     }
 
-    query() {
+    serialize() {
         this.stackPtr = this.tree.serialize(this.treeBuffer) + this.treePtr;
-        const q = this.wasm.is_safe(0, 0, 0, 65536, this.treePtr, this.stackPtr);
-        console.log(this.tree.__serialized, q);
     }
 }

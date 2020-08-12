@@ -4,22 +4,21 @@ const game = new Game();
 const engine = game.engine;
 
 engine.init().then(() => {
+
+    engine.options.VIRUS_COUNT = 0;
+    engine.options.PELLET_COUNT = 0;
+    engine.options.MOTHER_CELL_COUNT = 0;
+
     const cells = engine.cells;
 
-    const LOG = 5;
-    console.log("Tick0");
-    engine.newCell(99999, 99999, 2000, 0);
-    for (let i = 0; i < LOG; i++) 
-        console.log(cells[i].toString());
-
+    engine.newCell(0,  0, 1000, 0);
+    engine.newCell(10, 0, 1000, 0);
     
-    console.log("Tick1");
-    engine.tick();
-    for (let i = 0; i < LOG; i++) 
-        console.log(cells[i].toString());
-        
-    console.log("Tick2");
-    engine.tick();
-    for (let i = 0; i < LOG; i++) 
-        console.log(cells[i].toString());
+    const LOG = 2;
+    for (let i = 0; i < 17; i++) {
+        console.log(`Tick${i}`);
+        for (let i = 0; i < LOG; i++)
+            console.log(cells[i].toString());
+        engine.tick(1);
+    }
 });

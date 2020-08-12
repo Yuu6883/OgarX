@@ -5,6 +5,7 @@ const CELL_DEAD   = 0x8;
 const CELL_AUTO   = 0x10;
 const CELL_REMOVE = 0x20;
 const CELL_MERGE  = 0x40;
+const CELL_POP    = 0x80;
 
 const TYPES_TO_STRING = { 252: "Mother Cell", 253: "Virus", 254: "Pellet", 255: "Ejected" };
 const { QuadNode } = require("./quadtree");
@@ -93,8 +94,16 @@ module.exports = class Cell {
         return this.view.getUint8(13) & CELL_AUTO;
     }
 
+    get shouldRemove() {
+        return this.view.getUint8(13) & CELL_REMOVE;
+    }
+
     set merge(value) {
         value && this.view.setUint8(13, this.view.getUint8(13) | CELL_MERGE);
+    }
+
+    get popped() {
+        return this.view.getUint8(13) & CELL_POP;
     }
 
     get eatenBy() {
@@ -130,6 +139,7 @@ module.exports = class Cell {
     }
 
     toString() {
+        if (!this.exists) return `Cell[None]`;
         const s = TYPES_TO_STRING[this.type];
         return `Cell[type=${s || `Player#${this.type}`},x=${this.x},y=${this.y},r=${this.r},flags=${this.flags.toString(2).padStart(8, "0")}]`;
     }
