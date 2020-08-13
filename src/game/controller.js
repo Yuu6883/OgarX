@@ -2,11 +2,14 @@
 module.exports = class Controller {
     constructor(id = 0) {
         this.id = id;
+        this.name = "";
+        this.skin = "";
         this.spawn = false;
         this.alive = false;
         this.spectate = null;
         this.mouseX = 0;
         this.mouseY = 0;
+        this.ejectMarco = false;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;
         this.lastEjectTick = 0;

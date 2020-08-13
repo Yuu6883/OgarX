@@ -16,7 +16,8 @@ module.exports = class Socket extends Handler {
     /** @param {DataView} view */
     onMessage(view) {
         if (!this.protocol) {
-            const match = Protocols.some()
-        }
+            this.protocol = Protocols.find(p => p.handshake(view));
+            if (!this.protocol) this.ws.end(1003, "Ambiguous protocol");
+        } else this.protocol.onMessage(view);
     }
 }
