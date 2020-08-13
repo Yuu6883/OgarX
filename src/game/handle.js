@@ -1,6 +1,9 @@
 module.exports = class Handle {
-    /** @param {import("./controller")} controller */
-    constructor(controller) { this.controller = controller; controller.handle = this; };
+    constructor() {
+        /** @type {import("./controller")} */
+        this.controller = null; 
+    };
     onUpdate() {};
-    onDead() {};
+    /** @param {string} err */
+    onError(err) {};
 }

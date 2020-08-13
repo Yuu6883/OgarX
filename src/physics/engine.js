@@ -246,7 +246,7 @@ module.exports = class Engine {
             }
         }
 
-        // Serialize again
+        // Serialize again so client can select viewport?
         this.serialize();
 
         const __now = this.__tick;
@@ -254,6 +254,7 @@ module.exports = class Engine {
         for (const id in this.game.controls) {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
+
             // Split
             let attempts = this.options.PLAYER_SPLIT_CAP;
             while (controller.splitAttempts-- > 0 && attempts-- > 0) {
@@ -344,8 +345,10 @@ module.exports = class Engine {
             }
 
             controller.handle.onUpdate();
-            if (!this.counters[id].size) controller.handle.onDead();
+            controller.alive = !this.counters[id].size;
         }
+
+        this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }
 
     /**

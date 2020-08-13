@@ -1,6 +1,7 @@
 
 module.exports = class Controller {
-    constructor() {
+    constructor(id = 0) {
+        this.id = id;
         this.spawn = false;
         this.alive = false;
         this.spectate = null;
