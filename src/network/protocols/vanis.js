@@ -1,12 +1,15 @@
 const Protocol = require("../protocol");
 const Reader = require("../reader");
-const { read } = require("fs");
 const PONG = new Uint8Array([3]);
 
 /** @extends {Protocol<import("../socket")>} */
 module.exports = class VanisProtocol extends Protocol {
     /** @param {DataView} view */
     static handshake(view) {
+        if (view.byteLength !== 4) return false;
+        if (view.getUint16(0, true) != 69) return false;
+        if (view.getUint16(2, true) != 420) return false;
+        
         return true;
     }
     /** @param {DataView} view */
@@ -17,8 +20,8 @@ module.exports = class VanisProtocol extends Protocol {
 
         switch (opCode) {
             case 1:
-                controller.name = reader.readUTF16String().slice(0, 16);
-                controller.skin = reader.readUTF16String();
+                controller.name = decodeURIComponent(reader.readUTF8String()).slice(0, 16);
+                controller.skin = reader.readUTF8String();
                 // TODO: tag
                 controller.spawn = true;
                 break;
@@ -54,6 +57,8 @@ module.exports = class VanisProtocol extends Protocol {
             // Chat
             case 99:
                 // TODO: handle chat
+                const message = reader.readUTF8String();
+                console.log(message);
                 break;
         }
     }
