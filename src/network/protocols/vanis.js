@@ -121,7 +121,7 @@ module.exports = class VanisProtocol extends Protocol {
                 // Don't send ejected cell under 2 tick to optimize
                 if (cell.type == EJECTED_TYPE && cell.age < 3) continue;
 
-                const type = TYPE_TABLE[cell.type] || cell.isDead ? 5 : 1;
+                const type = TYPE_TABLE[cell.type] || (cell.isDead ? 5 : 1);
                 writer.writeUInt8(type);
                 if (type === 1)
                     writer.writeUInt16(cell.type); // type is also owner id

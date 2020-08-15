@@ -32,6 +32,7 @@ const DefaultSettings = {
     PLAYER_DECAY_MIN_SIZE: 1000,
     PLAYER_AUTOSPLIT_SIZE: 1500,
     PLAYER_MAX_CELLS: 16,
+    PLAYER_SPAWN_SIZE: 1000,
     PLAYER_SPLIT_BOOST: 780,
     PLAYER_SPLIT_DIST: 40,
     PLAYER_SPLIT_CAP: 255,
@@ -258,6 +259,9 @@ module.exports = class Engine {
                 for(const cell_id of this.counters[id])
                     this.cells[cell_id].dead = true;
                 this.counters[id].clear();
+
+                const point = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
+                this.newCell(point[0], point[1], this.options.PLAYER_SPAWN_SIZE, ~~id);
             }
 
             controller.handle.onUpdate();
