@@ -6,4 +6,5 @@ module.exports = class Protocol {
     constructor(handler) { this.handler = handler; }
     /** @param {DataView} view */
     onMessage(view) {};
+    onUpdate() {};
 }

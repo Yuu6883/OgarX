@@ -4,6 +4,7 @@ const Engine = require("../physics/engine");
 const MAX_PLAYER = 250;
 
 module.exports = class Game {
+    
     constructor() {
         this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(i));
         this.engine = new Engine(this, {}); // TODO

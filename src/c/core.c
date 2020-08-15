@@ -55,7 +55,8 @@ void update(Cell* cell, Cell* end, float dt_multi) {
                 cell->boost = 0.f;
             } else {
                 cell->age++;
-                cell->flags = EXIST_BIT;
+                if (cell->flags & DEAD_BIT) cell->flags = DEAD_BIT | EXIST_BIT;
+                else cell->flags = EXIST_BIT;
                 if (cell->boost > 1) {
                     float d = cell->boost / 9.0f * dt_multi;
                     cell->x += cell->boostX * d;
@@ -153,55 +154,13 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
     return counter;
 }
 
-unsigned short select(Cell* cells, float x, float y, float r, QuadNode* root, 
-    void** node_stack_pointer, unsigned short* list_pointer) {
-    
-    unsigned int stack_counter = 1;
-    node_stack_pointer[0] = root;
-    QuadNode* curr = root;
-
-    int counter = 0;
-    float dx;
-    float dy;
-
-    while (stack_counter > 0) {
-        // Has leaves, push leaves, if they intersect, to stack
-        if (curr->tl) {
-            if (y - r < curr->y) {
-                if (x + r > curr->x)
-                    node_stack_pointer[stack_counter++] = curr->br;
-                if (x - r < curr->x)
-                    node_stack_pointer[stack_counter++] = curr->bl;
-            }
-            if (y + r > curr->y) {
-                if (x + r > curr->x)
-                    node_stack_pointer[stack_counter++] = curr->tr;
-                if (x - r < curr->x)
-                    node_stack_pointer[stack_counter++] = curr->tl;
-            }
-        }
-
-        for (unsigned int i = 0; i < curr->count; i++) {
-            Cell* cell = &cells[*(&curr->indices + i)];
-            if (cell->type > 253) continue;
-            dx = cell->x - x;
-            dy = cell->y - y;
-            counter++;
-            if (dx * dx + dy * dy < (r + cell->r) * (r + cell->r)) return -counter;
-        }
-
-        // Pop from the stack
-        curr = (QuadNode*) node_stack_pointer[--stack_counter];
-    }
-    return counter;
-}
-
 #define PHYSICS_NON 0
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
 extern void log_ptr(void* p);
 extern void log_f(float f);
+extern void log_cell(unsigned int id);
 
 void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
@@ -337,10 +296,10 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
     }
 }
 
-unsigned short select(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, unsigned short* list_pointer, 
-    float l, float r, float t, float b) {
-    unsigned short counter = 0;
-
+unsigned int select(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, unsigned short* list_pointer, 
+    float l, float r, float b, float t) {
+    
+    unsigned int list_counter = 0;
     unsigned int stack_counter = 1;
     node_stack_pointer[0] = root;
     QuadNode* curr = root;
@@ -363,11 +322,19 @@ unsigned short select(Cell* cells, Cell* end, QuadNode* root, void** node_stack_
         }
 
         for (unsigned int i = 0; i < curr->count; i++) {
-            Cell* cell = &cells[*(&curr->indices + i)];
-            
+            unsigned short id = *(&curr->indices + i);
+            Cell* cell = &cells[id];
+            if (cell->x - cell->r <= r &&
+                cell->x + cell->r >= l &&
+                cell->y - cell->r <= t &&
+                cell->y + cell->r >= b) {
+                list_pointer[list_counter++] = id;
+            }
         }
 
         // Pop from the stack
         curr = (QuadNode*) node_stack_pointer[--stack_counter];
     }
+
+    return list_counter;
 }

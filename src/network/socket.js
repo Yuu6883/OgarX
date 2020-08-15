@@ -13,7 +13,7 @@ module.exports = class Socket extends Handler {
     }
 
     onUpdate() {
-        
+        this.protocol && this.protocol.onUpdate();
     }
 
     /** @param {DataView} view */
