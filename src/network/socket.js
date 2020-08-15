@@ -2,9 +2,12 @@ const Handler = require("../game/handle");
 const Protocols = require("./protocols");
 
 module.exports = class Socket extends Handler {
-    /** @param {import("uWebSockets.js").WebSocket} ws */
-    constructor(ws) {
-        super();
+    /** 
+     * @param {import("../game/game")} game
+     * @param {import("uWebSockets.js").WebSocket} ws 
+     */
+    constructor(game, ws) {
+        super(game);
         this.ws = ws;
         this.protocol = null;
     }
@@ -17,8 +20,9 @@ module.exports = class Socket extends Handler {
     onMessage(view) {
         try {
             if (!this.protocol) {
-                this.protocol = Protocols.find(p => p.handshake(view));
-                if (!this.protocol) this.ws.end(1003, "Ambiguous protocol");
+                const Protocol = Protocols.find(p => p.handshake(view));
+                if (!Protocol) this.ws.end(1003, "Ambiguous protocol");
+                this.protocol = new Protocol(this);
             } else this.protocol.onMessage(view);
         } catch (e) {
             console.error(e);

@@ -29,7 +29,7 @@ module.exports = class SocketServer {
                         context);
                 },
                 open: ws => {
-                    ws.sock = new Socket(ws);
+                    ws.sock = new Socket(this.game, ws);
                     this.game.addHandle(ws.sock);
                 },
                 message: (ws, message, isBinary) => {

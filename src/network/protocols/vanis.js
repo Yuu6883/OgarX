@@ -1,17 +1,19 @@
 const Protocol = require("../protocol");
 const Reader = require("../reader");
+const Writer = require("../writer");
 const PONG = new Uint8Array([3]);
 
 /** @extends {Protocol<import("../socket")>} */
 module.exports = class VanisProtocol extends Protocol {
+
     /** @param {DataView} view */
     static handshake(view) {
         if (view.byteLength !== 4) return false;
         if (view.getUint16(0, true) != 69) return false;
         if (view.getUint16(2, true) != 420) return false;
-        
         return true;
     }
+
     /** @param {DataView} view */
     onMessage(view) {
         const reader = new Reader(view);
@@ -31,7 +33,7 @@ module.exports = class VanisProtocol extends Protocol {
                 break;
             // ping
             case 3:
-                this.handler.ws.send(PONG);
+                this.handler.ws.send(PONG, true);
                 break;
             // line lock
             case 15:
@@ -62,6 +64,7 @@ module.exports = class VanisProtocol extends Protocol {
                 break;
         }
     }
+
     /** @param {import("../socket")} handler */
     constructor(handler) {
         super(handler);
@@ -69,5 +72,20 @@ module.exports = class VanisProtocol extends Protocol {
         this.lastVisible = new Set();
         /** @type {Set<number>} */
         this.currVisible = new Set();
+
+        this.sendInitPacket();
+    }
+
+    sendInitPacket() {
+        const writer = new Writer();
+        writer.writeUInt8(1);
+        writer.writeUInt8(2);
+        writer.writeUInt8(0); // Game mode type
+        writer.writeUInt8(0); // Game mode type
+        writer.writeUInt16(42069) // garbage value
+        writer.writeUInt16(this.handler.controller.id);
+        writer.writeUInt32(this.handler.game.engine.options.MAP_HW * 2);
+        writer.writeUInt32(this.handler.game.engine.options.MAP_HH * 2);
+        this.handler.ws.send(writer.finalize(), true);
     }
 }

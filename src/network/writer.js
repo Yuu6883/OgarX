@@ -2,12 +2,11 @@ const PoolSize = 1048576;
 const BufferPool = new DataView(new ArrayBuffer(PoolSize));
 
 module.exports = class Writer {
+    
     constructor(le = true) {
         this.offset = 0;
         this.le = le;
     }
-
-    get offset() { return offset; }
 
     /** @param {number} a */
     writeUInt8(a) {
@@ -62,6 +61,13 @@ module.exports = class Writer {
         for (let i = 0; i < a.length; i++)
             this.writeUInt8(a.charCodeAt(i));
         this.writeUInt8(0);
+    }
+
+    /** @param {string} a */
+    writeUTF16String(a) {
+        for (let i = 0; i < a.length; i++)
+            this.writeUInt16(a.charCodeAt(i));
+        this.writeUInt16(0);
     }
     
     finalize() {
