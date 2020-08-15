@@ -5,6 +5,7 @@ module.exports = class Handle {
         /** @type {import("./controller")} */
         this.controller = null; 
     };
+    onSpawn() {};
     onUpdate() {};
     /** @param {string} err */
     onError(err) {};

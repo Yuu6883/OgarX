@@ -7,4 +7,6 @@ module.exports = class Protocol {
     /** @param {DataView} view */
     onMessage(view) {};
     onUpdate() {};
+    /** @param {import("../game/controller")} controller */
+    onSpawn(controller) {};
 }

@@ -1,7 +1,9 @@
 const Protocol = require("../protocol");
 const Reader = require("../reader");
 const Writer = require("../writer");
+
 const PONG = new Uint8Array([3]);
+const CLEAR_SCREEN = new Uint8Array([0x12]);
 
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
@@ -31,7 +33,7 @@ module.exports = class VanisProtocol extends Protocol {
         const reader = new Reader(view);
         const opCode = reader.readUInt8();
         const controller = this.handler.controller;
-
+        
         switch (opCode) {
             case 1:
                 controller.name = decodeURIComponent(reader.readUTF8String()).slice(0, 16);
@@ -56,7 +58,7 @@ module.exports = class VanisProtocol extends Protocol {
                 break;
             case 16:
                 controller.mouseX = reader.readInt32();
-                controller.mouseY = reader.readInt32();
+                controller.mouseY = -reader.readInt32(); // We have flipped Y lol
                 break;
             // Split
             case 17:
@@ -96,11 +98,23 @@ module.exports = class VanisProtocol extends Protocol {
         writer.writeUInt8(1);
         writer.writeUInt8(2);
         writer.writeUInt8(0); // Game mode type
-        writer.writeUInt8(0); // Game mode type
         writer.writeUInt16(42069) // garbage value
         writer.writeUInt16(this.handler.controller.id);
         writer.writeUInt32(this.handler.game.engine.options.MAP_HW * 2);
         writer.writeUInt32(this.handler.game.engine.options.MAP_HH * 2);
+        this.handler.ws.send(writer.finalize(), true);
+    }
+
+    /** @param {import("../../game/controller")} controller */
+    onSpawn(controller) {
+        if (this.handler.controller == controller)
+            this.handler.ws.send(CLEAR_SCREEN, true);
+
+        const writer = new Writer();
+        writer.writeUInt8(15);
+        writer.writeUInt16(controller.id);
+        writer.writeUTF8String(encodeURIComponent(controller.name));
+        writer.writeUTF8String(controller.skin);
         this.handler.ws.send(writer.finalize(), true);
     }
 

@@ -15,7 +15,7 @@ module.exports = class Game {
     addHandle(handle) {
         if (this.isFull) handle.onError("Server full");
         if (handle.controller) return;
-        let i = 0;
+        let i = 1; // 0 is occupied ig
         while (this.controls[i].handle) i++;
         this.controls[i].handle = handle;
         handle.controller = this.controls[i];

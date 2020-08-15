@@ -158,9 +158,9 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-extern void log_ptr(void* p);
-extern void log_f(float f);
-extern void log_cell(unsigned int id);
+// extern void console_log(void* p);
+// extern void console_log(float f);
+extern void console_log(unsigned int i);
 
 void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
@@ -296,7 +296,8 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
     }
 }
 
-unsigned int select(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, unsigned short* list_pointer, 
+unsigned int select(Cell* cells, Cell* end, QuadNode* root, 
+    void** node_stack_pointer, unsigned short* list_pointer, 
     float l, float r, float b, float t) {
     
     unsigned int list_counter = 0;
@@ -323,6 +324,7 @@ unsigned int select(Cell* cells, Cell* end, QuadNode* root, void** node_stack_po
 
         for (unsigned int i = 0; i < curr->count; i++) {
             unsigned short id = *(&curr->indices + i);
+            console_log(id);
             Cell* cell = &cells[id];
             if (cell->x - cell->r <= r &&
                 cell->x + cell->r >= l &&

@@ -92,6 +92,7 @@ module.exports = class Engine {
     async init() {
         if (this.updateInterval) return;
 
+        this.__start = Date.now();
         this.__ltick = Date.now();
 
         // 60mb ram
@@ -101,9 +102,7 @@ module.exports = class Engine {
         const module = await WebAssembly.instantiate(
             fs.readFileSync(CORE_PATH), { env: { 
                 memory: this.memory,
-                log_ptr: console.log,
-                log_f: console.log,
-                log_cell: id => console.log(this.cells[id].toString())
+                console_log: console.log
             }});
 
         this.wasm = module.instance.exports;
@@ -178,7 +177,7 @@ module.exports = class Engine {
             }
 
             // Eject
-            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY) {
+            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY && controller.ejectAttempts-- > 0) {
                 const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
@@ -201,7 +200,7 @@ module.exports = class Engine {
             }
 
             // Idle spectate
-            if (!this.counters[id].size) {
+            if (!this.counters[id].size && !controller.spawn) {
                 controller.viewportX = 0;
                 controller.viewportY = 0;
                 controller.viewportHW = 1920 / 2;
@@ -252,7 +251,8 @@ module.exports = class Engine {
                 }
             }
 
-            if (controller.spawn && __now >= controller.lastSpawnTick + this.options.PLAYER_SPAWN_DELAY) {
+            if (controller.spawn && (__now <= this.options.PLAYER_SPAWN_DELAY || 
+                    __now >= controller.lastSpawnTick + this.options.PLAYER_SPAWN_DELAY)) {
                 controller.spawn = false;
                 controller.lastSpawnTick = __now;
 
@@ -262,6 +262,14 @@ module.exports = class Engine {
 
                 const point = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
                 this.newCell(point[0], point[1], this.options.PLAYER_SPAWN_SIZE, ~~id);
+
+                for (const id2 in this.game.controls) {
+                    const controller2 = this.game.controls[id2];
+                    if (!controller2.handle) continue;
+                    controller2.handle.onSpawn(controller);
+                }
+
+                console.log(`Spawned controller#${controller.id} at x: ${point[0]}, y: ${point[1]}`);
             }
 
             controller.handle.onUpdate();
@@ -276,6 +284,7 @@ module.exports = class Engine {
         for (const id in this.game.controls) {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
+
             // Loop through all player cells (not dead)
             for (const cell_id of this.counters[id]) {
                 const cell = this.cells[cell_id];
@@ -460,6 +469,7 @@ module.exports = class Engine {
         this.tree.insert(cell);
         this.counters[cell.type].add(cell.id);
         this.cellCount++;
+
         return cell;
     }
 

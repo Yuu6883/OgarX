@@ -10,6 +10,12 @@ module.exports = class Socket extends Handler {
         super(game);
         this.ws = ws;
         this.protocol = null;
+        this.ws.subscribe("broadcast");
+    }
+
+    /** @param {import("../game/controller")} controller */
+    onSpawn(controller) {
+        this.protocol && this.protocol.onSpawn(controller);
     }
 
     onUpdate() {
