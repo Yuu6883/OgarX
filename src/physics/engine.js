@@ -32,7 +32,7 @@ const DefaultSettings = {
     PLAYER_DECAY_MIN_SIZE: 1000,
     PLAYER_AUTOSPLIT_SIZE: 1500,
     PLAYER_MAX_CELLS: 16,
-    PLAYER_SPAWN_SIZE: 1000,
+    PLAYER_SPAWN_SIZE: 32,
     PLAYER_SPLIT_BOOST: 780,
     PLAYER_SPLIT_DIST: 40,
     PLAYER_SPLIT_CAP: 255,
@@ -86,7 +86,7 @@ module.exports = class Engine {
         /** @type {Set<number>[]} */
         this.counters = Array.from({ length: 256 }, _ => new Set());
         this.shouldRestart = false;
-        this.__next_cell_id = -1;
+        this.__next_cell_id = 0;
     }
 
     async init() {
@@ -217,10 +217,10 @@ module.exports = class Engine {
                 const cell = this.cells[cell_id];
                 x += cell.x * cell.r;
                 y += cell.y * cell.r;
-                min_x = x < min_x ? x : min_x;
-                max_x = x > max_x ? x : max_x;
-                min_y = y < min_y ? y : min_y;
-                max_y = y > max_y ? y : max_y;
+                min_x = cell.x < min_x ? cell.x : min_x;
+                max_x = cell.x > max_x ? cell.x : max_x;
+                min_y = cell.y < min_y ? cell.y : min_y;
+                max_y = cell.y > max_y ? cell.y : max_y;
                 score += cell.r * cell.r / 100;
                 size += cell.r;
             }
@@ -229,10 +229,11 @@ module.exports = class Engine {
             controller.viewportX = x / size;
             controller.viewportY = y / size;
             size = (factor + 1) * Math.sqrt(score * 100);
+            size_x = size_y = Math.max(size, 4000);
             size_x = Math.max(size_x, (controller.viewportX - min_x) * 1.75);
             size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
-            size_y = Math.max(size_x, (controller.viewportY - min_y) * 1.75);
-            size_y = Math.max(size_x, (max_y - controller.viewportY) * 1.75);
+            size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
+            size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
             controller.viewportHW = size_x * this.options.PLAYER_VIEW_SCALE;
             controller.viewportHH = size_y * this.options.PLAYER_VIEW_SCALE;
 
@@ -388,7 +389,7 @@ module.exports = class Engine {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
             controller.handle.onUpdate();
-        }        
+        }
 
         this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }
@@ -452,10 +453,11 @@ module.exports = class Engine {
      */
     newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0) {
         if (this.cellCount >= this.options.CELL_LIMIT)
-            return console.log("CAN NOT SPAWN NEW CELL")
+            return console.log("CAN NOT SPAWN NEW CELL");
 
         while (this.cells[++this.__next_cell_id % this.options.CELL_LIMIT].exists);
         this.__next_cell_id %= this.options.CELL_LIMIT;
+        this.__next_cell_id = this.__next_cell_id || 1;
 
         const cell = this.cells[this.__next_cell_id];
         cell.x = x;
@@ -509,3 +511,5 @@ module.exports = class Engine {
         return new Uint16Array(this.memory.buffer, listPtr, length);
     }
 }
+
+module.exports.DefaultSettings = DefaultSettings;

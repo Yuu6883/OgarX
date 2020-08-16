@@ -56,9 +56,10 @@ module.exports = class VanisProtocol extends Protocol {
             case 15:
                 // TODO
                 break;
+            // mouse
             case 16:
                 controller.mouseX = reader.readInt32();
-                controller.mouseY = -reader.readInt32(); // We have flipped Y lol
+                controller.mouseY = reader.readInt32();
                 break;
             // Split
             case 17:
@@ -125,26 +126,30 @@ module.exports = class VanisProtocol extends Protocol {
         const visibleList = engine.query(this.handler.controller);
         this.currVisible = new Set(visibleList);
 
+        // console.log(this.handler.controller.viewportX.toFixed(2), 
+        //             this.handler.controller.viewportY.toFixed(2),
+        //             this.handler.controller.viewportHW.toFixed(2),
+        //             this.handler.controller.viewportHH.toFixed(2),
+        //             visibleList.length + " visible cells");        
+
         const writer = new Writer();
         writer.writeUInt8(10);
 
         for (const cell_id of visibleList) {
-            if (!this.lastVisible.has(cell_id) || 
-                cells[cell_id].updated) {
-                const cell = cells[cell_id];
-                // Don't send ejected cell under 2 tick to optimize
-                if (cell.type == EJECTED_TYPE && cell.age < 3) continue;
-
-                const type = TYPE_TABLE[cell.type] || (cell.isDead ? 5 : 1);
-                writer.writeUInt8(type);
-                if (type === 1)
-                    writer.writeUInt16(cell.type); // type is also owner id
-                writer.writeUInt32(cell_id);
-                writer.writeInt32(~~cell.x);
-                writer.writeInt32(~~cell.y);
-                writer.writeInt16(~~cell.r);
-            }
+            const cell = cells[cell_id];
+            // Don't send ejected cell under 2 tick to optimize
+            if (cell.type == EJECTED_TYPE && cell.age < 3) continue;
+            
+            const type = TYPE_TABLE[cell.type] || (cell.isDead ? 5 : 1);
+            writer.writeUInt8(type);
+            if (type === 1)
+                writer.writeUInt16(cell.type); // type is also owner id
+            writer.writeUInt32(cell_id);
+            writer.writeInt32(~~cell.x);
+            writer.writeInt32(~~cell.y);
+            writer.writeInt16(~~cell.r);
         }
+
         writer.writeUInt8(0);
 
         const eat = [], del = [];
