@@ -158,8 +158,11 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-// extern void console_log(void* p);
-extern void console_log(float f);
+extern void print_node_stack(void* p, unsigned int c);
+extern void console_log(void* p, unsigned int c);
+extern void log_ptr(void* p);
+extern void log_num(unsigned int);
+// extern void console_log(float f);
 // extern void console_log(unsigned int i);
 
 void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, 

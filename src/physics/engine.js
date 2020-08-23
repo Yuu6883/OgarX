@@ -502,12 +502,14 @@ module.exports = class Engine {
     /** @param {Controller} controller */
     query(controller) {
         // idk why 1, can be anything reasonable
-        let listPtr = this.stackPtr + this.options.QUADTREE_MAX_LEVEL + 1;
+        let listPtr = this.stackPtr + 4 * this.options.QUADTREE_MAX_LEVEL + 1;
         listPtr % 2 && listPtr++; // Multiple of 2
+
         const length = this.wasm.select(0, this.treePtr, this.treePtr, 
             this.stackPtr, listPtr,
             controller.viewportX - controller.viewportHW, controller.viewportX + controller.viewportHW,
             controller.viewportY - controller.viewportHH, controller.viewportY + controller.viewportHH);
+        
         return new Uint16Array(this.memory.buffer, listPtr, length);
     }
 }
