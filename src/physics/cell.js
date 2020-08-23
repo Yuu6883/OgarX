@@ -59,7 +59,7 @@ module.exports = class Cell {
     }
     
     resetFlag() {
-        this.view.setUint8(12, CELL_EXISTS);
+        this.view.setUint8(13, CELL_EXISTS);
     }
 
     get exists() {

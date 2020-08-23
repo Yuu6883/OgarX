@@ -164,9 +164,10 @@ module.exports = class Engine {
             // Split
             let attempts = this.options.PLAYER_SPLIT_CAP;
             while (controller.splitAttempts-- > 0 && attempts-- > 0) {
+
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
-                    if (cell.r > this.options.PLAYER_MIN_SPLIT_SIZE) continue;
+                    if (cell.r < this.options.PLAYER_MIN_SPLIT_SIZE) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);
@@ -177,7 +178,8 @@ module.exports = class Engine {
             }
 
             // Eject
-            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY && controller.ejectAttempts-- > 0) {
+            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY && (controller.ejectAttempts-- > 0 || controller.ejectMarco)) {
+                
                 const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
@@ -244,9 +246,9 @@ module.exports = class Engine {
                     // TODO: kill the player and the cells
                     for (const cell_id of this.counters[id]) {
                         this.tree.remove(this.cells[cell_id]);
-                        this.counters[id].delete(cell_id);
                         this.cellCount--;
                     }
+                    this.counters[id].clear();
                 } else {
                     this.shouldRestart = true;
                 }
@@ -471,7 +473,6 @@ module.exports = class Engine {
         this.tree.insert(cell);
         this.counters[cell.type].add(cell.id);
         this.cellCount++;
-
         return cell;
     }
 

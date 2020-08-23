@@ -67,11 +67,11 @@ module.exports = class VanisProtocol extends Protocol {
                 break;
             // Feed
             case 21:
-                if (view.byteLength == 1)
+                if (view.byteLength == 1) {
                     controller.ejectAttempts++;
-                else {
+                } else {
                     controller.ejectAttempts = 0;
-                    controller.ejectMarco = reader.readUInt8();
+                    controller.ejectMarco = !!reader.readUInt8();
                 }
                 break;
             // Chat
@@ -141,6 +141,7 @@ module.exports = class VanisProtocol extends Protocol {
             if (cell.type == EJECTED_TYPE && cell.age < 3) continue;
             
             const type = TYPE_TABLE[cell.type] || (cell.isDead ? 5 : 1);
+
             writer.writeUInt8(type);
             if (type === 1)
                 writer.writeUInt16(cell.type); // type is also owner id
