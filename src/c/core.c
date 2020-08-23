@@ -158,7 +158,7 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-extern void console_log(void* p1, void* p2);
+extern void console_log(void* p1, unsigned short p2);
 // extern void console_log(float f);
 // extern void console_log(unsigned int i);
 
@@ -211,10 +211,9 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
 
                 unsigned char other_flags = other->flags;
 
-                // Other cell doesn't exist?! or removed or inside, OR 
-                // it's updated cuz they should belong to a new quadnode
+                // Other cell doesn't exist?! or removed
                 if (!(other_flags & EXIST_BIT) || 
-                    (other_flags & (INSIDE_BIT | REMOVE_BIT))) continue;
+                    (other_flags & REMOVE_BIT)) continue;
                 unsigned char action = PHYSICS_NON;
 
                 // Check player x player
@@ -225,7 +224,7 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
                             // action = PHYSICS_NON;
                         } else if ((cell->flags & MERGE_BIT) && (other->flags & MERGE_BIT)) {
                             action = PHYSICS_EAT;
-                        } else action = PHYSICS_COL;
+                        } else if (!(flags & INSIDE_BIT)) action = PHYSICS_COL;
                     // Dead cell can not eat others
                     } else if (!(cell->type & DEAD_BIT)) action = PHYSICS_EAT;
                 } else if (IS_VIRUS(cell->type) && IS_EJECTED(other->type)) {
@@ -270,7 +269,7 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
                     cell->flags |= UPDATE_BIT;
                     other->flags |= UPDATE_BIT;
                     // Other cell is inside this cell, mark it
-                    if (d + 2 * r2 < r1) other->flags |= INSIDE_BIT;
+                    if (d + r2 < r1) other->flags |= INSIDE_BIT;
                 } else if (action == PHYSICS_EAT) {
                     if ((cell->type == other->type || 
                          cell->r > other->r * eatMulti) && 
@@ -325,8 +324,11 @@ unsigned int select(Cell* cells, Cell* end, QuadNode* root,
 
         for (unsigned int i = 0; i < curr->count; i++) {
             unsigned short id = *(&curr->indices + i);
-            // console_log(id);
             Cell* cell = &cells[id];
+            if (!(cell->flags & EXIST_BIT)) {
+                console_log(curr, ((unsigned int) cell) >> 5);
+                continue;
+            };
             if (cell->x - cell->r <= r &&
                 cell->x + cell->r >= l &&
                 cell->y - cell->r <= t &&

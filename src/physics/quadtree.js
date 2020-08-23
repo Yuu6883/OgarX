@@ -76,9 +76,11 @@ class QuadNode {
             new QuadNode(this.tree, this.x + qw, this.y - qh, qw, qh, this),
         ];
         for (const cell_id of this.items) {
-            const quadrant = getQuadrant(this.tree.cells[cell_id], this);
+            const cell = this.tree.cells[cell_id];
+            const quadrant = getQuadrant(cell, this);
             if (quadrant < 0) continue;
             this.branches[quadrant].items.add(cell_id);
+            cell.__root = this.branches[quadrant];
             this.items.delete(cell_id);
         }
     }
@@ -139,6 +141,16 @@ class QuadNode {
             this.branches[3].__write(view);
         }
     }
+
+    print() {
+        console.log(`QuadNode at ${this.__ptr} has ${this.items.size} items: ${[...this.items].join(", ")}`)
+        if (this.branches) {
+            this.branches[0].print();
+            this.branches[1].print();
+            this.branches[2].print();
+            this.branches[3].print();
+        }
+    }
 }
 
 class QuadTree {
@@ -164,6 +176,7 @@ class QuadTree {
 
     /** @param {import("./cell")} cell */
     insert(cell) {
+        if (cell.__root) console.log("INSERTING CELL ALREADY IN QUADTREE");
         let node = this.root;
         while (true) {
             if (!node.branches) break;
@@ -178,13 +191,15 @@ class QuadTree {
 
     /** @param {import("./cell")} cell */
     remove(cell) {
-        cell.__root.items.delete(cell.id);
+        if (!cell.__root) console.log("REMOVING CELL NOT IN QUADTREE");
+        if (!cell.__root.items.delete(cell.id)) console.log("ITEM NOT IN QUAD??", cell.__root.items);
         cell.__root.merge();
         cell.__root = null;
     }
 
     /** @param {import("./cell")} cell */
     update(cell) {
+        if (!cell.__root) console.log("UPDATING CELL NOT IN QUADTREE");
         const oldNode = cell.__root;
         let newNode = cell.__root;
         while (true) {
@@ -215,6 +230,10 @@ class QuadTree {
         const end = this.__offset;
         this.__offset = 0;
         return end;
+    }
+
+    print() {
+        this.root.print();
     }
 }
 

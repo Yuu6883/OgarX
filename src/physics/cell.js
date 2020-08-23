@@ -66,10 +66,6 @@ module.exports = class Cell {
         return this.view.getUint8(13) & CELL_EXISTS;
     }
 
-    set exists(value) {
-        value && this.view.setUint8(13, CELL_EXISTS);
-    }
-
     get isUpdated() {
         return this.view.getUint8(13) & CELL_UPDATE;
     }
@@ -139,7 +135,7 @@ module.exports = class Cell {
     }
 
     toString() {
-        if (!this.exists) return `Cell[None]`;
+        // if (!this.exists) return `Cell[None]`;
         const s = TYPES_TO_STRING[this.type];
         return `Cell[type=${s || `Player#${this.type}`},x=${this.x},y=${this.y},r=${this.r},flags=${this.flags.toString(2).padStart(8, "0")}]`;
     }

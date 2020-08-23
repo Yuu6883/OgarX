@@ -123,7 +123,9 @@ module.exports = class VanisProtocol extends Protocol {
         const engine = this.handler.game.engine;
         const cells = engine.cells;
 
-        const visibleList = engine.query(this.handler.controller);
+        // Don't count ejected cell under 2 tick as visible to optimize
+        const visibleList = engine.query(this.handler.controller)
+            .filter(id => cells[id].type != EJECTED_TYPE || cells[id].age > 3);
         this.currVisible = new Set(visibleList);
 
         // console.log(this.handler.controller.viewportX.toFixed(2), 
@@ -137,15 +139,11 @@ module.exports = class VanisProtocol extends Protocol {
 
         for (const cell_id of visibleList) {
             const cell = cells[cell_id];
-            // Don't send ejected cell under 2 tick to optimize
-            if (cell.type == EJECTED_TYPE && cell.age < 3) continue;
-            
             const type = TYPE_TABLE[cell.type] || (cell.isDead ? 5 : 1);
 
             writer.writeUInt8(type);
             if (type === 1) {
                 writer.writeUInt16(cell.type); // type is also owner id
-                // console.log(`Updating cell#${cell.id} pid:${cell.type}`);
             }
             writer.writeUInt32(cell_id);
             writer.writeInt32(~~cell.x);
@@ -159,9 +157,6 @@ module.exports = class VanisProtocol extends Protocol {
         for (const cell_id of this.lastVisible) {
             if (this.currVisible.has(cell_id)) continue;
             const cell = cells[cell_id];
-
-            // Don't send ejected cell under 2 tick to optimize
-            if (cell.type == EJECTED_TYPE && cell.age < 3) continue;
             if (cell.shouldRemove) eat.push(cell_id);
             else del.push(cell_id);
         }
@@ -172,7 +167,6 @@ module.exports = class VanisProtocol extends Protocol {
         for (const cell_id of eat) {
             writer.writeUInt32(cell_id);
             writer.writeUInt32(cells[cell_id].eatenBy);
-            console.log(`Cell#${cell_id} eaten by ${cells[cell_id].eatenBy}`);
         }
         writer.writeUInt32(0);
         this.handler.ws.send(writer.finalize(), true);

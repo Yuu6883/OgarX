@@ -92,8 +92,8 @@ module.exports = class Engine {
     async init() {
         if (this.updateInterval) return;
 
-        this.__start = Date.now();
-        this.__ltick = Date.now();
+        this.__start = performance.now();
+        this.__ltick = performance.now();
 
         // 60mb ram
         this.memory = new WebAssembly.Memory({ initial: 1000 });
@@ -102,7 +102,12 @@ module.exports = class Engine {
         const module = await WebAssembly.instantiate(
             fs.readFileSync(CORE_PATH), { env: { 
                 memory: this.memory,
-                console_log: console.log
+                console_log: (p1, p2) => {
+                    console.log(p1, p2);
+                    clearInterval(this.updateInterval);
+                    this.tree.print();
+                    process.exit(0);
+                }
             }});
 
         this.wasm = module.instance.exports;
@@ -121,12 +126,21 @@ module.exports = class Engine {
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
         this.stackPtr = this.treePtr + 69; // hmm
 
+        /** @type {number[]} */
+        this.profiler = [];
+
         const delay = 1000 / this.options.TPS;
         this.updateInterval = setInterval(() => {
-            const now = Date.now();
+            const now = performance.now();
             this.tick((now - this.__ltick) / delay);
             this.__ltick = now;
+            this.profiler.push((performance.now() - now) / delay);
+            this.profiler.length > this.options.TPS && this.profiler.shift();
         }, delay);
+
+        setInterval(() => {
+            console.log("Cells: " + this.cellCount + ", " + this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100 + "%");
+        }, 1000);
     }
 
     get __tick() { return Date.now() - this.__start; }
@@ -270,6 +284,7 @@ module.exports = class Engine {
                     const controller2 = this.game.controls[id2];
                     if (!controller2.handle) continue;
                     controller2.handle.onSpawn(controller);
+                    controller.handle.onSpawn(controller2);
                 }
 
                 console.log(`Spawned controller#${controller.id} at x: ${point[0]}, y: ${point[1]}`);
@@ -341,7 +356,7 @@ module.exports = class Engine {
 
         // Update quadtree
         for (const cell of this.cells) {
-            if (!cell.isUpdated) continue;
+            if (!cell.exists || !cell.isUpdated) continue; 
             this.tree.update(cell);
             cell.resetFlag();
         }
@@ -360,8 +375,7 @@ module.exports = class Engine {
         // Handle pop, update quadtree, remove item
         for (const cell of this.cells) {
             if (!cell.exists) continue;
-            if (cell.updated) this.tree.update(cell);
-            else if (cell.shouldRemove) {
+            if (cell.shouldRemove) {
                 this.tree.remove(cell);
                 this.counters[cell.type].delete(cell.id);
                 this.cellCount--;
@@ -381,7 +395,7 @@ module.exports = class Engine {
                             Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
                     }
                 }
-            }
+            } else if (cell.updated) this.tree.update(cell);
         }
 
         // Serialize again so client can select/query viewport
@@ -458,9 +472,8 @@ module.exports = class Engine {
         if (this.cellCount >= this.options.CELL_LIMIT)
             return console.log("CAN NOT SPAWN NEW CELL");
 
-        while (this.cells[++this.__next_cell_id % this.options.CELL_LIMIT].exists);
-        this.__next_cell_id %= this.options.CELL_LIMIT;
-        this.__next_cell_id = this.__next_cell_id || 1;
+        while (this.cells[this.__next_cell_id].exists)
+            this.__next_cell_id = ((this.__next_cell_id + 1) % this.options.CELL_LIMIT) || 1;
 
         const cell = this.cells[this.__next_cell_id];
         cell.x = x;
@@ -470,7 +483,7 @@ module.exports = class Engine {
         cell.boostX = boostX;
         cell.boostY = boostY;
         cell.boost = boost;
-        cell.exists = true;
+        cell.resetFlag();
         this.tree.insert(cell);
         this.counters[cell.type].add(cell.id);
         this.cellCount++;
@@ -504,7 +517,7 @@ module.exports = class Engine {
     /** @param {Controller} controller */
     query(controller) {
         // idk why 1, can be anything reasonable
-        let listPtr = this.stackPtr + 4 * this.options.QUADTREE_MAX_LEVEL + 1;
+        let listPtr = this.stackPtr + 4 * this.options.QUADTREE_MAX_LEVEL + 20;
         listPtr % 2 && listPtr++; // Multiple of 2
 
         const length = this.wasm.select(0, this.treePtr, this.treePtr, 
