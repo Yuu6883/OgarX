@@ -143,8 +143,10 @@ module.exports = class VanisProtocol extends Protocol {
             const type = TYPE_TABLE[cell.type] || (cell.isDead ? 5 : 1);
 
             writer.writeUInt8(type);
-            if (type === 1)
+            if (type === 1) {
                 writer.writeUInt16(cell.type); // type is also owner id
+                // console.log(`Updating cell#${cell.id} pid:${cell.type}`);
+            }
             writer.writeUInt32(cell_id);
             writer.writeInt32(~~cell.x);
             writer.writeInt32(~~cell.y);
@@ -170,6 +172,7 @@ module.exports = class VanisProtocol extends Protocol {
         for (const cell_id of eat) {
             writer.writeUInt32(cell_id);
             writer.writeUInt32(cells[cell_id].eatenBy);
+            console.log(`Cell#${cell_id} eaten by ${cells[cell_id].eatenBy}`);
         }
         writer.writeUInt32(0);
         this.handler.ws.send(writer.finalize(), true);

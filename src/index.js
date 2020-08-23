@@ -3,7 +3,9 @@ const Game = require("./game/game");
 
 const game = new Game({
     VIRUS_COUNT: 0,
+    PELLET_COUNT: 10,
     PLAYER_SPAWN_SIZE: 1000,
+    PLAYER_MERGE_TIME: 5
 });
 const server = new Server(game);
 const engine = game.engine;

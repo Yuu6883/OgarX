@@ -295,8 +295,9 @@ module.exports = class Engine {
                 // Calculate can merge
                 if (this.options.PLAYER_MERGE_TIME > 0) {
                     const increase = Math.round(25 * cell.r * this.options.PLAYER_MERGE_INCREASE);
-                    cell.merge = cell.age >= Math.max(this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER ? 
+                    const time = Math.max(this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER ? 
                         Math.max(initial, increase) : initial + increase);
+                    cell.merge = cell.age >= time;                 
                 } else cell.merge = cell.age >= this.options.PLAYER_NO_MERGE_DELAY;
 
                 // Move cells

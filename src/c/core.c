@@ -158,10 +158,7 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-extern void print_node_stack(void* p, unsigned int c);
-extern void console_log(void* p, unsigned int c);
-extern void log_ptr(void* p);
-extern void log_num(unsigned int);
+extern void console_log(void* p1, void* p2);
 // extern void console_log(float f);
 // extern void console_log(unsigned int i);
 
@@ -224,11 +221,11 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
                 if (IS_PLAYER(cell->type)) {
                     if (IS_PLAYER(other->type) && cell->type == other->type) {
                         // Collide
-                        if (cell->age > noColliDelay && other->age > noColliDelay) {
-                            action = PHYSICS_COL;
+                        if (cell->age < noColliDelay || other->age < noColliDelay) {
+                            // action = PHYSICS_NON;
                         } else if ((cell->flags & MERGE_BIT) && (other->flags & MERGE_BIT)) {
                             action = PHYSICS_EAT;
-                        }
+                        } else action = PHYSICS_COL;
                     // Dead cell can not eat others
                     } else if (!(cell->type & DEAD_BIT)) action = PHYSICS_EAT;
                 } else if (IS_VIRUS(cell->type) && IS_EJECTED(other->type)) {
@@ -262,23 +259,24 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
                         dy /= d;
                     }
                     float a = r1 * r1;
-                    float b = other->r * other->r;
+                    float b = r2 * r2;
                     float aM = b / (a + b);
                     float bM = a / (a + b);
                     cell->x -= dx * (m < r1 ? m : r1) * aM;
-                    cell->x -= dy * (m < r1 ? m : r1) * aM;
+                    cell->y -= dy * (m < r1 ? m : r1) * aM;
                     other->x += dx * (m < r2 ? m : r2) * bM;
-                    other->x += dy * (m < r2 ? m : r2) * bM;
+                    other->y += dy * (m < r2 ? m : r2) * bM;
                     // Mark the cell as updated
                     cell->flags |= UPDATE_BIT;
                     other->flags |= UPDATE_BIT;
                     // Other cell is inside this cell, mark it
                     if (d + 2 * r2 < r1) other->flags |= INSIDE_BIT;
                 } else if (action == PHYSICS_EAT) {
-                    if (cell->r > other->r * eatMulti && 
-                        d < cell->r - other->r / eatOverlap) {
+                    if ((cell->type == other->type || 
+                         cell->r > other->r * eatMulti) && 
+                            d < cell->r - other->r / eatOverlap) {
                         cell->r = sqrtf(r1 * r1 + r2 * r2);
-                        other->eatenBy = other_index;
+                        other->eatenBy = ((unsigned int) cell) >> 5;
                         other->flags |= REMOVE_BIT;
                         if (IS_VIRUS(other->type) || IS_MOTHER_CELL(other->type))
                             cell->flags |= 0x80; // Mark this cell as popped
