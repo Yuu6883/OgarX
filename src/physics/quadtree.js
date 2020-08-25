@@ -1,5 +1,3 @@
-const { performance } = require("perf_hooks");
-
 /**
  * @param {import("./cell")} cell
  * @param {QuadNode} node
@@ -219,6 +217,18 @@ class QuadTree {
         cell.__root = newNode;
         oldNode.merge();
         newNode.split();
+    }
+
+    /**
+     * Swap cell1 (in the tree) with new cell2
+     * @param {import("./cell")} cell1 
+     * @param {import("./cell")} cell2 
+     */
+    swap(cell1, cell2) {
+        cell2.__root = cell1.__root;
+        cell2.__root.items.delete(cell1.id);
+        cell2.__root.items.add(cell2.id);
+        cell1.__root = null;
     }
 
     /** @param {DataView} view */

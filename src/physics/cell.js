@@ -57,6 +57,10 @@ module.exports = class Cell {
     get flags() {
         return this.view.getUint8(13);
     }
+
+    remove() {
+        this.view.setUint8(13, CELL_EXISTS | CELL_REMOVE);
+    }
     
     resetFlag() {
         this.view.setUint8(13, CELL_EXISTS);
@@ -137,6 +141,6 @@ module.exports = class Cell {
     toString() {
         // if (!this.exists) return `Cell[None]`;
         const s = TYPES_TO_STRING[this.type];
-        return `Cell[type=${s || `Player#${this.type}`},x=${this.x},y=${this.y},r=${this.r},flags=${this.flags.toString(2).padStart(8, "0")}]`;
+        return `Cell#${this.id}[type=${s || `Player#${this.type}`},x=${this.x.toFixed(2)},y=${this.y.toFixed(2)},r=${this.r.toFixed(2)},mass=${(this.r * this.r / 100000).toFixed(1)}k,flags=${this.flags.toString(2).padStart(8, "0")}]`;
     }
 }

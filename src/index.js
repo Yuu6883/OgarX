@@ -14,4 +14,5 @@ const engine = game.engine;
 (async () => {
     await engine.init();
     await server.open();
+    engine.start();
 })();

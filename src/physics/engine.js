@@ -107,6 +107,33 @@ module.exports = class Engine {
                     clearInterval(this.updateInterval);
                     this.tree.print();
                     process.exit(0);
+                },
+                log_cells: (c1, c2, flag) =>{
+                    c1 /= 32;
+                    c2 /= 32;
+                    const cell1 = this.cells[c1];
+                    const cell2 = this.cells[c2];
+                    if (cell1.type > 250 || cell2.type > 250) return;
+                    switch (flag) {
+                        case 0:
+                            console.log(`No action between cell#${c1} and cell#${c2}`);
+                            break;
+                        case 1:
+                            console.log(`Collision between cell#${c1} and cell#${c2}`);
+                            break;
+                        case 2:
+                            console.log(`cell#${c1} eats cell#${c2}`);
+                            break;
+                        case 3:
+                            console.log(`Resolving cell#${c1} and cell#${c2}`);
+                            break;
+                        case 4:
+                            console.log(`Checking cell#${c1} and cell#${c2}`);
+                            break;
+                        case 5:
+                            console.log(`cell#${c2} not exist or removed`);
+                            break;
+                    }
                 }
             }});
 
@@ -129,6 +156,13 @@ module.exports = class Engine {
         /** @type {number[]} */
         this.profiler = [];
 
+        this.debug = false;
+    }
+
+    start() {
+        if (this.updateInterval) return;
+        this.__ltick = performance.now();
+
         const delay = 1000 / this.options.TPS;
         this.updateInterval = setInterval(() => {
             const now = performance.now();
@@ -138,10 +172,18 @@ module.exports = class Engine {
             this.profiler.length > this.options.TPS && this.profiler.shift();
         }, delay);
 
-        setInterval(() => {
-            console.log("Cells: " + this.cellCount + ", " + this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100 + "%");
-        }, 1000);
+        // setInterval(() => {
+        //     console.log("Cells: " + this.cellCount + ", " + 
+        //         (this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100).toFixed(3) + "%");
+        // }, 1000);
     }
+
+    stop() {
+        if (this.updateInterval) clearInterval(this.updateInterval);
+        this.updateInterval = null;
+    }
+
+    get stopped() { return !this.updateInterval; }
 
     get __tick() { return Date.now() - this.__start; }
 
@@ -258,10 +300,9 @@ module.exports = class Engine {
             if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
                 if (this.options.WORLD_KILL_OVERSIZE) {
                     // TODO: kill the player and the cells
-                    for (const cell_id of this.counters[id]) {
-                        this.tree.remove(this.cells[cell_id]);
-                        this.cellCount--;
-                    }
+                    for (const cell_id of this.counters[id])
+                        this.cells[cell_id].remove();
+
                     this.counters[id].clear();
                 } else {
                     this.shouldRestart = true;
@@ -273,8 +314,14 @@ module.exports = class Engine {
                 controller.spawn = false;
                 controller.lastSpawnTick = __now;
 
-                for(const cell_id of this.counters[id])
-                    this.cells[cell_id].dead = true;
+                for(const cell_id of this.counters[id]) {
+                    const cell = this.cells[cell_id];
+                    const deadCell = this.newCell(cell.x, cell.y, cell.r, cell.type, 
+                        cell.boostX, cell.boostY, cell.boost, false); // Don't insert it yet
+                    deadCell.dead = true;
+                    this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
+                    cell.remove();
+                }
                 this.counters[id].clear();
 
                 const point = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
@@ -356,9 +403,8 @@ module.exports = class Engine {
 
         // Update quadtree
         for (const cell of this.cells) {
-            if (!cell.exists || !cell.isUpdated) continue; 
+            if (!cell.exists || (cell.type > 250 && !cell.isUpdated)) continue; 
             this.tree.update(cell);
-            cell.resetFlag();
         }
 
         // Serialize quadtree, preparing for collision/eat resolution
@@ -367,10 +413,24 @@ module.exports = class Engine {
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
             this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
 
-        // Magic goes here
-        this.wasm.resolve(0, this.treePtr, this.treePtr, this.stackPtr, 
-            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE);
+        if (this.debug) {
+            
+            const cells = this.counters[1];
+            [...cells].map(id => this.cells[id]).sort((c1, c2) => c1.r - c2.r).forEach(c => console.log(c.toString()));
+
+            console.log("RESOLVE_DEBUG");
+            this.wasm.resolve_debug(0, this.treePtr, this.treePtr, this.stackPtr, 
+                this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
+                this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE);
+            this.debug = false;
+
+            this.stop();
+        } else {
+            // Magic goes here
+            this.wasm.resolve(0, this.treePtr, this.treePtr, this.stackPtr, 
+                this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
+                this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE);
+        }
 
         // Handle pop, update quadtree, remove item
         for (const cell of this.cells) {
@@ -416,7 +476,7 @@ module.exports = class Engine {
      * @param {number} size 
      * @param {number} boostX 
      * @param {number} boostY 
-     * @param {number} boost 
+     * @param {number} boost
      */
     splitFromCell(cell, size, boostX, boostY, boost) {
         cell.r = Math.sqrt(cell.r * cell.r - size * size);
@@ -468,9 +528,9 @@ module.exports = class Engine {
      * @param {number} size
      * @param {number} type
      */
-    newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0) {
+    newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0, insert = true) {
         if (this.cellCount >= this.options.CELL_LIMIT)
-            return console.log("CAN NOT SPAWN NEW CELL");
+            return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
 
         while (this.cells[this.__next_cell_id].exists)
             this.__next_cell_id = ((this.__next_cell_id + 1) % this.options.CELL_LIMIT) || 1;
@@ -484,8 +544,10 @@ module.exports = class Engine {
         cell.boostY = boostY;
         cell.boost = boost;
         cell.resetFlag();
-        this.tree.insert(cell);
-        this.counters[cell.type].add(cell.id);
+        if (insert) {
+            this.tree.insert(cell);
+            this.counters[cell.type].add(cell.id);
+        }
         this.cellCount++;
         return cell;
     }
