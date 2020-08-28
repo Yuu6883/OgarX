@@ -71,16 +71,28 @@ void update(Cell* cell, Cell* end, float dt_multi) {
 }
 
 void decay_and_auto(Cell* cell, Cell* end, float dt_multi, float auto_size, float multi, float min) {
-    while (cell != end) {
-        if (cell->flags & EXIST_BIT && 
-            IS_PLAYER(cell->type) && cell->r > min) {
+    if (auto_size) {
+        while (cell != end) {
+            if (cell->flags & EXIST_BIT && 
+                IS_PLAYER(cell->type) && cell->r > min) {
 
-            cell->r -= cell->r * multi * dt_multi;
-            cell->flags |= UPDATE_BIT;
-            if (cell->r > auto_size) cell->flags |= AUTOSPLIT_BIT;
+                cell->r -= cell->r * multi * dt_multi / 50.0f;
+                cell->flags |= UPDATE_BIT;
+                if (cell->r > auto_size) cell->flags |= AUTOSPLIT_BIT;
+            }
+            cell++;
         }
-        cell++;
-    }
+    } else {
+        while (cell != end) {
+            if (cell->flags & EXIST_BIT && 
+                IS_PLAYER(cell->type) && cell->r > min) {
+
+                cell->r -= cell->r * multi * dt_multi / 50.0f;
+                cell->flags |= UPDATE_BIT;
+            }
+            cell++;
+        }
+    }    
 }
 
 void edge_check(Cell* cell, Cell* end, float l, float r, float b, float t) {
@@ -218,14 +230,19 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
 
                 // Check player x player
                 if (IS_PLAYER(cell->type)) {
-                    if (IS_PLAYER(other->type) && cell->type == other->type && !(cell->flags & DEAD_BIT)) {
-                        if (cell->age < noColliDelay || other->age < noColliDelay) {
-                            // action = PHYSICS_NON;
-                        } else if ((flags & MERGE_BIT) && (other_flags & MERGE_BIT)) {
-                            action = PHYSICS_EAT;
-                        } else if (!(flags & INSIDE_BIT)) action = PHYSICS_COL;
+                    if (IS_PLAYER(other->type) && cell->type == other->type) {
+                        if (flags & DEAD_BIT) {
+                            if (other_flags & DEAD_BIT) action = PHYSICS_COL;
+                        } else {
+                            if (other_flags & DEAD_BIT) action = PHYSICS_EAT;
+                            else if (cell->age < noColliDelay || other->age < noColliDelay)
+                                action = PHYSICS_NON;
+                            else if ((flags & MERGE_BIT) && (other_flags & MERGE_BIT))
+                                action = PHYSICS_EAT;
+                            else if (!(flags & INSIDE_BIT)) action = PHYSICS_COL;
+                        }
                     // Dead cell can not eat others
-                    } else if (!(cell->flags & DEAD_BIT)) action = PHYSICS_EAT;
+                    } else if (!(flags & DEAD_BIT)) action = PHYSICS_EAT;
                 } else if (IS_VIRUS(cell->type) && IS_EJECTED(other->type)) {
                     // Virus can only eat ejected cell
                     action = PHYSICS_EAT;
@@ -366,7 +383,7 @@ void resolve_debug(Cell* cells, Cell* end, QuadNode* root, void** node_stack_poi
                             // action = PHYSICS_NON;
                         } else if ((flags & MERGE_BIT) && (other_flags & MERGE_BIT)) {
                             action = PHYSICS_EAT;
-                        } else if (!(flags & INSIDE_BIT)) action = PHYSICS_COL;
+                        } else if (!(flags & INSIDE_BIT) && !(other_flags & DEAD_BIT)) action = PHYSICS_COL;
                     // Dead cell can not eat others
                     } else if (!(cell->flags & DEAD_BIT)) action = PHYSICS_EAT;
                 } else if (IS_VIRUS(cell->type) && IS_EJECTED(other->type)) {

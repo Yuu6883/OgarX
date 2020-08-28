@@ -63,7 +63,8 @@ module.exports = class Cell {
     }
     
     resetFlag() {
-        this.view.setUint8(13, CELL_EXISTS);
+        if (this.isDead) this.view.setUint8(13, CELL_DEAD | CELL_EXISTS);
+        else this.view.setUint8(13, CELL_EXISTS);
     }
 
     get exists() {

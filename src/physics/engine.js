@@ -223,6 +223,7 @@ module.exports = class Engine {
 
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
+                    if (this.counters[id].size >= this.options.PLAYER_MAX_CELLS) break;
                     if (cell.r < this.options.PLAYER_MIN_SPLIT_SIZE) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
@@ -367,8 +368,11 @@ module.exports = class Engine {
                 let dy = controller.mouseY - cell.y;
                 const d = Math.sqrt(dx * dx + dy * dy);
                 if (d < 1) continue; dx /= d; dy /= d;
+                let modifier = 1;
+                if (cell.r > this.options.PLAYER_MIN_SPLIT_SIZE * 5 &&
+                    cell.age <= this.options.PLAYER_NO_COLLI_DELAY) modifier = 2;
                 const speed = 88 * Math.pow(cell.r, -0.4396754) * this.options.PLAYER_SPEED;
-                const m = Math.min(speed, d) * dt;
+                const m = Math.min(speed * modifier, d) * dt;
                 cell.x += dx * m;
                 cell.y += dy * m;
             }
@@ -415,8 +419,8 @@ module.exports = class Engine {
 
         if (this.debug) {
             
-            const cells = this.counters[1];
-            [...cells].map(id => this.cells[id]).sort((c1, c2) => c1.r - c2.r).forEach(c => console.log(c.toString()));
+            const cells = this.cells.filter(c => c.exists);
+            cells.sort((c1, c2) => c1.r - c2.r).forEach(c => console.log(c.toString()));
 
             console.log("RESOLVE_DEBUG");
             this.wasm.resolve_debug(0, this.treePtr, this.treePtr, this.stackPtr, 
