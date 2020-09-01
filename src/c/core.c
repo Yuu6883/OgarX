@@ -170,13 +170,18 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer, 
+extern void console_log(unsigned short id);
+
+void resolve(Cell* cells, 
+    unsigned short* id_start, unsigned short* id_end, 
+    QuadNode* root, void** node_stack_pointer, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
     float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
 
-    Cell* cell = cells;
+    while (id_start != id_end) {
 
-    while (cell != end) {
+        // console_log(*id_start);
+        Cell* cell = &cells[*id_start++];
 
         unsigned char flags = cell->flags;
 
@@ -256,6 +261,7 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
                     action = PHYSICS_EAT;
                 }
 
+                // console_log(*id_start);
                 if (action == PHYSICS_NON) continue;
 
                 float dx = other->x - cell->x;
@@ -324,8 +330,6 @@ void resolve(Cell* cells, Cell* end, QuadNode* root, void** node_stack_pointer,
             // Pop from the stack
             curr = (QuadNode*) node_stack_pointer[--stack_counter];
         }
-
-        cell++;
     }
 }
 

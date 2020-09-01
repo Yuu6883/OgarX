@@ -101,7 +101,13 @@ module.exports = class Engine {
 
         // Load wasm module
         const module = await WebAssembly.instantiate(
-            fs.readFileSync(CORE_PATH), { env: { memory: this.memory }});
+            fs.readFileSync(CORE_PATH), { env: { 
+                memory: this.memory,
+                console_log: cell_id => {
+                    if (this.cells[cell_id].type > 250) return;
+                    console.log(this.cells[cell_id].toString())
+                }
+            }});
 
         this.wasm = module.instance.exports;
 
@@ -115,6 +121,9 @@ module.exports = class Engine {
             this.options.QUADTREE_MAX_LEVEL,
             this.options.QUADTREE_MAX_ITEMS);
 
+        this.indices = 0;
+        this.indicesPtr =  BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.indicesBuffer = new DataView(this.memory.buffer, this.indicesPtr);
         this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
         this.stackPtr = this.treePtr + 69; // hmm
@@ -377,18 +386,23 @@ module.exports = class Engine {
             this.tree.update(cell);
         }
 
+        // Sort indices
+        this.sortIndices();
         // Serialize quadtree, preparing for collision/eat resolution
         this.serialize();
 
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
             this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
 
+        // console.log("resolving");
         // Magic goes here
-        this.wasm.resolve(0, this.treePtr, this.treePtr, this.stackPtr, 
+        this.wasm.resolve(0, 
+            this.indicesPtr, this.treePtr, 
+            this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
             this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, 
             this.options.TPS * this.options.PLAYER_DEAD_DELAY);
-    
+        // console.log("resolved");
 
         // Handle pop, update quadtree, remove item
         for (const cell of this.cells) {
@@ -416,6 +430,9 @@ module.exports = class Engine {
             } else if (cell.updated) this.tree.update(cell);
         }
 
+        // No need to reserve space for indices now since we are only going to query it
+        this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
         // Serialize again so client can select/query viewport
         this.serialize();
 
@@ -528,6 +545,28 @@ module.exports = class Engine {
                 return point;
         }
         return this.randomPoint(size);
+    }
+
+    sortIndices() {
+        let offset = 0;
+        for (let type = 0; type < this.counters.length; type++) {
+            // No need to resolve pellet since they don't collide with or eat other cells
+            if (type == PELLET_TYPE) continue;
+            // No need to sort none player cells
+            if (type > 250) {
+                for (const cell_id of this.counters[type]) {
+                    this.indicesBuffer.setUint16(offset, cell_id, true);
+                    offset += 2;
+                }
+            } else {
+                [...this.counters[type]].map(id => this.cells[id]).sort((a, b) => b.r - a.r).forEach(cell => {
+                    this.indicesBuffer.setUint16(offset, cell.id, true);
+                    offset += 2;
+                });
+            }
+        }
+        this.treePtr = this.indicesPtr + offset;
+        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
     }
 
     serialize() {
