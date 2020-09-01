@@ -44,6 +44,7 @@ const DefaultSettings = {
     PLAYER_MERGE_INCREASE: 0.02,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_VIEW_SCALE: 1,
+    PLAYER_DEAD_DELAY: 5,
     EJECT_DISPERSION: 0.3,
     EJECT_SIZE: 38,
     EJECT_LOSS: 43,
@@ -100,42 +101,7 @@ module.exports = class Engine {
 
         // Load wasm module
         const module = await WebAssembly.instantiate(
-            fs.readFileSync(CORE_PATH), { env: { 
-                memory: this.memory,
-                console_log: (p1, p2) => {
-                    console.log(p1, p2);
-                    clearInterval(this.updateInterval);
-                    this.tree.print();
-                    process.exit(0);
-                },
-                log_cells: (c1, c2, flag) =>{
-                    c1 /= 32;
-                    c2 /= 32;
-                    const cell1 = this.cells[c1];
-                    const cell2 = this.cells[c2];
-                    if (cell1.type > 250 || cell2.type > 250) return;
-                    switch (flag) {
-                        case 0:
-                            console.log(`No action between cell#${c1} and cell#${c2}`);
-                            break;
-                        case 1:
-                            console.log(`Collision between cell#${c1} and cell#${c2}`);
-                            break;
-                        case 2:
-                            console.log(`cell#${c1} eats cell#${c2}`);
-                            break;
-                        case 3:
-                            console.log(`Resolving cell#${c1} and cell#${c2}`);
-                            break;
-                        case 4:
-                            console.log(`Checking cell#${c1} and cell#${c2}`);
-                            break;
-                        case 5:
-                            console.log(`cell#${c2} not exist or removed`);
-                            break;
-                    }
-                }
-            }});
+            fs.readFileSync(CORE_PATH), { env: { memory: this.memory }});
 
         this.wasm = module.instance.exports;
 
@@ -172,10 +138,10 @@ module.exports = class Engine {
             this.profiler.length > this.options.TPS && this.profiler.shift();
         }, delay);
 
-        // setInterval(() => {
-        //     console.log("Cells: " + this.cellCount + ", " + 
-        //         (this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100).toFixed(3) + "%");
-        // }, 1000);
+        setInterval(() => {
+            console.log("Cells: " + this.cellCount + ", " + 
+                (this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100).toFixed(3) + "%");
+        }, 1000);
     }
 
     stop() {
@@ -336,7 +302,7 @@ module.exports = class Engine {
                 }
 
                 console.log(`Spawned controller#${controller.id} at x: ${point[0]}, y: ${point[1]}`);
-            }
+            } else controller.spawn = false;
 
             controller.handle.onUpdate();
             controller.alive = !this.counters[id].size;
@@ -368,11 +334,11 @@ module.exports = class Engine {
                 let dy = controller.mouseY - cell.y;
                 const d = Math.sqrt(dx * dx + dy * dy);
                 if (d < 1) continue; dx /= d; dy /= d;
-                let modifier = 1;
-                if (cell.r > this.options.PLAYER_MIN_SPLIT_SIZE * 5 &&
-                    cell.age <= this.options.PLAYER_NO_COLLI_DELAY) modifier = 2;
+                // let modifier = 1;
+                // if (cell.r > this.options.PLAYER_MIN_SPLIT_SIZE * 5 &&
+                //     cell.age <= this.options.PLAYER_NO_COLLI_DELAY) modifier = 2;
                 const speed = 88 * Math.pow(cell.r, -0.4396754) * this.options.PLAYER_SPEED;
-                const m = Math.min(speed * modifier, d) * dt;
+                const m = Math.min(speed, d) * dt;
                 cell.x += dx * m;
                 cell.y += dy * m;
             }
@@ -417,24 +383,12 @@ module.exports = class Engine {
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
             this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
 
-        if (this.debug) {
-            
-            const cells = this.cells.filter(c => c.exists);
-            cells.sort((c1, c2) => c1.r - c2.r).forEach(c => console.log(c.toString()));
-
-            console.log("RESOLVE_DEBUG");
-            this.wasm.resolve_debug(0, this.treePtr, this.treePtr, this.stackPtr, 
-                this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-                this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE);
-            this.debug = false;
-
-            this.stop();
-        } else {
-            // Magic goes here
-            this.wasm.resolve(0, this.treePtr, this.treePtr, this.stackPtr, 
-                this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-                this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE);
-        }
+        // Magic goes here
+        this.wasm.resolve(0, this.treePtr, this.treePtr, this.stackPtr, 
+            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, 
+            this.options.TPS * this.options.PLAYER_DEAD_DELAY);
+    
 
         // Handle pop, update quadtree, remove item
         for (const cell of this.cells) {

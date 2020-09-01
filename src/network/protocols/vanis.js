@@ -125,7 +125,7 @@ module.exports = class VanisProtocol extends Protocol {
 
         // Don't count ejected cell under 2 tick as visible to optimize
         const visibleList = engine.query(this.handler.controller)
-            .filter(id => cells[id].type != EJECTED_TYPE || cells[id].age > 3);
+            .filter(id => cells[id].type != EJECTED_TYPE || cells[id].age > 1);
         this.currVisible = new Set(visibleList);
 
         // console.log(this.handler.controller.viewportX.toFixed(2), 
