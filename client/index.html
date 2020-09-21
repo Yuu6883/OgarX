@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="description" content="A game where you divide into pieces and eat other players." />
+    <title>OgarCpp Test Site</title>
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css" integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
+    <link href="css/style.css" rel="stylesheet"></head>
+<body>
+    <div id="app">
+        <ab-overlay></ab-overlay>
+        <context-menu></context-menu>
+        <hud v-show="showHud"></hud>
+        <replay-controls></replay-controls>
+        <div id="overlay" v-show="showMenu || showDeathScreen">
+            <canvas id="starfield"></canvas>
+            <privacy-tos></privacy-tos>
+            <death-stats v-show="showDeathScreen" :stats="deathStats"></death-stats>
+            <main-container v-show="showMenu"></main-container>
+            <social-links></social-links>
+            <p class="preload">text</p>
+        </div>
+    </div>
+    <canvas id="canvas" tabindex="0"></canvas>
+    <script type="text/javascript" src="js/vendor.js"></script>
+    <script type="text/javascript" src="js/main.js"></script>
+</body>
+</html>

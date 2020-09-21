@@ -49,7 +49,7 @@ const DefaultSettings = {
     EJECT_SIZE: 38,
     EJECT_LOSS: 43,
     EJECT_BOOST: 780,
-    EJECT_DELAY: 75, // ms
+    EJECT_DELAY: 80, // ms
     WORLD_RESTART_MULT: 0.75,
     WORLD_KILL_OVERSIZE: false,
     EAT_OVERLAP: 3,
