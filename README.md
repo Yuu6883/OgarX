@@ -1,5 +1,5 @@
 # <strong> Ogar69 </strong>
-Yeah it's OGAR 69
+Yeah it's OGAR 69 pogchamp<br>
 Server is working now, but need to start on the client (temp client scrapped from a certain game is in `/client`)
 
 # Project Goals
