@@ -1,4 +1,5 @@
 const Handler = require("../game/handle");
+const Writer = require("./writer");
 const Protocols = require("./protocols");
 
 module.exports = class Socket extends Handler {
@@ -37,12 +38,18 @@ module.exports = class Socket extends Handler {
 
     onChatMsg(controller, message) {
         var writer = new Writer();
-        writer.writeUInt8(13);
-        writer.writeUInt16(controller.id);
-        writer.writeUTF8String(message);
+        if (controller == null) {
+            writer.writeUInt8(13);
+            writer.writeUInt16(0);
+            writer.writeUTF8String(message);
+        } else {
+            writer.writeUInt8(13);
+            writer.writeUInt16(controller.id);
+            writer.writeUTF8String(message);
+        }
 
         writer = writer.finalize();
 
-        this.protocol && this.protocol.onChatMsg(viewFinalized);
+        this.protocol && this.protocol.onChatMsg(writer);
     }
 }

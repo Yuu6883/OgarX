@@ -14,21 +14,4 @@ module.exports = class ChatChannel {
             }
         }
     }
-
-    broadcastServerMessage(message) {
-        var writer = new Writer();
-        writer.writeUInt8(13);
-        writer.writeUInt8(0);
-        writer.writeUTF8String(message);
-
-        writer = writer.finalize();
-
-        for (var id in this.game.controls) {
-            var Controller = this.game.controls[id];
-
-            if (Controller.handle) {
-                Controller.handle.onChatMsg(writer);
-            };
-        };
-    }
 }
