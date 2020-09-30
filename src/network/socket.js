@@ -34,4 +34,8 @@ module.exports = class Socket extends Handler {
             console.error(e);
         }
     }
+
+    onChatMsg(viewFinalized) {
+        this.protocol && this.protocol.onChatMsg(viewFinalized);
+    }
 }

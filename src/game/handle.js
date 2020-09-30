@@ -9,4 +9,5 @@ module.exports = class Handle {
     onUpdate() {};
     /** @param {string} err */
     onError(err) {};
+    onChatMsg() {};
 }

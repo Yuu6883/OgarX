@@ -9,4 +9,5 @@ module.exports = class Protocol {
     onUpdate() {};
     /** @param {import("../game/controller")} controller */
     onSpawn(controller) {};
+    onChatMsg(viewFinalized) {};
 }

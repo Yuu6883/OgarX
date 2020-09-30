@@ -1,6 +1,8 @@
 const uWS = require("uWebSockets.js");
 const Socket = require("./socket");
 
+const ChatChannel = require("./chatchannel");
+
 /** @param {ArrayBuffer} buffer */
 const bufferToString = buffer => new Uint8Array(buffer).map(ch => String.fromCharCode(ch)).join("");
 
@@ -43,6 +45,7 @@ module.exports = class SocketServer {
             }).listen("0.0.0.0", 3000, sock => {
                 this.listening = false;
                 this.sock = sock;
+                this.game.chatChannel = new ChatChannel(this.game);
                 console.log(`Server opened`);
                 resolve(true);
             });

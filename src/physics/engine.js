@@ -147,10 +147,12 @@ module.exports = class Engine {
             this.profiler.length > this.options.TPS && this.profiler.shift();
         }, delay);
 
-        setInterval(() => {
-            console.log("Cells: " + this.cellCount + ", " + 
-                (this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100).toFixed(3) + "%");
-        }, 1000);
+        if (this.debug) {
+            setInterval(() => {
+                console.log("Cells: " + this.cellCount + ", " + 
+                    (this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100).toFixed(3) + "%");
+            }, 1000);
+        }
     }
 
     stop() {

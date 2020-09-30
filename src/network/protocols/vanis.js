@@ -76,9 +76,9 @@ module.exports = class VanisProtocol extends Protocol {
                 break;
             // Chat
             case 99:
-                // TODO: handle chat
                 const message = reader.readUTF8String();
-                console.log(message);
+
+                this.handler.game.chatChannel.broadcastMessage(this.handler, message);
                 break;
         }
     }
@@ -172,5 +172,9 @@ module.exports = class VanisProtocol extends Protocol {
         this.handler.ws.send(writer.finalize(), true);
 
         this.lastVisible = this.currVisible;
+    }
+
+    onChatMsg(viewFinalized) {
+        this.handler.ws.send(viewFinalized, true);
     }
 }
