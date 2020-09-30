@@ -33,15 +33,15 @@ module.exports = class VanisProtocol extends Protocol {
         const reader = new Reader(view);
         const opCode = reader.readUInt8();
         const controller = this.handler.controller;
-        
+
         switch (opCode) {
             case 1:
                 controller.name = decodeURIComponent(reader.readUTF8String()).slice(0, 16);
                 controller.skin = reader.readUTF8String();
                 // TODO: tag
                 controller.spawn = true;
-                console.log(`Player#${controller.id}: ` + 
-                    `{ name: ${controller.name}, ` + 
+                console.log(`Player#${controller.id}: ` +
+                    `{ name: ${controller.name}, ` +
                     `skin: ${controller.skin} } requested spawn`);
                 break;
             case 2:
@@ -76,7 +76,7 @@ module.exports = class VanisProtocol extends Protocol {
                 break;
             // Chat
             case 99:
-                const message = reader.readUTF8String();
+                const message = decodeURIComponent(reader.readUTF8String());
 
                 this.handler.game.chatChannel.broadcastMessage(this.handler.controller, message);
                 break;
