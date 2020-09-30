@@ -78,7 +78,7 @@ module.exports = class VanisProtocol extends Protocol {
             case 99:
                 const message = reader.readUTF8String();
 
-                this.handler.game.chatChannel.broadcastMessage(this.handler, message);
+                this.handler.game.chatChannel.broadcastMessage(this.handler.controller, message);
                 break;
         }
     }

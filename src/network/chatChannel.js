@@ -5,26 +5,17 @@ module.exports = class ChatChannel {
         this.game = game;
     }
 
-    broadcastMessage(handler, message) {
-        /* Placing here to prevent possible extra memory usage of creating an array everytime? */
-        var writer = new Writer();
-        writer.writeUInt8(13);
-        writer.writeUInt16(handler.controller.id);
-        writer.writeUTF8String(message);
-
-        writer = writer.finalize();
-
+    broadcastMessage(controller, message) {
         for (var id in this.game.controls) {
             var Controller = this.game.controls[id];
 
             if (Controller.handle) {
-                Controller.handle.onChatMsg(writer);
+                Controller.handle.onChatMsg(controller, message);
             }
         }
     }
 
     broadcastServerMessage(message) {
-        /* Placing here to prevent possible extra memory usage of creating an array everytime? */
         var writer = new Writer();
         writer.writeUInt8(13);
         writer.writeUInt8(0);

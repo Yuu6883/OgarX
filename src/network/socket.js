@@ -35,7 +35,14 @@ module.exports = class Socket extends Handler {
         }
     }
 
-    onChatMsg(viewFinalized) {
+    onChatMsg(controller, message) {
+        var writer = new Writer();
+        writer.writeUInt8(13);
+        writer.writeUInt16(controller.id);
+        writer.writeUTF8String(message);
+
+        writer = writer.finalize();
+
         this.protocol && this.protocol.onChatMsg(viewFinalized);
     }
 }
