@@ -174,7 +174,20 @@ module.exports = class VanisProtocol extends Protocol {
         this.lastVisible = this.currVisible;
     }
 
-    onChatMsg(viewFinalized) {
-        this.handler.ws.send(viewFinalized, true);
+    onChatMsg(controller, message) {
+        var writer = new Writer();
+        if (controller == null) {
+            writer.writeUInt8(13);
+            writer.writeUInt16(0);
+            writer.writeUTF8String(message);
+        } else {
+            writer.writeUInt8(13);
+            writer.writeUInt16(controller.id);
+            writer.writeUTF8String(message);
+        }
+
+        writer = writer.finalize();
+        
+        this.handler.ws.send(writer, true);
     }
 }
