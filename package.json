@@ -1,0 +1,25 @@
+{
+  "name": "ogar69",
+  "version": "1.0.0",
+  "description": "Yeah it's OGAR 69\r Nothing really works yet...",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yuu6883/Ogar69.git"
+  },
+  "author": "Yuu6883",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Yuu6883/Ogar69/issues"
+  },
+  "homepage": "https://github.com/Yuu6883/Ogar69#readme",
+  "devDependencies": {
+    "@types/node": "^14.0.27"
+  },
+  "dependencies": {
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v18.4.0"
+  }
+}
