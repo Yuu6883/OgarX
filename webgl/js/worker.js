@@ -568,14 +568,15 @@ const initEngine = async () => {
 
     {
         const CIRCLE_RADIUS = 2048;
+        const MARGIN = 10;
         console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS * 2} circle texture`);
-        const temp = new OffscreenCanvas(CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2);
+        const temp = new OffscreenCanvas((CIRCLE_RADIUS + MARGIN) * 2, (CIRCLE_RADIUS + MARGIN) * 2);
         const temp_ctx = temp.getContext("2d");
         temp_ctx.fillStyle = "yellow";
-        temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+        temp_ctx.arc(CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
         temp_ctx.fill();
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, 
-            temp_ctx.getImageData(0, 0, CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2));
+            temp_ctx.getImageData(0, 0, temp.width, temp.height));
             
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
