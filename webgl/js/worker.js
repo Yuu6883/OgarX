@@ -257,7 +257,7 @@ const Viewport = {
 }
 
 const IMG_DIM = 512;
-const SKIN_LIMIT = 100;
+const SKIN_LIMIT = 256;
 const SkinWorker = new Worker("skins.js");
 
 // Offset 0 is reserved (transparent/nothing)
@@ -399,6 +399,8 @@ const initEngine = async () => {
     gl.depthMask(false);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     const depthPeelProg = makeProgram(CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE);
     if (!depthPeelProg) return;
@@ -595,6 +597,7 @@ const initEngine = async () => {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 
+    // Allocate vram for skins
     gl.texImage3D(
         gl.TEXTURE_2D_ARRAY,
         0,
@@ -605,7 +608,7 @@ const initEngine = async () => {
         0,
         gl.RGBA,
         gl.UNSIGNED_BYTE,
-        new Uint8Array(IMG_DIM * IMG_DIM * SKIN_LIMIT * 4)
+        null
     );
 
     // Create mass texture on texture 12
@@ -617,6 +620,7 @@ const initEngine = async () => {
     const MASS_FONT_HEIGHT = 128;
     const MASS_CHARS       = "0123456789.k".split("");
     const MASS_FONT_COUNT  = MASS_CHARS.length;
+    const FONT_WIDTHS = {};
 
     {
         gl.texImage3D(
@@ -629,7 +633,7 @@ const initEngine = async () => {
             0,
             gl.RGBA,
             gl.UNSIGNED_BYTE,
-            new Uint8Array(MASS_FONT_COUNT * MASS_FONT_HEIGHT * MASS_FONT_WIDTH * 4)
+            null
         );
 
         console.log("loading font");
@@ -641,14 +645,17 @@ const initEngine = async () => {
         const temp_ctx = temp.getContext("2d");
 
         temp_ctx.font = "128px Bree Serif";
-        temp_ctx.fillStyle = "black";
-        temp_ctx.strokeStyle = "white";
+        temp_ctx.fillStyle = "white";
+        temp_ctx.strokeStyle = "black";
         temp_ctx.textAlign = "center";
-        temp_ctx.lineWidth = 15;
+        temp_ctx.lineWidth = 8;
+        temp_ctx.textBaseline = "middle";
 
         for (const index in MASS_CHARS) {
             const char = MASS_CHARS[index];
-            temp_ctx.fillText(char, 0, 0);
+            temp_ctx.strokeText(char, temp.width >> 1, 0);
+            temp_ctx.fillText(char, temp.width >> 1, 0);
+            FONT_WIDTHS[char] = temp_ctx.measureText(char).width;
             gl.texSubImage3D(
                 gl.TEXTURE_2D_ARRAY,
                 0,
@@ -660,9 +667,9 @@ const initEngine = async () => {
                 1,
                 gl.RGBA,
                 gl.UNSIGNED_BYTE,
-                temp_ctx.getImageData(0, 0, MASS_FONT_WIDTH, MASS_FONT_HEIGHT));
+                temp);
         }
-
+        
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);

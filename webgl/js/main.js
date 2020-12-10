@@ -36,6 +36,7 @@ window.onresize = () => {
 
 window.loadSkin = (...url) => worker && worker.postMessage({ skins: url });
 
+// Ctrl + and -
 window.onkeydown = event => {
     if((event.keyCode == 107 && event.ctrlKey == true) || 
        (event.keyCode == 109 && event.ctrlKey == true)) {
