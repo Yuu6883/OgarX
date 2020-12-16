@@ -133,7 +133,7 @@ void main() {
 
     vec4 circle = texture(u_circle, v_texcoord);
     vec4 src = texture(u_skins, vec3(v_texcoord, player_id));
-    vec4 color = vec4(mix(bgc, src.rgb, src.a) * circle.a, circle.a);
+    vec4 color = vec4(mix(bgc, src.rgb, src.a), circle.a);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
@@ -446,7 +446,7 @@ const initEngine = async () => {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RG, gl.FLOAT, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, 1920, 1080, 0, gl.RG, gl.FLOAT, null);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
 
         const frontColorTarget = gl.createTexture();
@@ -456,7 +456,7 @@ const initEngine = async () => {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
 
         const backColorTarget = gl.createTexture();
@@ -466,7 +466,7 @@ const initEngine = async () => {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, colorBuffers[i]);
@@ -484,7 +484,7 @@ const initEngine = async () => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -698,7 +698,14 @@ const initEngine = async () => {
         }
         const delta = now - lastTimestamp;
         
-        gl.viewport(0, 0, offscreen.width, offscreen.height);
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        
+        if (gl.canvas.width != Viewport.width || gl.canvas.height != Viewport.height) {
+            gl.canvas.width  = Viewport.width;
+            gl.canvas.height = Viewport.height;
+            gl.uniform2f(u_resolution, gl.canvas.width, gl.canvas.height);
+            postMessage({ resized: Viewport });
+        }
 
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
         gl.clearColor(0, 0, 0, 0);
@@ -730,13 +737,6 @@ const initEngine = async () => {
         gl.useProgram(depthPeelProg);
         gl.uniform1i(peeling_u_depth, 3);
         gl.uniform1i(peeling_u_front, 4);
-
-        if (gl.canvas.width != Viewport.width || gl.canvas.height != Viewport.height) {
-            gl.canvas.width  = Viewport.width;
-            gl.canvas.height = Viewport.height;
-            gl.uniform2f(u_resolution, gl.canvas.width, gl.canvas.height);
-            postMessage({ resized: Viewport });
-        }
 
         // hue += delta;
         // gl.uniform1f(u_hue, hue / 500);
