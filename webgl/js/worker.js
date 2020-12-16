@@ -118,7 +118,6 @@ void main() {
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
 
-
     if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
         // Skip this depth since it's been peeled.
         return;
@@ -133,8 +132,6 @@ void main() {
     }
 
     vec4 circle = texture(u_circle, v_texcoord);
-    // if (circle.a == 0.0) discard;
-
     vec4 src = texture(u_skins, vec3(v_texcoord, player_id));
     vec4 color = vec4(mix(bgc, src.rgb, src.a) * circle.a, circle.a);
 
@@ -381,7 +378,7 @@ const makeProgram = (vs_src, fs_src) => {
 
 const initEngine = async () => {
 
-    gl = offscreen.getContext("webgl2");
+    gl = offscreen.getContext("webgl2", { premultipliedAlpha: false, antialias: true });
     if (!gl) return console.error("WebGL2 Not Supported");
     
     console.log("Loading WASM...");
@@ -577,8 +574,7 @@ const initEngine = async () => {
         temp_ctx.fillStyle = "yellow";
         temp_ctx.arc(CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
         temp_ctx.fill();
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, 
-            temp_ctx.getImageData(0, 0, temp.width, temp.height));
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
             
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
