@@ -22,7 +22,6 @@ const HUE_ROTATE1_FUNC = `vec3 hue_rotate1(vec3 src_rgb) {
 
     return vec3(dot(yIQ, kYIQToR), dot(yIQ, kYIQToG), dot(yIQ, kYIQToB));
 }`;
-
 const HUE_ROTATE2_FUNC = `vec3 hue_rotate2(vec3 src_rgb) {
     const vec3 k = vec3(0.57735, 0.57735, 0.57735);
     float angle = cos(u_hue);
@@ -32,8 +31,8 @@ const HUE_ROTATE2_FUNC = `vec3 hue_rotate2(vec3 src_rgb) {
 const CELL_VERT_SHADER_SOURCE = 
 `#version 300 es
 
-precision highp float;
-precision highp int;
+precision mediump float;
+precision mediump int;
 
 uniform vec2 u_resolution;
 uniform mat3 u_view;
@@ -62,130 +61,48 @@ void main() {
     // convert the position from pixels to -1.0 to 1.0
     vec2 clipSpace = camera_pos / u_resolution;
 
-    gl_Position = vec4(clipSpace * vec2(1, -1), 1.0 / a_data.z, 1);
+    gl_Position = vec4(clipSpace * vec2(1, -1), 1.0 - a_data.z / 10000.0, 1);
 
     bgc = hue_rotate2(a_color);
 }
 `;
 
-const CELL_FRAG_PEELING_SHADER_SOURCE = 
+const CELL_FRAG_SHADER_SOURCE = 
 `#version 300 es
 
 #define PI 3.1415926538
 
-precision highp float;
-precision highp int;
-precision highp sampler2DArray;
-precision highp sampler2D;
+precision mediump float;
+precision mediump int;
+precision mediump sampler2DArray;
+precision mediump sampler2D;
 
-#define MAX_DEPTH 99999.0
-
-uniform sampler2DArray u_skins;
+uniform sampler2DArray u_sampler2D;
 uniform sampler2D u_circle;
-
-uniform sampler2D uDepth;
-uniform sampler2D uFrontColor;
 
 in vec3 background_color;
 in vec2 v_texcoord;
 in vec3 bgc;
 flat in int player_id;
 
-layout(location=0) out vec2 depth;  // RG32F, R - negative front depth, G - back depth
-layout(location=1) out vec4 frontColor;
-layout(location=2) out vec4 backColor;
+out vec4 color;
 
 void main() {
-
-    float fragDepth = gl_FragCoord.z;   // 0 - 1
-
-    ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-    vec2 lastDepth = texelFetch(uDepth, fragCoord, 0).rg;
-    vec4 lastFrontColor = texelFetch(uFrontColor, fragCoord, 0);
-
-    // depth value always increases
-    // so we can use MAX blend equation
-    depth.rg = vec2(-MAX_DEPTH);
-
-    // front color always increases
-    // so we can use MAX blend equation
-    frontColor = lastFrontColor;
-
-    // back color is separately blend afterwards each pass
-    backColor = vec4(0.0);
-
-    float nearestDepth = -lastDepth.x;
-    float furthestDepth = lastDepth.y;
-    float alphaMultiplier = 1.0 - lastFrontColor.a;
-
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
-        // Skip this depth since it's been peeled.
-        return;
-    }
-
-    if (fragDepth > nearestDepth && fragDepth < furthestDepth) {
-        // This needs to be peeled.
-        // The ones remaining after MAX blended for 
-        // all need-to-peel will be peeled next pass.
-        depth.rg = vec2(-fragDepth, fragDepth);
-        return;
-    }
-
     vec4 circle = texture(u_circle, v_texcoord);
-    vec4 src = texture(u_skins, vec3(v_texcoord, player_id));
-    vec4 color = vec4(mix(bgc, src.rgb, src.a) * circle.a, circle.a);
-
-    if (fragDepth == nearestDepth) {
-        frontColor.rgb += color.rgb * color.a * alphaMultiplier;
-        frontColor.a = 1.0 - alphaMultiplier * (1.0 - color.a);
-    } else {
-        backColor += color;
-    }
-}
-`;
-
-const QUAD_VERT_SHADER_SOURCE = 
-`#version 300 es
-layout(location=0) in vec4 aPosition;
-void main() {
-    gl_Position = aPosition;
-}
-`;
-
-const BLEND_BACK_FRAG_SHADER_SOURCE =
-`#version 300 es
-precision highp float;
-
-uniform sampler2D uBackColor;
-
-out vec4 fragColor;
-void main() {
-    fragColor = texelFetch(uBackColor, ivec2(gl_FragCoord.xy), 0);
-    if (fragColor.a == 0.0) { 
+    if (circle.a == 0.0) {
+        gl_FragDepth = 0.0;
         discard;
+    } else if (circle.a < 1.0) {
+        gl_FragDepth = 1.0;
+        vec4 src = texture(u_sampler2D, vec3(v_texcoord, player_id));
+        color = vec4(mix(bgc, src.rgb, src.a) * circle.a, circle.a);
+    } else {
+        gl_FragDepth = gl_FragCoord.z;
+        vec4 src = texture(u_sampler2D, vec3(v_texcoord, player_id));
+        color = vec4(mix(bgc, src.rgb, src.a) * circle.a, circle.a);
     }
 }
 `;
-
-const FINAL_FRAG_SHADER_SOURCE = 
-`#version 300 es
-precision highp float;
-
-uniform sampler2D uFrontColor;
-uniform sampler2D uBackColor;
-
-out vec4 fragColor;
-void main() {
-    ivec2 fragCoord = ivec2(gl_FragCoord.xy);
-    vec4 frontColor = texelFetch(uFrontColor, fragCoord, 0);
-    vec4 backColor = texelFetch(uBackColor, fragCoord, 0);
-    float alphaMultiplier = 1.0 - frontColor.a;
-
-    fragColor = vec4(
-        frontColor.rgb + alphaMultiplier * backColor.rgb,
-        frontColor.a + backColor.a
-    );
-}`;
 
 const Mat3 = {
     mul: (a, b) => {
@@ -254,7 +171,7 @@ const Viewport = {
 }
 
 const IMG_DIM = 512;
-const SKIN_LIMIT = 256;
+const SKIN_LIMIT = 100;
 const SkinWorker = new Worker("skins.js");
 
 // Offset 0 is reserved (transparent/nothing)
@@ -264,6 +181,8 @@ let skinOffset = 1;
 let offscreen = null;
 /** @type {WebGL2RenderingContext} */
 let gl = null;
+/** @type {WebGLProgram} */
+let cell_prog = null;
 
 /** @type {Map<string, number>} */
 const SkinCache = new Map();
@@ -287,7 +206,7 @@ onmessage = e => {
         Target.scale = Math.min(Math.max(Target.scale, 300), 10000000);
     }
 
-    if (!gl) initEngine();
+    if (!gl) initProgram();
     if (data.resize) resize(data.width, data.height);
     if (data.skins && Array.isArray(data.skins)) loadSkin(...data.skins);
 };
@@ -316,11 +235,11 @@ const resize = (width, height) => {
     }
 }
 
-const CELL_LIMIT = 2 ** 16;
+const CELL_LIMIT = 2 ** 14;
 const MIN_SIZE = 300
 const SIZE_RANGE = 10000;
-const POS_RANGE = 1000000;
-const SORT_SCENE = false;
+const POS_RANGE = 400000;
+const SORT_SCENE = true;
 
 /** @param {Float32Array} array */
 const genCell = array => {
@@ -340,172 +259,75 @@ const genCell = array => {
     array[6] = Math.random();
 }
 
-/**
- * @param {string} vs_src
- * @param {string} fs_src
- */
-const makeProgram = (vs_src, fs_src) => {
-    const vs = gl.createShader(gl.VERTEX_SHADER);
-    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+const initProgram = async () => {
 
-    gl.shaderSource(vs, vs_src);
-    gl.shaderSource(fs, fs_src);
-
-    gl.compileShader(vs);
-    gl.compileShader(fs);
-
-    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS) || !gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-        console.error(`vs info-log: ${gl.getShaderInfoLog(vs)}\n` +
-                      `info-log: ${gl.getShaderInfoLog(fs)}`);
-        gl.deleteShader(vs);
-        gl.deleteShader(fs);
-        return;
-    }
-
-    const prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-        console.error(`prog link failed: ${gl.getProgramInfoLog(prog)}`);
-        gl.deleteProgram(prog);
-        return;
-    }
-
-    return prog;
-}
-
-const initEngine = async () => {
-
-    gl = offscreen.getContext("webgl2", { premultipliedAlpha: false, antialias: true });
-    if (!gl) return console.error("WebGL2 Not Supported");
+    gl = offscreen.getContext("webgl2", { premultipliedAlpha: false, depth: true });
+    if (!gl || cell_prog) return console.log("Nope");
     
     console.log("Loading WASM...");
     await Module.load();
     const CellDataBuffer = Module.HEAPF32.subarray(0, CELL_LIMIT * 7);
     
     console.log(`Supported WebGL2 extensions: ${gl.getSupportedExtensions().join(", ")}`);
+
+    {
+        const cell_vs = gl.createShader(gl.VERTEX_SHADER);
+        const cell_fs = gl.createShader(gl.FRAGMENT_SHADER);
     
-    if (!gl.getExtension("EXT_color_buffer_float")) {
-        console.error("FLOAT color buffer not available");
-        return;
-    }
+        gl.shaderSource(cell_vs, CELL_VERT_SHADER_SOURCE);
+        gl.shaderSource(cell_fs, CELL_FRAG_SHADER_SOURCE);
     
-    gl.enable(gl.BLEND);
-    gl.depthMask(false);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-    const depthPeelProg = makeProgram(CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE);
-    if (!depthPeelProg) return;
-    const blendbackProg = makeProgram(QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
-    if (!blendbackProg) return;
-    const finalProg = makeProgram(QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
-    if (!finalProg) return;
-
-    // Attributes and uniforms
-    const a_position = gl.getAttribLocation(depthPeelProg, "a_position");
-    const a_color    = gl.getAttribLocation(depthPeelProg, "a_color");
-    const a_data     = gl.getAttribLocation(depthPeelProg, "a_data");
-
-    const u_resolution = gl.getUniformLocation(depthPeelProg, "u_resolution");
-    const u_skins      = gl.getUniformLocation(depthPeelProg, "u_skins");
-    const u_view       = gl.getUniformLocation(depthPeelProg, "u_view");
-    const u_circle     = gl.getUniformLocation(depthPeelProg, "u_circle");
-    const u_hue        = gl.getUniformLocation(depthPeelProg, "u_hue");
-
-    const peeling_u_depth = gl.getUniformLocation(depthPeelProg, "uDepth");
-    const peeling_u_front = gl.getUniformLocation(depthPeelProg, "uFrontColor");
-
-    const final_u_front = gl.getUniformLocation(finalProg, "uFrontColor");
-    const final_u_back  = gl.getUniformLocation(finalProg, "uBackColor");
-
-    const blendback_color = gl.getUniformLocation(blendbackProg, "uBackColor");
-
-    // Framebuffers
-    const depthPeelBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-
-    const colorBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-
-    const blendBackBuffer = gl.createFramebuffer();
-
-    // Texture unit 0-5 are used
-    for (let i = 0; i < 2; i++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, depthPeelBuffers[i]);
-        const texture_unit_offset = i * 3;
-
-        const depthTarget  = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0 + texture_unit_offset);
-        gl.bindTexture(gl.TEXTURE_2D, depthTarget); 
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RG, gl.FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
-
-        const frontColorTarget = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE1 + texture_unit_offset);
-        gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
-
-        const backColorTarget = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE2 + texture_unit_offset);
-        gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, colorBuffers[i]);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, frontColorTarget, 0);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, backColorTarget, 0);
+        gl.compileShader(cell_vs);
+        gl.compileShader(cell_fs);
+    
+        if (!gl.getShaderParameter(cell_vs, gl.COMPILE_STATUS) || !gl.getShaderParameter(cell_fs, gl.COMPILE_STATUS)) {
+            console.error(`cell_vs info-log: ${gl.getShaderInfoLog(cell_vs)}\n` +
+                          `cell_fs info-log: ${gl.getShaderInfoLog(cell_fs)}`);
+            gl.deleteShader(cell_vs);
+            gl.deleteShader(cell_fs);
+            return;
+        }
+    
+        cell_prog = gl.createProgram();
+        gl.attachShader(cell_prog, cell_vs);
+        gl.attachShader(cell_prog, cell_fs);
+        gl.linkProgram(cell_prog);
+    
+        if (!gl.getProgramParameter(cell_prog, gl.LINK_STATUS)) {
+            console.error(`cell_prog link failed: ${gl.getProgramInfoLog(cell_prog)}`);
+            gl.deleteProgram(cell_prog);
+            return;
+        }
     }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, blendBackBuffer);
+    // Quad fields
+    const a_position = gl.getAttribLocation(cell_prog, "a_position");
+    const a_color = gl.getAttribLocation(cell_prog, "a_color");
+    const a_data = gl.getAttribLocation(cell_prog, "a_data");
 
-    // Texture6
-    const blendBackTarget = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE6);
-    gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const u_resolution = gl.getUniformLocation(cell_prog, "u_resolution");
+    const u_sampler2D = gl.getUniformLocation(cell_prog, "u_sampler2D");
+    const u_view = gl.getUniformLocation(cell_prog, "u_view");
+    const u_circle = gl.getUniformLocation(cell_prog, "u_circle");
+    const u_hue = gl.getUniformLocation(cell_prog, "u_hue");
     
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
 
-    const quadArray = gl.createBuffer();
+    const pos_buffer = gl.createBuffer();
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadArray);
+    gl.bindBuffer(gl.ARRAY_BUFFER, pos_buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        -1, +1,
         -1, -1,
         +1, -1,
+        -1, +1,
         -1, +1,
         +1, -1,
         +1, +1,
     ]), gl.STATIC_DRAW);
 
     {
-        gl.enableVertexAttribArray(quadArray);
+        gl.enableVertexAttribArray(pos_buffer);
         const size = 2;
         const type = gl.FLOAT;
         const normalize = false;
@@ -560,32 +382,32 @@ const initEngine = async () => {
         gl.vertexAttribDivisor(a_color, 2);
     }
 
-    // Create circle texture on texture10
+    // Create circle texture
     const circle_texture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE10);
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, circle_texture);
 
     {
         const CIRCLE_RADIUS = 2048;
-        const MARGIN = 10;
         console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS * 2} circle texture`);
-        const temp = new OffscreenCanvas((CIRCLE_RADIUS + MARGIN) * 2, (CIRCLE_RADIUS + MARGIN) * 2);
+        const temp = new OffscreenCanvas(CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2);
         const temp_ctx = temp.getContext("2d");
         temp_ctx.fillStyle = "yellow";
-        temp_ctx.arc(CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+        temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
         temp_ctx.fill();
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, 
+            temp_ctx.getImageData(0, 0, CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2));
             
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
     }
 
-    // Create skin texture array on texture 11
+    // Create skin texture array
     const skin_texture_array = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE11);
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, skin_texture_array);
     
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -593,7 +415,6 @@ const initEngine = async () => {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 
-    // Allocate vram for skins
     gl.texImage3D(
         gl.TEXTURE_2D_ARRAY,
         0,
@@ -604,19 +425,17 @@ const initEngine = async () => {
         0,
         gl.RGBA,
         gl.UNSIGNED_BYTE,
-        null
+        new Uint8Array(IMG_DIM * IMG_DIM * SKIN_LIMIT * 4)
     );
 
-    // Create mass texture on texture 12
     const mass_texture_array = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE12);
+    gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, mass_texture_array);
 
     const MASS_FONT_WIDTH  = 128;
     const MASS_FONT_HEIGHT = 128;
     const MASS_CHARS       = "0123456789.k".split("");
     const MASS_FONT_COUNT  = MASS_CHARS.length;
-    const FONT_WIDTHS = {};
 
     {
         gl.texImage3D(
@@ -629,7 +448,7 @@ const initEngine = async () => {
             0,
             gl.RGBA,
             gl.UNSIGNED_BYTE,
-            null
+            new Uint8Array(MASS_FONT_COUNT * MASS_FONT_HEIGHT * MASS_FONT_WIDTH * 4)
         );
 
         console.log("loading font");
@@ -641,17 +460,14 @@ const initEngine = async () => {
         const temp_ctx = temp.getContext("2d");
 
         temp_ctx.font = "128px Bree Serif";
-        temp_ctx.fillStyle = "white";
-        temp_ctx.strokeStyle = "black";
+        temp_ctx.fillStyle = "black";
+        temp_ctx.strokeStyle = "white";
         temp_ctx.textAlign = "center";
-        temp_ctx.lineWidth = 8;
-        temp_ctx.textBaseline = "middle";
+        temp_ctx.lineWidth = 15;
 
         for (const index in MASS_CHARS) {
             const char = MASS_CHARS[index];
-            temp_ctx.strokeText(char, temp.width >> 1, 0);
-            temp_ctx.fillText(char, temp.width >> 1, 0);
-            FONT_WIDTHS[char] = temp_ctx.measureText(char).width;
+            temp_ctx.fillText(char, 0, 0);
             gl.texSubImage3D(
                 gl.TEXTURE_2D_ARRAY,
                 0,
@@ -663,29 +479,23 @@ const initEngine = async () => {
                 1,
                 gl.RGBA,
                 gl.UNSIGNED_BYTE,
-                temp);
+                temp_ctx.getImageData(0, 0, MASS_FONT_WIDTH, MASS_FONT_HEIGHT));
+            temp_ctx.clearRect(0, 0, temp.width, temp.height);
         }
-        
+
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     }
 
-    gl.useProgram(depthPeelProg);
+    gl.useProgram(cell_prog);
     gl.bindVertexArray(vao);
 
     gl.uniform2f(u_resolution, gl.canvas.width, gl.canvas.height);
-    gl.uniform1i(u_circle, 10);
-    gl.uniform1i(u_skins,  11);
+    gl.uniform1i(u_sampler2D, 0);
+    gl.uniform1i(u_circle, 1);
     gl.uniform1f(u_hue, 0);
-
-    gl.useProgram(finalProg);
-    gl.uniform1i(final_u_back, 6);
-
-    const DEPTH_CLEAR_VALUE = -99999.0;
-    const MIN_DEPTH = 0.0;
-    const MAX_DEPTH = 1.0;
 
     let hue = 0;
     let lastTimestamp;
@@ -697,39 +507,6 @@ const initEngine = async () => {
             return;
         }
         const delta = now - lastTimestamp;
-        
-        gl.viewport(0, 0, offscreen.width, offscreen.height);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[0]);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-        gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[1]);
-        gl.clearColor(-MIN_DEPTH, MAX_DEPTH, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[0]);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[1]);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        // draw depth for first pass to peel
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[0]);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-        gl.blendEquation(gl.MAX);
-
-        gl.useProgram(depthPeelProg);
-        gl.uniform1i(peeling_u_depth, 3);
-        gl.uniform1i(peeling_u_front, 4);
 
         if (gl.canvas.width != Viewport.width || gl.canvas.height != Viewport.height) {
             gl.canvas.width  = Viewport.width;
@@ -738,10 +515,17 @@ const initEngine = async () => {
             postMessage({ resized: Viewport });
         }
 
-        // hue += delta;
+        gl.viewport(0, 0, offscreen.width, offscreen.height);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthRange(0, 1);
+        gl.depthMask(true);
+    
+        hue += delta;
         // gl.uniform1f(u_hue, hue / 500);
 
-        // Process updated skins
         if (SkinUpdates.size) {
             gl.bindTexture(gl.TEXTURE_2D_ARRAY, skin_texture_array);
             for (const [offset, bitmap] of SkinUpdates) {
@@ -764,15 +548,14 @@ const initEngine = async () => {
             for (let i = 3; i < 7 * GEN_CELLS; i += 7)
                 CellDataBuffer[i] = ~~(Math.random() * skinOffset);
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, cell_data_buffer);
-            gl.bufferSubData(gl.ARRAY_BUFFER, 0, CellDataBuffer, 0, 7 * GEN_CELLS);
         }
 
-        // if (SORT_SCENE) {
-        //     Module.instance.exports.sort(0, CELL_LIMIT);
-        //     gl.bindBuffer(gl.ARRAY_BUFFER, cell_data_buffer);
-        //     gl.bufferSubData(gl.ARRAY_BUFFER, 0, CellDataBuffer, 0, 7 * GEN_CELLS);
-        // }
+        if (SORT_SCENE) {
+            // Module.instance.exports.sort(0, CELL_LIMIT);
+        }
+
+        // gl.bindBuffer(gl.ARRAY_BUFFER, cell_data_buffer);
+        // gl.bufferSubData(gl.ARRAY_BUFFER, 0, CellDataBuffer, 0, 7 * GEN_CELLS);
 
         // Smooth update camera
         Camara.scale += (50 / (Target.scale + 10) - Camara.scale) / delta;
@@ -783,66 +566,7 @@ const initEngine = async () => {
         const cameraMatrix = Mat3.mul(Mat3.trans(Camara.x * Camara.scale, Camara.y * Camara.scale), Mat3.scale(Camara.scale, Camara.scale));
 
         gl.uniformMatrix3fv(u_view, false, cameraMatrix);
-
-        gl.bindVertexArray(vao);
-        // TODO: update cell position etc
         gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, GEN_CELLS);
-
-        const NUM_PASS = 4;
-        // Dual depth peeling
-        let readId, writeId;
-        let offsetRead, offsetBack;
-
-        for (let pass = 0; pass < NUM_PASS; pass++) {
-            readId = pass % 2;
-            writeId = 1 - readId;  // ping-pong: 0 or 1
-            
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
-            gl.blendEquation(gl.MAX);
-
-            // update texture uniform
-            offsetRead = readId * 3;
-            gl.useProgram(depthPeelProg);
-            gl.uniform1i(peeling_u_depth, offsetRead);
-            gl.uniform1i(peeling_u_front, offsetRead + 1);
-
-            // draw geometry
-            gl.bindVertexArray(vao);
-            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, GEN_CELLS);
-
-            // blend back color separately
-            offsetBack = writeId * 3;
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.blendEquation(gl.FUNC_ADD);
-            gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            gl.useProgram(blendbackProg);
-            gl.uniform1i(blendback_color, offsetBack + 2);
-            gl.bindVertexArray(vao);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-
-        // Final prog
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        gl.useProgram(finalProg);
-        gl.uniform1i(final_u_front, offsetBack + 1);
-
-        gl.bindVertexArray(vao);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         requestAnimationFrame(render);
         lastTimestamp = now;
