@@ -3,8 +3,31 @@ let worker = null;
 /** @type {HTMLCanvasElement} */
 let canvas = null;
 
+const Mouse = new class {
+
+    constructor () {
+        this.setBuffer();
+    }
+
+    setBuffer(buf = new SharedArrayBuffer(12)) {
+        this.sharedBuffer = buf;
+        this.buffer = new Int32Array(this.sharedBuffer);
+    }
+
+    get x() { return Atomics.load(this.buffer, 0); }
+    set x(v) { Atomics.store(this.buffer, 0, v) }
+
+    get y() { return Atomics.load(this.buffer, 1); }
+    set y(v) { Atomics.store(this.buffer, 1, v); }
+
+    get scroll() { return Atomics.load(this.buffer, 2); }
+    set scroll(v) { Atomics.store(this.buffer, 2, v); }
+    updateScroll(v) { Atomics.add(this.buffer, 2, -v); }
+    resetScroll() { return Atomics.exchange(this.buffer, 2, 0); }
+}
+
 window.onload = () => {
-    worker = new Worker("js/worker.js");
+    worker = new Worker("js/renderer.js");
     worker.onmessage = e=> {
         const { data } = e;
         if (data.resized) {
@@ -21,7 +44,7 @@ window.onload = () => {
     offscreen.width = window.innerWidth;
     offscreen.height = window.innerHeight;
 
-    worker.postMessage({ offscreen }, [offscreen]);
+    worker.postMessage({ offscreen, mouse: Mouse.sharedBuffer }, [offscreen]);
     
     console.log("Document loaded");
 }
@@ -34,21 +57,12 @@ window.onresize = () => {
     });
 }
 
-window.loadSkin = (...url) => worker && worker.postMessage({ skins: url });
-
 // Ctrl + and -
 window.onkeydown = event => {
     if((event.keyCode == 107 && event.ctrlKey == true) || 
        (event.keyCode == 109 && event.ctrlKey == true)) {
         event.preventDefault(); 
     }
-}
-
-const Mouse = {
-    x: window.innerWidth  / 2,
-    y: window.innerHeight / 2,
-    scroll: 0,
-    clicked: false
 }
 
 const wheelEvt = "onwheel" in document.createElement("div") ? "wheel" : // Modern browsers support "wheel"
@@ -60,12 +74,4 @@ window.addEventListener("mousemove", e => {
     Mouse.y = e.clientY;
 });
 
-window.onmouseup = _ => Mouse.clicked = true;
-
-window.addEventListener(wheelEvt, e => Mouse.scroll -= e.deltaY);
-
-setInterval(() => {
-    worker && worker.postMessage({ mouse: Mouse });
-    Mouse.scroll = 0;
-    Mouse.clicked = false;
-}, 10);
+window.addEventListener(wheelEvt, e => Mouse.updateScroll(e.deltaY));
