@@ -147,8 +147,8 @@ setInterval(() => {
 
 const CELL_LIMIT = 2 ** 16;
 const MIN_SIZE = 500;
-const SIZE_RANGE = 100000;
-const POS_RANGE = 10000000;
+const SIZE_RANGE = 10000;
+const POS_RANGE = 1000000;
 const SORT_SCENE = false;
 
 /** @param {[]} array */
@@ -156,10 +156,12 @@ const pick = array => array[~~(Math.random() * array.length)];
 
 /** @param {Float32Array} array */
 const genCell = array => {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.sqrt(Math.random()) * POS_RANGE;
     // x
-    array[0] = Math.random() * 2 * POS_RANGE - POS_RANGE;
+    array[0] = Math.sin(angle) * dist;
     // y
-    array[1] = Math.random() * 2 * POS_RANGE - POS_RANGE;
+    array[1] = Math.cos(angle) * dist;
     // Size
     array[2] = Math.random() * SIZE_RANGE + MIN_SIZE;
     // Skin

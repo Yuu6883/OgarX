@@ -135,13 +135,12 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-
+    
     vec4 circle = texture(u_circle, v_texcoord);
     vec4 name = texture(u_names, vec3(v_texcoord, player_id));
     vec4 skin = texture(u_skins, vec3(v_texcoord, player_id));
     vec3 mixed = mix(bgc, skin.rgb, skin.a);
     vec4 color = vec4(mix(mixed, name.rgb, float(render_flags & 0x1) * name.a), circle.a);
-    // vec4 color = vec4(mixed, circle.a);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
