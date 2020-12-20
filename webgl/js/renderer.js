@@ -260,7 +260,6 @@ class Renderer {
             gl.activeTexture(gl.TEXTURE0 + texture_unit_offset);
             gl.bindTexture(gl.TEXTURE_2D, depthTarget);
             FBOTexParam();
-
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, 1920, 1080, 0, gl.RG, gl.FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
 
@@ -287,6 +286,7 @@ class Renderer {
         // Texture unit 6 is used for blendback
         {
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("blend_back"));
+            
             const blendBackTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE6);
             gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
@@ -314,6 +314,8 @@ class Renderer {
 
     clearPeelingBuffers() {
         const gl = this.gl;
+        console.log(this.fbo);
+
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -344,6 +346,7 @@ class Renderer {
         gl.useProgram(this.peel_prog1);
         gl.uniform1i(this.getUniform(this.peel_prog1, "u_depth"), 3);
         gl.uniform1i(this.getUniform(this.peel_prog1, "u_front_color"), 4);
+        gl.bindVertexArray(this.quadVAO);
     }
 
     generateQuadVAO() {
@@ -510,27 +513,21 @@ class Renderer {
         const delta = now - this.lastTimestamp;
         this.lastTimestamp = now;
 
-        this.updateTarget();
-        this.lerpCamera(delta);
-        
-        this.checkViewport();
-        this.clearPeelingBuffers();
-
         const gl = this.gl;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-        // Process updated skins and canvas TODO
-        // if (CanvasUpdates.size) updatePlayerData();
-
-        this.core.instance.exports.draw(0, this.bufferOffsetsTableOffset, this.renderBufferOffset, 0.5);
-
-        // console.log(this.bufferOffsetsTable);
 
         const main_prog = DEBUG ? this.debug_prog : this.peel_prog1;
         gl.useProgram(main_prog);
         gl.uniformMatrix3fv(this.getUniform(main_prog, "u_view"), false, this.cameraMatrix);
 
-        const draw = () => {
+        this.updateTarget();
+        this.lerpCamera(delta);
+        
+        this.core.instance.exports.draw(0, this.bufferOffsetsTableOffset, this.renderBufferOffset, 0.5);
+
+        this.checkViewport();
+
+        const drawCells = () => {
             for (let i = 1; i < CELL_TYPES; i++) {
                 const begin = this.bufferOffsetsTable[i - 1] || (i == 1 ? 0 : 65536);
                 const end   = this.bufferOffsetsTable[i] || 65536;
@@ -556,25 +553,28 @@ class Renderer {
             }
         }
 
-        if (DEBUG) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-        const NUM_PASS = 4;
-        DEBUG ? draw() : this.depthPeelRender(NUM_PASS, draw);
-
-        this.bufferOffsetsTable.fill(0);
-
-        if (!DEBUG) {
+        if (DEBUG) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            drawCells();
+        } else {
+            const NUM_PASS = 4;
+            this.clearPeelingBuffers();
+            const offsetBack = this.depthPeelRender(NUM_PASS, drawCells);
+            
             // Final prog
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             gl.useProgram(this.final_prog);
-            gl.uniform1i(this.getUniform(this.final_prog, "u_back_color"), 6);
+            gl.uniform1i(this.getUniform(this.final_prog, "u_back_color"), offsetBack + 1);
 
             // Draw to screen
             gl.bindVertexArray(this.quadVAO);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
+        
+        this.bufferOffsetsTable.fill(0);
 
         // FXAA prog
         // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -584,16 +584,22 @@ class Renderer {
 
         // gl.bindVertexArray(vao);
         // gl.drawArrays(gl.TRIANGLES, 0, 6);
-        // this.stop();
+        this.stop();
     }
 
     /** @param {() => void} func */
     depthPeelRender(passes = 4, func) {
+        func();
+
         const gl = this.gl;
+
+        let readId, writeId;
+        let offsetRead, offsetBack;
+
         // Dual depth peeling passes
         for (let pass = 0; pass < passes; pass++) {
-            const readId = pass % 2;
-            const writeId = 1 - readId;  // ping-pong: 0 or 1
+            readId = pass % 2;
+            writeId = 1 - readId;  // ping-pong: 0 or 1
             
             gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[writeId]);
             gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
@@ -610,7 +616,7 @@ class Renderer {
             gl.blendEquation(gl.MAX);
 
             // update texture uniform
-            const offsetRead = readId * 3;
+            offsetRead = readId * 3;
             gl.useProgram(this.peel_prog1);
             gl.uniform1i(this.getUniform(this.peel_prog1, "u_depth"), offsetRead);
             gl.uniform1i(this.getUniform(this.peel_prog1, "u_front_color"), offsetRead + 1);
@@ -619,7 +625,7 @@ class Renderer {
             func();
 
             // blend back color separately
-            const offsetBack = writeId * 3;
+            offsetBack = writeId * 3;
             gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
             gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
             gl.blendEquation(gl.FUNC_ADD);
@@ -629,6 +635,8 @@ class Renderer {
             gl.bindVertexArray(this.quadVAO);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
+
+        return offsetBack;
     }
 }
 

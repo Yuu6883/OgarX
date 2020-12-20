@@ -103,7 +103,7 @@ void main() {
     // vec4 circle = texture(u_circle, v_texcoord);
     // vec4 skin = texture(u_skin, v_texcoord);
     // vec4 color = vec4(mix(u_circle_color, skin.rgb, skin.a), circle.a);
-    vec4 color = vec4(1, 1, 1, 1);
+    vec4 color = vec4(u_circle_color, 1);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
