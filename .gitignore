@@ -1,10 +1,8 @@
-# Node omega
+# Node modules
 node_modules/*
 
-client/*
-
-.vs*
-x64*
 config.json*
 
 debug.log*
+
+client/js/*

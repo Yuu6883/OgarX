@@ -4,7 +4,8 @@
   "description": "Yeah it's OGAR 69\r Nothing really works yet...",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "browserify ./webgl/js/main.js -o ./client/js/main.js && browserify ./webgl/js/renderer.js -o ./client/js/renderer.js && cp ./webgl/js/loader.js ./client/js/loader.js"
   },
   "repository": {
     "type": "git",

@@ -8,4 +8,10 @@ Server is working now, but need to start on the client (temp client scrapped fro
 * JS (instead of c++)
 * Raw WebGL client
 
-# More stuff coming soon...
+## WebGL Renderer
+
+### Internal Buffer
+[currX(4)|currY(4)|currSize(4)|oldX(4)|oldY(4)|oldSize(4)|netX(4)|netY(4)|netSize(4)|type(1)] -> 37 bytes per cell
+
+### Render Buffer
+[X(4)|Y(4)|size(4)|type(1)] -> 13 bytes

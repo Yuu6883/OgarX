@@ -1,730 +1,580 @@
-importScripts("men.js", "shaders.js");
+const Mouse = require("./mouse");
+const Viewport = require("./viewport");
+const WasmCore = require("./wasm-core");
 
-const Target = {
-    x: 0,
-    y: 0,
-    scale: 1000,
-}
+const { makeProgram, pick, Mat3, getColor } = require("./util");
+const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE, CELL_FRAG_DEBUG_SHADER_SOURCE,
+   QUAD_VERT_SHADER_SOURCE, 
+   BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE } = require("./shaders");
 
-const Camara = {
-    x: 0,
-    y: 0,
-    scale: 1
-}
+const DEBUG = false;
 
-const Viewport = {
-    width: 0,
-    height: 0
-}
+// Constants
+const CELL_TYPES = 256;
+const CELL_LIMIT = 2 ** 16; // 65536
+const MIN_SIZE = 10;
+const SIZE_RANGE = 200;
+const POS_RANGE = 65536;
 
-const IMG_DIM = 512;
-const NAME_TEXTURE_RES = 512;
-const PLAYER_LIMIT = 256;
-const CanvasWorker = new Worker("canvas.js");
+const DEPTH_CLEAR_VALUE = -99999.0;
+const MIN_DEPTH = 0.0;
+const MAX_DEPTH = 1.0;
 
-/** @param {{ id: number, skin: string, name: string }} data */
-const loadSkinAndName = data => CanvasWorker.postMessage(data);
+class Renderer {
+    /** @param {OffscreenCanvas} canvas */
+    constructor(canvas) {
+        this.canvas = canvas;
 
-/** @type {OffscreenCanvas} */
-let offscreen = null;
-/** @type {WebGL2RenderingContext} */
-let gl = null;
+        this.target = { x: 0, y: 0, scale: 1000 };
+        this.camera = { x: 0, y: 0, scale: 1 };
 
-/** @type {Map<number, { skin: string, name: string }>} player data */
-const PlayerData = new Map();
+        /** @type {Map<string, WebGLFramebuffer|WebGLFramebuffer[]>} */
+        this.fbo = new Map();
+        /** @type {Map<string, WebGLFramebuffer>} */
+        this.buffers = new Map();
+        /** @type {Map<WebGLProgram, Map<string, WebGLUniformLocation>} */
+        this.uniforms = new Map();
 
-/** @type {Map<number, [ImageBitmap, ImageBitmap]>} */
-const CanvasUpdates = new Map();
+        /** @type {Map<number, { skin: WebGLTexture, name: WebGLTexture }>} player data */
+        this.players = new Map();
 
-const Mouse = new class {
+        /** @type {Map<number, [ImageBitmap, ImageBitmap]>} */
+        this.updates = new Map();
 
-    constructor () {
-        this.setBuffer();
+        this.mouse = new Mouse();
+        this.viewport = new Viewport();
+        this.core = new WasmCore();
+
+        this.initLoader();
+        this.initEngine();
     }
 
-    setBuffer(buf = new SharedArrayBuffer(12)) {
-        this.sharedBuffer = buf;
-        this.buffer = new Int32Array(this.sharedBuffer);
+    start() {
+        if (this.r) return false;
+        const loop = now => {
+            this.r = requestAnimationFrame(loop);
+            this.render(now);
+        };
+        this.r = requestAnimationFrame(loop);
+        return true;
     }
 
-    get x() { return Atomics.load(this.buffer, 0); }
-    set x(v) { Atomics.store(this.buffer, 0, v) }
-
-    get y() { return Atomics.load(this.buffer, 1); }
-    set y(v) { Atomics.store(this.buffer, 1, v); }
-
-    get scroll() { return Atomics.load(this.buffer, 2); }
-    set scroll(v) { Atomics.store(this.buffer, 2, v); }
-    updateScroll(v) { Atomics.add(this.buffer, 2, -v); }
-    resetScroll() { return Atomics.exchange(this.buffer, 2, 0); }
-}
-
-onmessage = e => {
-    const { data } = e;
-    if (!data) return;
-
-    if (!offscreen) {
-        offscreen = data.offscreen;
-        Viewport.width  = offscreen.width;
-        Viewport.height = offscreen.height;
+    stop() {
+        if (!this.r) return false;
+        this.r = cancelAnimationFrame(this.r);
+        return true;
     }
 
-    if (data.mouse) Mouse.setBuffer(data.mouse);
-
-    if (!gl) initEngine();
-    if (data.resize) resize(data.width, data.height);
-};
-
-CanvasWorker.onmessage = e => {
-    /** @type {{ data: { id: number, skin: ImageBitmap, name: ImageBitmap }}}} */
-    const { data } = e;
-    if (data) {
-        CanvasUpdates.set(data.id, [data.skin, data.name]);
-        console.log(`PlayerData#${data.id} loaded`);
-    }
-}
-
-const resize = (width, height) => {
-    if (Viewport.width != width || Viewport.height != height) {
-        Viewport.width  = width;
-        Viewport.height = height;
-        console.log(`Resizing: [${width}, ${height}]`);
-    }
-}
-
-const UPDATE_LIMIT = 1;
-
-let mipmap_update = false;
-const updatePlayerData = () => {
-    let limit = 0;
-    for (const [id, [skin, name]] of [...CanvasUpdates.entries()]) {
-        if (limit++ >= UPDATE_LIMIT) break;
-
-        gl.activeTexture(gl.TEXTURE11);
-        gl.texSubImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            0,
-            0,
-            id,
-            IMG_DIM,
-            IMG_DIM,
-            1,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            skin);
-        skin.close();
-
-        gl.activeTexture(gl.TEXTURE12);
-        gl.texSubImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            0,
-            0,
-            id,
-            NAME_TEXTURE_RES,
-            NAME_TEXTURE_RES,
-            1,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            name);
-        name.close();
-
-        CanvasUpdates.delete(id);
-    }
-    mipmap_update = true;
-}
-
-setInterval(() => {
-    if (mipmap_update) {
-        mipmap_update = false;
-        gl.activeTexture(gl.TEXTURE11);
-        gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
-        gl.activeTexture(gl.TEXTURE12);
-        gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
-    }
-}, 1000);
-
-const CELL_LIMIT = 2 ** 16;
-const MIN_SIZE = 500;
-const SIZE_RANGE = 10000;
-const POS_RANGE = 1000000;
-const SORT_SCENE = false;
-
-/** @param {[]} array */
-const pick = array => array[~~(Math.random() * array.length)];
-
-/** @param {Float32Array} array */
-const genCell = array => {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.sqrt(Math.random()) * POS_RANGE;
-    // x
-    array[0] = Math.sin(angle) * dist;
-    // y
-    array[1] = Math.cos(angle) * dist;
-    // Size
-    array[2] = Math.random() * SIZE_RANGE + MIN_SIZE;
-    // Skin
-    array[3] = 1 + ~~(Math.random() * (PLAYER_LIMIT - 2));
-    // r
-    array[4] = Math.random();
-    // g
-    array[5] = Math.random();
-    // b
-    array[6] = Math.random();
-}
-
-/**
- * @param {string} vs_src
- * @param {string} fs_src
- */
-const makeProgram = (vs_src, fs_src) => {
-    const vs = gl.createShader(gl.VERTEX_SHADER);
-    const fs = gl.createShader(gl.FRAGMENT_SHADER);
-
-    gl.shaderSource(vs, vs_src);
-    gl.shaderSource(fs, fs_src);
-
-    gl.compileShader(vs);
-    gl.compileShader(fs);
-
-    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS) || !gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-        console.error(`vs info-log: ${gl.getShaderInfoLog(vs)}\n` +
-                      `info-log: ${gl.getShaderInfoLog(fs)}`);
-        gl.deleteShader(vs);
-        gl.deleteShader(fs);
-        return;
+    /** @param {{ id: number, skin: string, name: string }} data */
+    loadPlayerData(data) {
+        this.loader.postMessage(data);
     }
 
-    const prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-        console.error(`prog link failed: ${gl.getProgramInfoLog(prog)}`);
-        gl.deleteProgram(prog);
-        return;
+    initLoader() {
+        this.loader = new Worker("loader.js");
+        /** @param {{ data: { id: number, skin: ImageBitmap, name: ImageBitmap }}} e */
+        this.loader.onmessage = e => this.updates.set(e.data.id, [e.data.skin, e.data.name]);
     }
 
-    return prog;
-}
-
-const initEngine = async () => {
-
-    gl = offscreen.getContext("webgl2", { premultipliedAlpha: false });
-    if (!gl) return console.error("WebGL2 Not Supported");
-    
-    console.log("Loading WASM...");
-    await Module.load();
-    const CellDataBuffer = Module.HEAPF32.subarray(0, CELL_LIMIT * 7);
-    
-    console.log(`Supported WebGL2 extensions: ${gl.getSupportedExtensions().join(", ")}`);
-    
-    if (!gl.getExtension("EXT_color_buffer_float")) {
-        console.error("FLOAT color buffer not available");
-        return;
-    }
-    
-    gl.enable(gl.BLEND);
-    gl.depthMask(false);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-    const depthPeelProg = makeProgram(CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE);
-    if (!depthPeelProg) return;
-    const blendbackProg = makeProgram(QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
-    if (!blendbackProg) return;
-    const finalProg = makeProgram(QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
-    if (!finalProg) return;
-    // const fxaaProg = makeProgram(FXAA_VERT_SHADER_SOURCE, FXAA_FRAG_SHADER_SOURCE);
-    // if (!fxaaProg) return;
-
-    // Attributes and uniforms
-    const a_position = gl.getAttribLocation(depthPeelProg, "a_position");
-    const a_color    = gl.getAttribLocation(depthPeelProg, "a_color");
-    const a_data     = gl.getAttribLocation(depthPeelProg, "a_data");
-
-    const u_resolution = gl.getUniformLocation(depthPeelProg, "u_resolution");
-    const u_names      = gl.getUniformLocation(depthPeelProg, "u_names");
-    const u_skins      = gl.getUniformLocation(depthPeelProg, "u_skins");
-    const u_view       = gl.getUniformLocation(depthPeelProg, "u_view");
-    const u_circle     = gl.getUniformLocation(depthPeelProg, "u_circle");
-    const u_hue        = gl.getUniformLocation(depthPeelProg, "u_hue");
-
-    const peeling_u_depth = gl.getUniformLocation(depthPeelProg, "uDepth");
-    const peeling_u_front = gl.getUniformLocation(depthPeelProg, "uFrontColor");
-
-    const final_u_front = gl.getUniformLocation(finalProg, "uFrontColor");
-    const final_u_back  = gl.getUniformLocation(finalProg, "uBackColor");
-
-    const blendback_color = gl.getUniformLocation(blendbackProg, "uBackColor");
-
-    // const fxaa_tex = gl.getUniformLocation(fxaaProg, "tDiffuse");
-    // const fxaa_res = gl.getUniformLocation(fxaaProg, "resolution");
-
-    // Framebuffers
-    const depthPeelBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-
-    const colorBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-
-    const blendBackBuffer = gl.createFramebuffer();
-    // const fxaaBuffer = gl.createFramebuffer();
-
-    // Texture unit 0-5 are used
-    for (let i = 0; i < 2; i++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, depthPeelBuffers[i]);
-        const texture_unit_offset = i * 3;
-
-        const depthTarget  = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0 + texture_unit_offset);
-        gl.bindTexture(gl.TEXTURE_2D, depthTarget); 
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, 1920, 1080, 0, gl.RG, gl.FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
-
-        const frontColorTarget = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE1 + texture_unit_offset);
-        gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
-
-        const backColorTarget = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE2 + texture_unit_offset);
-        gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, colorBuffers[i]);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, frontColorTarget, 0);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, backColorTarget, 0);
+    /**
+     * @param {WebGLProgram} prog 
+     * @param {string} name
+     */
+    loadUniform(prog, name) {
+        if (!this.uniforms.has(prog)) this.uniforms.set(prog, new Map());
+        this.uniforms.get(prog).set(name, this.gl.getUniformLocation(prog, name));
     }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, blendBackBuffer);
-    // Texture6
-    const blendBackTarget = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE6);
-    gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    
-    // gl.bindFramebuffer(gl.FRAMEBUFFER, fxaaBuffer);
-    // Texture7
-    // const fxaaTarget = gl.createTexture();
-    // gl.activeTexture(gl.TEXTURE7);
-    // gl.bindTexture(gl.TEXTURE_2D, fxaaTarget);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fxaaTarget, 0);
-    // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-
-    const quadArray = gl.createBuffer();
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadArray);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        -1, +1,
-        -1, -1,
-        +1, -1,
-        -1, +1,
-        +1, -1,
-        +1, +1,
-    ]), gl.STATIC_DRAW);
-
-    {
-        gl.enableVertexAttribArray(quadArray);
-        const size = 2;
-        const type = gl.FLOAT;
-        const normalize = false;
-        const stride = 0;
-        const offset = 0;
-        gl.vertexAttribPointer(a_position, size, type, normalize, stride, offset);
+    /**
+     * @param {WebGLProgram} prog 
+     * @param {string} name 
+     */
+    getUniform(prog, name) {
+        return this.uniforms.get(prog).get(name);
     }
 
-    const GEN_CELLS = CELL_LIMIT;
-        
-    const cells = [];
+    async initEngine() {
+        const gl = this.gl = this.canvas.getContext("webgl2", { premultipliedAlpha: false });
+        if (!gl) return console.error("WebGL2 Not Supported");
 
-    for (let i = 0; i < GEN_CELLS; i++) {
-        const cell = CellDataBuffer.subarray(7 * i, 7 * (i + 1));
-        genCell(cell);
-        cells.push(cell);
-    }
+        console.log("Loading WASM...");
+        await this.core.load();
 
-    /*
-    let now = performance.now();
-    cells.sort((a, b) => a[2] - b[2]);
-    console.log(`JS sort took: ${(performance.now() - now).toFixed(4)}ms`);
-
-    now = performance.now();
-    Module.instance.exports.sort(0, CELL_LIMIT);
-    console.log(`WASM sort took: ${(performance.now() - now).toFixed(4)}ms`); */
-    
-
-    const cell_data_buffer = gl.createBuffer();
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, cell_data_buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, CellDataBuffer, gl.DYNAMIC_DRAW);
-    
-    // Bind data (position + size + pid)
-    {
-        gl.enableVertexAttribArray(a_data);
-        const size = 4;          
-        const type = gl.FLOAT;   
-        const normalize = false; 
-        const stride = 4 * 7;
-        const offset = 0;
-        gl.vertexAttribPointer(a_data, size, type, normalize, stride, offset);
-        gl.vertexAttribDivisor(a_data, 2);
-    }
-    // Bind color
-    {
-        gl.enableVertexAttribArray(a_color);
-        const size = 3;
-        const type = gl.FLOAT;
-        const normalize = false; 
-        const stride = 4 * 7;
-        const offset = 4 * 4;
-        gl.vertexAttribPointer(a_color, size, type, normalize, stride, offset);
-        gl.vertexAttribDivisor(a_color, 2);
-    }
-
-    // Create circle texture on texture10
-    const circle_texture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE10);
-    gl.bindTexture(gl.TEXTURE_2D, circle_texture);
-    // Generating circle
-    {
-        const CIRCLE_RADIUS = 2048;
-        const MARGIN = 10;
-        console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS * 2} circle texture`);
-        const temp = new OffscreenCanvas((CIRCLE_RADIUS + MARGIN) * 2, (CIRCLE_RADIUS + MARGIN) * 2);
-        const temp_ctx = temp.getContext("2d");
-        temp_ctx.fillStyle = "yellow";
-        temp_ctx.arc(CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
-        temp_ctx.fill();
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
-            
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    }
-
-    // Create skin texture array on texture 11
-    const skin_texture_array = gl.createTexture();
-
-    {
-        gl.activeTexture(gl.TEXTURE11);
-        gl.bindTexture(gl.TEXTURE_2D_ARRAY, skin_texture_array);
-        
-        gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    
-        // Allocate vram for skins
-        gl.texImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            gl.RGBA,
-            IMG_DIM,
-            IMG_DIM,
-            PLAYER_LIMIT,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            null
-        );
-    }
-
-    // Create name texture array on texture 12
-    const name_texture_array = gl.createTexture();
-
-    {
-        gl.activeTexture(gl.TEXTURE12);
-        gl.bindTexture(gl.TEXTURE_2D_ARRAY, name_texture_array);
-        
-        gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    
-        // Allocate vram for skins
-        gl.texImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            gl.RGBA,
-            NAME_TEXTURE_RES,
-            NAME_TEXTURE_RES,
-            PLAYER_LIMIT,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            null
-        );
-    }
-
-    // Create mass texture on texture 13
-    const mass_texture_array = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE13);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, mass_texture_array);
-
-    const MASS_FONT_WIDTH  = 128;
-    const MASS_FONT_HEIGHT = 128;
-    const MASS_CHARS       = "0123456789.k".split("");
-    const MASS_FONT_COUNT  = MASS_CHARS.length;
-    const FONT_WIDTHS = {};
-
-    {
-        gl.texImage3D(
-            gl.TEXTURE_2D_ARRAY,
-            0,
-            gl.RGBA,
-            MASS_FONT_WIDTH,
-            MASS_FONT_HEIGHT,
-            MASS_FONT_COUNT,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            null
-        );
-
-        console.log("loading font");
+        console.log("Loading font");
         const font = new FontFace("Bree Serif", "url(../font/BreeSerif-Regular.ttf)");
         fonts.add(font);
         await font.load();
-
-        const temp = new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
-        const temp_ctx = temp.getContext("2d");
-
-        temp_ctx.font = "128px Bree Serif";
-        temp_ctx.fillStyle = "white";
-        temp_ctx.strokeStyle = "black";
-        temp_ctx.textAlign = "center";
-        temp_ctx.lineWidth = 8;
-        temp_ctx.textBaseline = "middle";
-
-        for (const index in MASS_CHARS) {
-            const char = MASS_CHARS[index];
-            temp_ctx.strokeText(char, temp.width >> 1, 0);
-            temp_ctx.fillText(char, temp.width >> 1, 0);
-            FONT_WIDTHS[char] = temp_ctx.measureText(char).width;
-            gl.texSubImage3D(
-                gl.TEXTURE_2D_ARRAY,
-                0,
-                0,
-                0,
-                index,
-                MASS_FONT_WIDTH,
-                MASS_FONT_HEIGHT,
-                1,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                temp);
-        }
         
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    }
+        console.log("Loading bot skins & names");
+        const res = await fetch("/data/bots.json");
+        /** @type {{ names: string[], skins: string[] }} */
+        this.bots = await res.json();
 
-    const res = await fetch("/data/bots.json");
-    const bots = await res.json();
-    
-    for (let id = 1; id < PLAYER_LIMIT; id++)
-        loadSkinAndName({ id, name: "Luka", skin: pick(bots.skins) });
+        this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
+        this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
 
-    gl.useProgram(depthPeelProg);
-    gl.bindVertexArray(vao);
+        this.bufferOffsetsTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
+        console.log(`Table offset: ${this.bufferOffsetsTableOffset}`);
+        this.renderBufferOffset = this.bufferOffsetsTableOffset + CELL_TYPES * 2; // Offset table
+        console.log(`Render buffers offset: ${this.renderBufferOffset}`);
+        this.renderBufferEnd = this.renderBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
+        console.log(`Render buffer end ${this.renderBufferEnd}`);
 
-    gl.uniform2f(u_resolution, gl.canvas.width, gl.canvas.height);
-    gl.uniform1i(u_circle, 10);
-    gl.uniform1i(u_skins,  11);
-    gl.uniform1i(u_names,  12);
-    gl.uniform1f(u_hue, 0);
+        this.bufferOffsetsTable = new Uint16Array(this.core.buffer, this.bufferOffsetsTableOffset, CELL_TYPES); 
+        this.dataBuffer = this.core.HEAPU8.subarray(0, this.renderBufferOffset);
+        this.renderBuffer = this.core.HEAPU8.subarray(this.renderBufferOffset, this.renderBufferEnd);
 
-    gl.useProgram(finalProg);
-    gl.uniform1i(final_u_back, 6);
-
-    // gl.useProgram(fxaaProg);
-    // gl.uniform1i(fxaa_tex, 7);
-    // gl.uniform2f(fxaa_res, 1 / 1024, 1 / 512);
-
-    const DEPTH_CLEAR_VALUE = -99999.0;
-    const MIN_DEPTH = 0.0;
-    const MAX_DEPTH = 1.0;
-
-    let hue = 0;
-    let lastTimestamp;
-    (function render(now) {
-
-        Target.x = Camara.x + (Mouse.x - offscreen.width  / 2);
-        Target.y = Camara.y + (Mouse.y - offscreen.height / 2);
-        Target.scale *= (1 - (Mouse.resetScroll() / 1000));
-        Target.scale = Math.min(Math.max(Target.scale, 300), 10000000);
-
-        if (!lastTimestamp) {
-            lastTimestamp = now;
-            requestAnimationFrame(render);
+        // console.log(`Supported WebGL2 extensions: `, gl.getSupportedExtensions());
+        if (!gl.getExtension("EXT_color_buffer_float")) {
+            console.error("FLOAT color buffer not available");
             return;
         }
-        const delta = now - lastTimestamp;
+
+        gl.enable(gl.BLEND);
+        gl.depthMask(false);
+        gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.CULL_FACE);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        const peel_prog1 = this.peel_prog1 = makeProgram(gl, CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE);
+        const debug_prog = this.debug_prog = makeProgram(gl, CELL_VERT_SHADER_SOURCE, CELL_FRAG_DEBUG_SHADER_SOURCE);
+        const blend_prog = this.blend_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
+        const final_prog = this.final_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
+        // this.fxaaProg = makeProgram(gl, FXAA_VERT_SHADER_SOURCE, FXAA_FRAG_SHADER_SOURCE);
+    
+        this.loadUniform(peel_prog1, "u_depth");
+        this.loadUniform(peel_prog1, "u_front_color");
+
+        this.loadUniform(peel_prog1, "u_resolution");
+        this.loadUniform(peel_prog1, "u_view");
+        this.loadUniform(peel_prog1, "u_circle");
+        this.loadUniform(peel_prog1, "u_skin");
+        this.loadUniform(peel_prog1, "u_circle_color");
         
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        gl.useProgram(depthPeelProg);
+        this.loadUniform(debug_prog, "u_resolution");
+        this.loadUniform(debug_prog, "u_view");
+        this.loadUniform(debug_prog, "u_circle_color");
 
-        if (gl.canvas.width != Viewport.width || gl.canvas.height != Viewport.height) {
-            gl.canvas.width  = Viewport.width;
-            gl.canvas.height = Viewport.height;
-            gl.uniform2f(u_resolution, gl.canvas.width, gl.canvas.height);
-            postMessage({ resized: Viewport });
+        this.loadUniform(final_prog, "u_front_color");
+        this.loadUniform(final_prog, "u_back_color");
+
+        this.loadUniform(blend_prog, "u_back_color");
+
+        this.setUpPeelingBuffers();
+        this.generateQuadVAO();
+        this.generateCircleTexture();
+        this.generateMassTextures();
+
+        const GEN_CELLS = 65536;
+        const view = new DataView(this.dataBuffer.buffer, 0, GEN_CELLS * this.BYTES_PER_CELL_DATA);
+        
+        const RNGRange = (min, max) => Math.random() * (max - min) + min;
+        const genCell = () => {
+            for (let i = 0; i < GEN_CELLS; i++) {
+                const o = this.BYTES_PER_CELL_DATA * i;
+                const type = ~~(255 * Math.random() + 1);
+                const x = RNGRange(-POS_RANGE, POS_RANGE);
+                const y = RNGRange(-POS_RANGE, POS_RANGE);
+                const size = RNGRange(MIN_SIZE, MIN_SIZE + SIZE_RANGE);
+
+                view.setUint32(0 + o , type, true);
+                view.setFloat32(4 + o, x, true); // oldX
+                view.setFloat32(8 + o, y, true); // oldY
+                view.setFloat32(12 + o, size, true); // oldSize
+                view.setFloat32(16 + o, x, true); // currX
+                view.setFloat32(20 + o, y, true); // currY
+                view.setFloat32(24 + o, size, true); // currSize
+                view.setFloat32(28 + o, x, true);  // netX
+                view.setFloat32(32 + o, y, true);  // netY
+                view.setFloat32(36 + o, size, true); // netSize
+            }
+        }
+        genCell();
+
+        // const render_view = new DataView(this.core.buffer, this.renderBufferOffset, GEN_CELLS * BYTES_PER_RENDER_CELL);
+        // for (let i = 0; i < 256; i++)
+        //     console.log(`Cell#${i} ` + 
+        //                 `x: ${render_view.getFloat32(i * 12, true)}, ` +
+        //                 `y: ${render_view.getFloat32(i * 12 + 4, true)}, ` +
+        //                 `size: ${render_view.getFloat32(i * 12 + 8, true)}`);
+
+        this.allocBuffer("cell_data_buffer");
+
+        gl.bindVertexArray(this.quadVAO);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
+        gl.bufferData(gl.ARRAY_BUFFER, this.renderBuffer, gl.DYNAMIC_DRAW);
+
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribDivisor(1, 2);
+        gl.enableVertexAttribArray(1);
+
+        gl.useProgram(peel_prog1);    
+        gl.uniform2f(this.getUniform(peel_prog1, "u_resolution"), gl.canvas.width, gl.canvas.height);
+        gl.uniform1i(this.getUniform(peel_prog1, "u_circle"), 10);
+        gl.uniform1i(this.getUniform(peel_prog1, "u_skin"), 11);
+
+        gl.useProgram(debug_prog);    
+        gl.uniform2f(this.getUniform(debug_prog, "u_resolution"), gl.canvas.width, gl.canvas.height);
+    
+        gl.useProgram(final_prog);
+        gl.uniform1i(this.getUniform(final_prog, "u_back_color"), 6);
+        
+        this.start();
+    }
+
+    /** @param {string} name */
+    allocBuffer(name) {
+        if (this.buffers.has(name)) throw new Error(`Already allocated buffer "${name}"`);
+        this.buffers.set(name, this.gl.createBuffer());
+    }
+
+    /** @param {string} name */
+    allocFrameBuffer(name, number = 1) {
+        if (this.fbo.has(name)) throw new Error(`Already allocated framebuffer "${name}"`);
+        this.fbo.set(name, number == 1 ? this.gl.createFramebuffer() : 
+            Array.from({ length: number }, _ => this.gl.createFramebuffer()));
+    }
+
+    /** Make sure texture units [0-6] are not changed anywhere later in rendering */
+    setUpPeelingBuffers() {
+        this.allocFrameBuffer("peel_depths", 2);
+        this.allocFrameBuffer("peel_colors", 2);
+        this.allocFrameBuffer("blend_back");
+
+        const gl = this.gl;
+        const FBOTexParam = () => {
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         }
 
-        // Dual depth peeling stuff
+        // Texture unit 0-5 are used for depth peeling
+        for (let i = 0; i < 2; i++) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("peel_depths")[i]);
+            const texture_unit_offset = i * 3;
+
+            const depthTarget  = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE0 + texture_unit_offset);
+            gl.bindTexture(gl.TEXTURE_2D, depthTarget);
+            FBOTexParam();
+
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, 1920, 1080, 0, gl.RG, gl.FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
+
+            const frontColorTarget = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE1 + texture_unit_offset);
+            gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
+            FBOTexParam();
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
+
+            const backColorTarget = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE2 + texture_unit_offset);
+            gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
+            FBOTexParam();
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("peel_colors")[i]);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, frontColorTarget, 0);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, backColorTarget, 0);
+        }
+
+        
+        // Texture unit 6 is used for blendback
         {
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-            
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[0]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("blend_back"));
+            const blendBackTarget = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE6);
+            gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
+            FBOTexParam();
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+        
+        // Texture unit 7 is potentially used for FXAA
+        {
+            // const fxaa_tex = gl.getUniformLocation(fxaaProg, "tDiffuse");
+            // const fxaa_res = gl.getUniformLocation(fxaaProg, "resolution");
+            // const fxaaBuffer = gl.createFramebuffer();
+            // gl.bindFramebuffer(gl.FRAMEBUFFER, fxaaBuffer);
+            // const fxaaTarget = gl.createTexture();
+            // gl.activeTexture(gl.TEXTURE7);
+            // gl.bindTexture(gl.TEXTURE_2D, fxaaTarget);
+            // FBOTexParam();
+            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fxaaTarget, 0);
+            // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+    }
 
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[1]);
-            gl.clearColor(-MIN_DEPTH, MAX_DEPTH, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+    clearPeelingBuffers() {
+        const gl = this.gl;
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[0]);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+        gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[0]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[1]);
+        gl.clearColor(-MIN_DEPTH, MAX_DEPTH, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[1]);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_colors")[0]);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
-            // draw depth for first pass to peel
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[0]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.blendEquation(gl.MAX);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_colors")[1]);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
-            gl.useProgram(depthPeelProg);
-            gl.uniform1i(peeling_u_depth, 3);
-            gl.uniform1i(peeling_u_front, 4);
+        // draw depth for first pass to peel
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[0]);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+        gl.blendEquation(gl.MAX);
+
+        gl.useProgram(this.peel_prog1);
+        gl.uniform1i(this.getUniform(this.peel_prog1, "u_depth"), 3);
+        gl.uniform1i(this.getUniform(this.peel_prog1, "u_front_color"), 4);
+    }
+
+    generateQuadVAO() {
+        const gl = this.gl;
+
+        const vao = this.quadVAO = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+    
+        const quadArray = gl.createBuffer();
+    
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadArray);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, +1,
+            -1, -1,
+            +1, -1,
+            -1, +1,
+            +1, -1,
+            +1, +1,
+        ]), gl.STATIC_DRAW);
+    
+        {
+            const size = 2;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+            gl.enableVertexAttribArray(0);
+        }
+    }
+
+    generateCircleTexture() {
+        const gl = this.gl;
+        // Create circle texture on texture unit 10
+        const circle_texture = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE10);
+        gl.bindTexture(gl.TEXTURE_2D, circle_texture);
+        // Generating circle
+        {
+            const CIRCLE_RADIUS = 2048;
+            const MARGIN = 0;
+            console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS * 2} circle texture`);
+            const temp = new OffscreenCanvas((CIRCLE_RADIUS + MARGIN) * 2, (CIRCLE_RADIUS + MARGIN) * 2);
+            const temp_ctx = temp.getContext("2d");
+            temp_ctx.fillStyle = "white";
+            temp_ctx.arc(CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+            temp_ctx.fill();
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+                
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        }
+    }
+
+    generateMassTextures() {
+        console.log("Generating mass characters");
+
+        const gl = this.gl;
+        // Create mass texture on texture 13
+        const mass_texture_array = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE13);
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, mass_texture_array);
+
+        const MASS_FONT_WIDTH  = 128;
+        const MASS_FONT_HEIGHT = 128;
+        const MASS_CHARS       = "0123456789.k".split("");
+        const MASS_FONT_COUNT  = MASS_CHARS.length;
+        const FONT_WIDTHS = [];
+
+        {
+            gl.texImage3D(
+                gl.TEXTURE_2D_ARRAY,
+                0,
+                gl.RGBA,
+                MASS_FONT_WIDTH,
+                MASS_FONT_HEIGHT,
+                MASS_FONT_COUNT,
+                0,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                null
+            );
+
+            const temp = new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
+            const temp_ctx = temp.getContext("2d");
+
+            temp_ctx.font = "128px Bree Serif";
+            temp_ctx.fillStyle = "white";
+            temp_ctx.strokeStyle = "black";
+            temp_ctx.textAlign = "center";
+            temp_ctx.lineWidth = 8;
+            temp_ctx.textBaseline = "middle";
+
+            for (const index in MASS_CHARS) {
+                const char = MASS_CHARS[index];
+                temp_ctx.strokeText(char, temp.width >> 1, 0);
+                temp_ctx.fillText(char, temp.width >> 1, 0);
+                FONT_WIDTHS.push(temp_ctx.measureText(char).width);
+                gl.texSubImage3D(
+                    gl.TEXTURE_2D_ARRAY,
+                    0,
+                    0,
+                    0,
+                    index,
+                    MASS_FONT_WIDTH,
+                    MASS_FONT_HEIGHT,
+                    1,
+                    gl.RGBA,
+                    gl.UNSIGNED_BYTE,
+                    temp);
+            }
+        
+            gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        }
+    }
+
+    updateTarget() {
+        this.target.x = this.camera.x + this.mouse.x;
+        this.target.y = this.camera.y + this.mouse.y;
+        this.target.scale *= (1 - (this.mouse.resetScroll() / 1000));
+        this.target.scale = Math.min(Math.max(this.target.scale, 300), 10000000);
+    }
+
+    checkViewport() {
+        const gl = this.gl;
+        if (gl.canvas.width != this.viewport.width || gl.canvas.height != this.viewport.height) {
+            gl.canvas.width  = this.viewport.width;
+            gl.canvas.height = this.viewport.height;
+            gl.useProgram(this.peel_prog1);
+            gl.uniform2f(this.getUniform(this.peel_prog1, "u_resolution"), gl.canvas.width, gl.canvas.height);
+            // console.log(`Resized canvas to [${gl.canvas.width}, ${gl.canvas.height}]`);
+        }
+    }
+
+    /** @param {number} delta */
+    lerpCamera(delta) {
+        // Smooth update camera
+        this.camera.scale += (50 / (this.target.scale + 10) - this.camera.scale) / delta;
+        this.camera.x += (this.camera.x - this.target.x) / (delta * 2.5) / this.camera.scale;
+        this.camera.y += (this.camera.y - this.target.y) / (delta * 2.5) / this.camera.scale;
+        // console.log(`Camera: [${this.camera.x}, ${this.camera.y}, ${this.camera.scale}]`);
+    }
+
+    get cameraMatrix() {
+        const { x, y, scale } = this.camera;
+        return Mat3.mul(Mat3.translate(x * scale, y * scale), Mat3.scale(scale, scale));
+    }
+
+    /** @param {number} now */
+    render(now) {
+        
+        if (!this.lastTimestamp) {
+            this.lastTimestamp = now;
+            return;
         }
 
-        // hue += delta;
-        // gl.uniform1f(u_hue, hue / 500);
+        const delta = now - this.lastTimestamp;
+        this.lastTimestamp = now;
 
-        // Process updated skins
-        if (CanvasUpdates.size) updatePlayerData();
+        this.updateTarget();
+        this.lerpCamera(delta);
+        
+        this.checkViewport();
+        this.clearPeelingBuffers();
 
-        // if (SORT_SCENE) {
-        //     Module.instance.exports.sort(0, CELL_LIMIT);
-        //     gl.bindBuffer(gl.ARRAY_BUFFER, cell_data_buffer);
-        //     gl.bufferSubData(gl.ARRAY_BUFFER, 0, CellDataBuffer, 0, 7 * GEN_CELLS);
-        // }
+        const gl = this.gl;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-        // Smooth update camera
-        Camara.scale += (50 / (Target.scale + 10) - Camara.scale) / delta;
-        Camara.x += (Camara.x - Target.x) / (delta * 2.5) / Camara.scale;
-        Camara.y += (Camara.y - Target.y) / (delta * 2.5) / Camara.scale;
-        // console.log(`Camera: [${Camara.x}`, `${Camara.y}]`);
+        // Process updated skins and canvas TODO
+        // if (CanvasUpdates.size) updatePlayerData();
 
-        const cameraMatrix = Mat3.mul(Mat3.trans(Camara.x * Camara.scale, Camara.y * Camara.scale), Mat3.scale(Camara.scale, Camara.scale));
+        this.core.instance.exports.draw(0, this.bufferOffsetsTableOffset, this.renderBufferOffset, 0.5);
 
-        gl.uniformMatrix3fv(u_view, false, cameraMatrix);
+        // console.log(this.bufferOffsetsTable);
 
-        gl.bindVertexArray(vao);
-        // TODO: update cell position etc
-        gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, GEN_CELLS);
+        const main_prog = DEBUG ? this.debug_prog : this.peel_prog1;
+        gl.useProgram(main_prog);
+        gl.uniformMatrix3fv(this.getUniform(main_prog, "u_view"), false, this.cameraMatrix);
+
+        const draw = () => {
+            for (let i = 1; i < CELL_TYPES; i++) {
+                const begin = this.bufferOffsetsTable[i - 1] || (i == 1 ? 0 : 65536);
+                const end   = this.bufferOffsetsTable[i] || 65536;
+                if (begin >= end) continue;
+
+                // console.log(`Type: ${i}, Color: ${getColor(i)}`);
+                const color = getColor(i);
+                gl.uniform3f(this.getUniform(main_prog, "u_circle_color"), color[0], color[1], color[2]);
+
+                const begin_offset = this.renderBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
+                const buffer_length = (end - begin) * this.BYTES_PER_RENDER_CELL;
+
+                gl.bindVertexArray(this.quadVAO);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.core.HEAPU8, begin_offset, buffer_length);
+                
+                gl.bindVertexArray(this.quadVAO);
+                gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, (end - begin) * 2);
+
+                // const copy = new ArrayBuffer(buffer.length);
+                // new Uint8Array(copy).set(buffer, 0);
+                // console.log(`Drawing cell type #${i} from index ${begin} to index ${end}`, new Float32Array(copy));
+            }
+        }
+
+        if (DEBUG) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
         const NUM_PASS = 4;
-        // Dual depth peeling
-        let readId, writeId;
-        let offsetRead, offsetBack;
+        DEBUG ? draw() : this.depthPeelRender(NUM_PASS, draw);
 
-        // Dual depth peeling passes
-        for (let pass = 0; pass < NUM_PASS; pass++) {
-            readId = pass % 2;
-            writeId = 1 - readId;  // ping-pong: 0 or 1
-            
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+        this.bufferOffsetsTable.fill(0);
 
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+        if (!DEBUG) {
+            // Final prog
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.useProgram(this.final_prog);
+            gl.uniform1i(this.getUniform(this.final_prog, "u_back_color"), 6);
 
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
-            gl.blendEquation(gl.MAX);
-
-            // update texture uniform
-            offsetRead = readId * 3;
-            gl.useProgram(depthPeelProg);
-            gl.uniform1i(peeling_u_depth, offsetRead);
-            gl.uniform1i(peeling_u_front, offsetRead + 1);
-
-            // draw geometry
-            gl.bindVertexArray(vao);
-            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, GEN_CELLS);
-
-            // blend back color separately
-            offsetBack = writeId * 3;
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.blendEquation(gl.FUNC_ADD);
-            gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            gl.useProgram(blendbackProg);
-            gl.uniform1i(blendback_color, offsetBack + 2);
-            gl.bindVertexArray(vao);
+            // Draw to screen
+            gl.bindVertexArray(this.quadVAO);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
-
-        // Final prog
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.useProgram(finalProg);
-        gl.uniform1i(final_u_front, offsetBack + 1);
-
-        gl.bindVertexArray(vao);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         // FXAA prog
         // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -734,8 +584,58 @@ const initEngine = async () => {
 
         // gl.bindVertexArray(vao);
         // gl.drawArrays(gl.TRIANGLES, 0, 6);
+        // this.stop();
+    }
 
-        requestAnimationFrame(render);
-        lastTimestamp = now;
-    })();
+    /** @param {() => void} func */
+    depthPeelRender(passes = 4, func) {
+        const gl = this.gl;
+        // Dual depth peeling passes
+        for (let pass = 0; pass < passes; pass++) {
+            const readId = pass % 2;
+            const writeId = 1 - readId;  // ping-pong: 0 or 1
+            
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[writeId]);
+            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+            gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_colors")[writeId]);
+            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+            gl.clearColor(0, 0, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[writeId]);
+            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+            gl.blendEquation(gl.MAX);
+
+            // update texture uniform
+            const offsetRead = readId * 3;
+            gl.useProgram(this.peel_prog1);
+            gl.uniform1i(this.getUniform(this.peel_prog1, "u_depth"), offsetRead);
+            gl.uniform1i(this.getUniform(this.peel_prog1, "u_front_color"), offsetRead + 1);
+
+            // draw geometry
+            func();
+
+            // blend back color separately
+            const offsetBack = writeId * 3;
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
+            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+            gl.blendEquation(gl.FUNC_ADD);
+            gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            gl.useProgram(this.blend_prog);
+            gl.uniform1i(this.getUniform(this.blend_prog, "u_back_color"), offsetBack + 2);
+            gl.bindVertexArray(this.quadVAO);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+    }
 }
+
+self.onmessage = function(e) {
+    const { data } = e;
+    const renderer = new Renderer(data.offscreen);
+    renderer.mouse.setBuffer(data.mouse);
+    renderer.viewport.setBuffer(data.viewport);
+    self.removeEventListener("message", this);
+};

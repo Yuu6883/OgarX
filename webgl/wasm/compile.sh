@@ -1,0 +1,1 @@
+emcc -O2 -s SIDE_MODULE=1 ./client.c -o ../../client/wasm/client.wasm
