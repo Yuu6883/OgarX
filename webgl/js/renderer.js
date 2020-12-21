@@ -48,7 +48,6 @@ class Renderer {
         this.core = new WasmCore();
 
         this.proj = mat4.create();
-        this.view = mat4.create();
 
         this.initLoader();
         this.initEngine();
@@ -152,14 +151,12 @@ class Renderer {
         this.loadUniform(peel_prog1, "u_front_color");
 
         this.loadUniform(peel_prog1, "u_proj");
-        this.loadUniform(peel_prog1, "u_view");
         this.loadUniform(peel_prog1, "u_circle_color");
 
         this.loadUniform(peel_prog1, "u_circle");
         this.loadUniform(peel_prog1, "u_skin");
         
         this.loadUniform(debug_prog, "u_proj");
-        this.loadUniform(debug_prog, "u_view");
         this.loadUniform(debug_prog, "u_circle_color");
 
         this.loadUniform(blend_prog, "u_back_color");
@@ -482,11 +479,9 @@ class Renderer {
     }
 
     screenToWorld(out = vec3.create(), x = 0, y = 0) {
-        const temp1 = mat4.create();
-        const temp2 = mat4.create();
-        mat4.mul(temp1, this.proj, this.view);
-        mat4.invert(temp2, temp1);
-        vec3.transformMat4(out, [x, -y, 0], temp2);
+        const temp = mat4.create();
+        mat4.invert(temp, this.proj);
+        vec3.transformMat4(out, [x, -y, 0], temp);
     }
 
     updateTarget() {
@@ -541,7 +536,6 @@ class Renderer {
         gl.useProgram(main_prog);
 
         gl.uniformMatrix4fv(this.getUniform(main_prog, "u_proj"), false, this.proj);
-        gl.uniformMatrix4fv(this.getUniform(main_prog, "u_view"), false, this.view);
 
         this.updateTarget();
         this.lerpCamera(delta / 1000);

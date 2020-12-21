@@ -3,7 +3,6 @@ module.exports.CELL_VERT_SHADER_SOURCE =
 precision highp float;
 
 uniform mat4 u_proj;
-uniform mat4 u_view;
 
 layout(location=0) in vec2 a_position;
 layout(location=1) in vec3 a_data;
@@ -15,7 +14,7 @@ void main() {
     v_texcoord = (a_position + 1.0) / 2.0;
 
     vec4 world_pos = vec4(a_position * a_data.z + a_data.xy, -1.0 / a_data.z, 1.0);
-    gl_Position = u_proj * u_view * world_pos;
+    gl_Position = u_proj * world_pos;
 }
 `;
 
