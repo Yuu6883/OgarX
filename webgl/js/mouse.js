@@ -17,6 +17,6 @@ module.exports = class Mouse {
     get scroll() { return Atomics.load(this.buffer, 2); }
     set scroll(v) { Atomics.store(this.buffer, 2, v); }
     
-    updateScroll(v) { Atomics.add(this.buffer, 2, -v); }
+    updateScroll(v) { Atomics.add(this.buffer, 2, v); }
     resetScroll() { return Atomics.exchange(this.buffer, 2, 0); }
 }

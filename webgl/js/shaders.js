@@ -2,8 +2,8 @@ module.exports.CELL_VERT_SHADER_SOURCE =
 `#version 300 es
 precision highp float;
 
-uniform vec2 u_resolution;
-uniform mat3 u_view;
+uniform mat4 u_proj;
+uniform mat4 u_view;
 
 layout(location=0) in vec2 a_position;
 layout(location=1) in vec3 a_data;
@@ -14,13 +14,8 @@ void main() {
     // Map from -1 to 1 -> 0 to 1
     v_texcoord = (a_position + 1.0) / 2.0;
 
-    vec2 quad_pos = a_position * a_data.z + a_data.xy;
-    vec2 camera_pos = (u_view * vec3(quad_pos, 1)).xy;
-
-    // convert the position from pixels to -1.0 to 1.0
-    vec2 clip_space = camera_pos / u_resolution;
-
-    gl_Position = vec4(clip_space * vec2(1, -1), 1.0 / a_data.z, 1);
+    vec4 world_pos = vec4(a_position * a_data.z + a_data.xy, -1.0 / a_data.z, 1.0);
+    gl_Position = u_proj * u_view * world_pos;
 }
 `;
 
@@ -100,10 +95,10 @@ void main() {
         return;
     }
     
-    // vec4 circle = texture(u_circle, v_texcoord);
-    // vec4 skin = texture(u_skin, v_texcoord);
-    // vec4 color = vec4(mix(u_circle_color, skin.rgb, skin.a), circle.a);
-    vec4 color = vec4(u_circle_color, 1);
+    vec4 circle = texture(u_circle, v_texcoord);
+    vec4 skin = texture(u_skin, v_texcoord);
+    vec4 color = vec4(mix(u_circle_color, skin.rgb, skin.a), circle.a);
+    // vec4 color = vec4(u_circle_color, circle.a);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;

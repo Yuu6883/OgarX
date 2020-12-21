@@ -1,13 +1,15 @@
+const { mat4, vec3 } = require("gl-matrix");
 const Mouse = require("./mouse");
 const Viewport = require("./viewport");
 const WasmCore = require("./wasm-core");
 
-const { makeProgram, pick, Mat3, getColor } = require("./util");
+const { makeProgram, pick, getColor } = require("./util");
 const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE, CELL_FRAG_DEBUG_SHADER_SOURCE,
    QUAD_VERT_SHADER_SOURCE, 
    BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE } = require("./shaders");
 
 const DEBUG = false;
+const ZOOM_SPEED = 5;
 
 // Constants
 const CELL_TYPES = 256;
@@ -25,8 +27,8 @@ class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
 
-        this.target = { x: 0, y: 0, scale: 1000 };
-        this.camera = { x: 0, y: 0, scale: 1 };
+        this.target = { position: vec3.create(), scale: 1 };
+        this.camera = { position: vec3.create(), scale: 1 };
 
         /** @type {Map<string, WebGLFramebuffer|WebGLFramebuffer[]>} */
         this.fbo = new Map();
@@ -44,6 +46,9 @@ class Renderer {
         this.mouse = new Mouse();
         this.viewport = new Viewport();
         this.core = new WasmCore();
+
+        this.proj = mat4.create();
+        this.view = mat4.create();
 
         this.initLoader();
         this.initEngine();
@@ -146,20 +151,21 @@ class Renderer {
         this.loadUniform(peel_prog1, "u_depth");
         this.loadUniform(peel_prog1, "u_front_color");
 
-        this.loadUniform(peel_prog1, "u_resolution");
+        this.loadUniform(peel_prog1, "u_proj");
         this.loadUniform(peel_prog1, "u_view");
+        this.loadUniform(peel_prog1, "u_circle_color");
+
         this.loadUniform(peel_prog1, "u_circle");
         this.loadUniform(peel_prog1, "u_skin");
-        this.loadUniform(peel_prog1, "u_circle_color");
         
-        this.loadUniform(debug_prog, "u_resolution");
+        this.loadUniform(debug_prog, "u_proj");
         this.loadUniform(debug_prog, "u_view");
         this.loadUniform(debug_prog, "u_circle_color");
 
+        this.loadUniform(blend_prog, "u_back_color");
+
         this.loadUniform(final_prog, "u_front_color");
         this.loadUniform(final_prog, "u_back_color");
-
-        this.loadUniform(blend_prog, "u_back_color");
 
         this.setUpPeelingBuffers();
         this.generateQuadVAO();
@@ -200,9 +206,7 @@ class Renderer {
         //                 `size: ${render_view.getFloat32(i * 12 + 8, true)}`);
 
         this.allocBuffer("cell_data_buffer");
-
         gl.bindVertexArray(this.quadVAO);
-
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
         gl.bufferData(gl.ARRAY_BUFFER, this.renderBuffer, gl.DYNAMIC_DRAW);
 
@@ -210,7 +214,7 @@ class Renderer {
         gl.vertexAttribDivisor(1, 2);
         gl.enableVertexAttribArray(1);
 
-        gl.useProgram(peel_prog1);    
+        gl.useProgram(peel_prog1);
         gl.uniform2f(this.getUniform(peel_prog1, "u_resolution"), gl.canvas.width, gl.canvas.height);
         gl.uniform1i(this.getUniform(peel_prog1, "u_circle"), 10);
         gl.uniform1i(this.getUniform(peel_prog1, "u_skin"), 11);
@@ -221,6 +225,15 @@ class Renderer {
         gl.useProgram(final_prog);
         gl.uniform1i(this.getUniform(final_prog, "u_back_color"), 6);
         
+        gl.activeTexture(gl.TEXTURE11);
+        const empty_texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, empty_texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
         this.start();
     }
 
@@ -286,7 +299,7 @@ class Renderer {
         // Texture unit 6 is used for blendback
         {
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("blend_back"));
-            
+
             const blendBackTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE6);
             gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
@@ -314,7 +327,6 @@ class Renderer {
 
     clearPeelingBuffers() {
         const gl = this.gl;
-        console.log(this.fbo);
 
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
         gl.clearColor(0, 0, 0, 0);
@@ -346,7 +358,6 @@ class Renderer {
         gl.useProgram(this.peel_prog1);
         gl.uniform1i(this.getUniform(this.peel_prog1, "u_depth"), 3);
         gl.uniform1i(this.getUniform(this.peel_prog1, "u_front_color"), 4);
-        gl.bindVertexArray(this.quadVAO);
     }
 
     generateQuadVAO() {
@@ -387,12 +398,12 @@ class Renderer {
         // Generating circle
         {
             const CIRCLE_RADIUS = 2048;
-            const MARGIN = 0;
+            const MARGIN = 10;
             console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS * 2} circle texture`);
-            const temp = new OffscreenCanvas((CIRCLE_RADIUS + MARGIN) * 2, (CIRCLE_RADIUS + MARGIN) * 2);
+            const temp = new OffscreenCanvas(CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2);
             const temp_ctx = temp.getContext("2d");
             temp_ctx.fillStyle = "white";
-            temp_ctx.arc(CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS + MARGIN, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+            temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS - MARGIN, 0, 2 * Math.PI, false);
             temp_ctx.fill();
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
                 
@@ -470,11 +481,36 @@ class Renderer {
         }
     }
 
+    screenToWorld(out = vec3.create(), x = 0, y = 0) {
+        const temp1 = mat4.create();
+        const temp2 = mat4.create();
+        mat4.mul(temp1, this.proj, this.view);
+        mat4.invert(temp2, temp1);
+        vec3.transformMat4(out, [x, -y, 0], temp2);
+    }
+
     updateTarget() {
-        this.target.x = this.camera.x + this.mouse.x;
-        this.target.y = this.camera.y + this.mouse.y;
-        this.target.scale *= (1 - (this.mouse.resetScroll() / 1000));
-        this.target.scale = Math.min(Math.max(this.target.scale, 300), 10000000);
+        // Screen space to world space
+        this.screenToWorld(this.target.position,
+            this.mouse.x / this.viewport.width  * 2 - 1, 
+            this.mouse.y / this.viewport.height * 2 - 1);
+
+        this.target.scale *= (1 + this.mouse.resetScroll() / 1000);
+        this.target.scale = Math.max(this.target.scale, 0.01);
+        this.target.scale = Math.min(this.target.scale, 10000);
+    }
+
+    // Smooth update camera
+    lerpCamera(d = 1 / 60) {
+        vec3.lerp(this.camera.position, this.camera.position, this.target.position, d);
+        this.camera.scale += (this.target.scale - this.camera.scale) * d * ZOOM_SPEED;
+
+        const x = this.camera.position[0];
+        const y = this.camera.position[1];
+        const hw = this.viewport.width  * this.camera.scale / 2;
+        const hh = this.viewport.height * this.camera.scale / 2;
+
+        mat4.ortho(this.proj, x - hw, x + hw, y - hh, y + hh, 0, 1);
     }
 
     checkViewport() {
@@ -484,22 +520,7 @@ class Renderer {
             gl.canvas.height = this.viewport.height;
             gl.useProgram(this.peel_prog1);
             gl.uniform2f(this.getUniform(this.peel_prog1, "u_resolution"), gl.canvas.width, gl.canvas.height);
-            // console.log(`Resized canvas to [${gl.canvas.width}, ${gl.canvas.height}]`);
         }
-    }
-
-    /** @param {number} delta */
-    lerpCamera(delta) {
-        // Smooth update camera
-        this.camera.scale += (50 / (this.target.scale + 10) - this.camera.scale) / delta;
-        this.camera.x += (this.camera.x - this.target.x) / (delta * 2.5) / this.camera.scale;
-        this.camera.y += (this.camera.y - this.target.y) / (delta * 2.5) / this.camera.scale;
-        // console.log(`Camera: [${this.camera.x}, ${this.camera.y}, ${this.camera.scale}]`);
-    }
-
-    get cameraMatrix() {
-        const { x, y, scale } = this.camera;
-        return Mat3.mul(Mat3.translate(x * scale, y * scale), Mat3.scale(scale, scale));
     }
 
     /** @param {number} now */
@@ -518,38 +539,36 @@ class Renderer {
 
         const main_prog = DEBUG ? this.debug_prog : this.peel_prog1;
         gl.useProgram(main_prog);
-        gl.uniformMatrix3fv(this.getUniform(main_prog, "u_view"), false, this.cameraMatrix);
+
+        gl.uniformMatrix4fv(this.getUniform(main_prog, "u_proj"), false, this.proj);
+        gl.uniformMatrix4fv(this.getUniform(main_prog, "u_view"), false, this.view);
 
         this.updateTarget();
-        this.lerpCamera(delta);
+        this.lerpCamera(delta / 1000);
         
         this.core.instance.exports.draw(0, this.bufferOffsetsTableOffset, this.renderBufferOffset, 0.5);
 
         this.checkViewport();
 
         const drawCells = () => {
+            gl.bindVertexArray(this.quadVAO);
+
             for (let i = 1; i < CELL_TYPES; i++) {
                 const begin = this.bufferOffsetsTable[i - 1] || (i == 1 ? 0 : 65536);
                 const end   = this.bufferOffsetsTable[i] || 65536;
                 if (begin >= end) continue;
 
-                // console.log(`Type: ${i}, Color: ${getColor(i)}`);
                 const color = getColor(i);
                 gl.uniform3f(this.getUniform(main_prog, "u_circle_color"), color[0], color[1], color[2]);
 
                 const begin_offset = this.renderBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
                 const buffer_length = (end - begin) * this.BYTES_PER_RENDER_CELL;
 
-                gl.bindVertexArray(this.quadVAO);
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
                 gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.core.HEAPU8, begin_offset, buffer_length);
-                
-                gl.bindVertexArray(this.quadVAO);
-                gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, (end - begin) * 2);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-                // const copy = new ArrayBuffer(buffer.length);
-                // new Uint8Array(copy).set(buffer, 0);
-                // console.log(`Drawing cell type #${i} from index ${begin} to index ${end}`, new Float32Array(copy));
+                gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - begin);
             }
         }
 
@@ -557,7 +576,7 @@ class Renderer {
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             drawCells();
         } else {
-            const NUM_PASS = 4;
+            const NUM_PASS = 2;
             this.clearPeelingBuffers();
             const offsetBack = this.depthPeelRender(NUM_PASS, drawCells);
             
@@ -567,7 +586,7 @@ class Renderer {
             gl.clear(gl.COLOR_BUFFER_BIT);
             gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             gl.useProgram(this.final_prog);
-            gl.uniform1i(this.getUniform(this.final_prog, "u_back_color"), offsetBack + 1);
+            gl.uniform1i(this.getUniform(this.final_prog, "u_front_color"), offsetBack + 1);
 
             // Draw to screen
             gl.bindVertexArray(this.quadVAO);
@@ -584,7 +603,8 @@ class Renderer {
 
         // gl.bindVertexArray(vao);
         // gl.drawArrays(gl.TRIANGLES, 0, 6);
-        this.stop();
+        // this.stop();
+        // setTimeout(() => this.stop(), 3000);
     }
 
     /** @param {() => void} func */
