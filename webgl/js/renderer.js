@@ -212,13 +212,10 @@ class Renderer {
         gl.enableVertexAttribArray(1);
 
         gl.useProgram(peel_prog1);
-        gl.uniform2f(this.getUniform(peel_prog1, "u_resolution"), gl.canvas.width, gl.canvas.height);
         gl.uniform1i(this.getUniform(peel_prog1, "u_circle"), 10);
         gl.uniform1i(this.getUniform(peel_prog1, "u_skin"), 11);
 
-        gl.useProgram(debug_prog);    
-        gl.uniform2f(this.getUniform(debug_prog, "u_resolution"), gl.canvas.width, gl.canvas.height);
-    
+        gl.useProgram(debug_prog);
         gl.useProgram(final_prog);
         gl.uniform1i(this.getUniform(final_prog, "u_back_color"), 6);
         
@@ -513,8 +510,6 @@ class Renderer {
         if (gl.canvas.width != this.viewport.width || gl.canvas.height != this.viewport.height) {
             gl.canvas.width  = this.viewport.width;
             gl.canvas.height = this.viewport.height;
-            gl.useProgram(this.peel_prog1);
-            gl.uniform2f(this.getUniform(this.peel_prog1, "u_resolution"), gl.canvas.width, gl.canvas.height);
         }
     }
 
