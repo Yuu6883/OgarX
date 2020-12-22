@@ -113,18 +113,27 @@ void deserialize(CellData data[], unsigned short* packet) {
     }
 }
 
-extern void print(float f);
-
-unsigned int draw(CellData data_begin[], 
+unsigned int draw_cells(CellData data_begin[], 
     unsigned short offset_table[], 
-    RenderCell render_cells[], float lerp) {
+    RenderCell render_cells[], float lerp,
+    float t, float b, float l, float r) {
 
     CellData* begin = data_begin;
     while ((void*) begin < (void*) offset_table) {
-        offset_table[begin->type]++;
+        if (begin->type) {
+            begin->currX = lerp * (begin->netX - begin->oldX) + begin->oldX;
+            begin->currY = lerp * (begin->netY - begin->oldY) + begin->oldY;
+            begin->currSize = lerp * (begin->netSize - begin->oldSize) + begin->oldSize;
+            if (begin->currX - begin->currSize < r &&
+                begin->currX + begin->currSize > l &&
+                begin->currY - begin->currSize < t &&
+                begin->currY + begin->currSize > b) {
+                offset_table[begin->type]++;
+            }
+        }
         begin++;
     }
-
+    
     offset_table[0] = 0;
 
     unsigned int count = 0;
@@ -134,11 +143,69 @@ unsigned int draw(CellData data_begin[],
 
     begin = data_begin;
     while ((void*) begin < (void*) offset_table) {
-        if (begin->type) {
+        if (begin->type &&
+            begin->currX - begin->currSize < r &&
+            begin->currX + begin->currSize > l &&
+            begin->currY - begin->currSize < t &&
+            begin->currY + begin->currSize > b) {
             unsigned short offset = offset_table[begin->type - 1]++;
-            begin->currX = render_cells[offset].x = lerp * (begin->netX - begin->oldX) + begin->oldX;
-            begin->currY = render_cells[offset].y = lerp * (begin->netY - begin->oldY) + begin->oldY;
-            begin->currX = render_cells[offset].size = lerp * (begin->netSize - begin->oldSize) + begin->oldSize;
+            render_cells[offset].x = begin->currX;
+            render_cells[offset].y = begin->currY;
+            render_cells[offset].size = begin->currSize;
+        }
+        begin++;
+    }
+
+    unsigned short* end = (unsigned short*) render_cells - 1;
+
+    while (end-- > offset_table)
+        end[1] = end[0];
+        
+    end[1] = 0;
+
+    return count;
+}
+
+
+unsigned int draw_names(CellData data_begin[], 
+    CellData data_end[],
+    unsigned short offset_table[], 
+    RenderCell render_cells[], float minScale,
+    float t, float b, float l, float r) {
+
+    float w = r - l;
+    float h = t - b;
+    float sizeCutoff = (w < h ? w : h) * minScale;
+
+    CellData* begin = data_begin;
+    while (begin < data_end) {
+        if (begin->type && begin->currSize > sizeCutoff &&
+            begin->currX - begin->currSize < r &&
+            begin->currX + begin->currSize > l &&
+            begin->currY - begin->currSize < t &&
+            begin->currY + begin->currSize > b)
+            offset_table[begin->type]++;
+        begin++;
+    }
+    
+    offset_table[0] = 0;
+
+    unsigned int count = 0;
+
+    for (unsigned short* ptr = offset_table; (void*) ptr < (void*) render_cells; ptr++)
+        *ptr = count = count + *ptr;
+
+    begin = data_begin;
+    while (begin < data_end) {
+        if (begin->type && begin->currSize > sizeCutoff &&
+            begin->currX - begin->currSize < r &&
+            begin->currX + begin->currSize > l &&
+            begin->currY - begin->currSize < t &&
+            begin->currY + begin->currSize > b) {
+            unsigned short offset = offset_table[begin->type - 1]++;
+            render_cells[offset].x = begin->currX;
+            render_cells[offset].y = begin->currY;
+            render_cells[offset].size = begin->currSize + 0.1f;
         }
         begin++;
     }

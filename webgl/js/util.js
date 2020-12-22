@@ -15,23 +15,16 @@ module.exports.makeProgram = (gl, vs_src, fs_src) => {
 
    gl.compileShader(vs);
    gl.compileShader(fs);
-
-   if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS) || !gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-       console.error(`vs info-log: ${gl.getShaderInfoLog(vs)}\n` +
-                     `info-log: ${gl.getShaderInfoLog(fs)}`);
-       gl.deleteShader(vs);
-       gl.deleteShader(fs);
-       return;
-   }
-
+   
    const prog = gl.createProgram();
    gl.attachShader(prog, vs);
    gl.attachShader(prog, fs);
    gl.linkProgram(prog);
 
    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-        gl.deleteProgram(prog);
-       throw new Error(`prog link failed: ${gl.getProgramInfoLog(prog)}`);
+        console.error(`vs info-log: ${gl.getShaderInfoLog(vs)}\n` +
+                     `info-log: ${gl.getShaderInfoLog(fs)}`);
+        throw new Error(`prog link failed: ${gl.getProgramInfoLog(prog)}`);
    }
 
    return prog;

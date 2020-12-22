@@ -17,5 +17,5 @@ window.onload = () => {
     worker.postMessage({ offscreen, mouse: mouse.sharedBuffer, viewport: viewport.sharedBuffer }, [offscreen]);
     // window.onkeydown = e => (e.keyCode == 107 || e.keyCode == 109) && e.ctrlKey == true && e.preventDefault();  
     canvas.addEventListener("mousemove", e => (mouse.x = e.clientX, mouse.y = e.clientY));
-    canvas.addEventListener("wheel", e => mouse.updateScroll(e.deltaY));
+    canvas.addEventListener("wheel", e => mouse.updateScroll(e.deltaY), { passive: true });
 }
