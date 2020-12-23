@@ -20,6 +20,13 @@ typedef struct {
 } RenderCell;
 
 typedef struct {
+    float x;
+    float y;
+    float size;
+    float mass;
+} RenderMass;
+
+typedef struct {
     unsigned short id;
     unsigned char type;
     short x;
@@ -45,6 +52,7 @@ typedef struct {
 
 unsigned int bytes_per_cell_data() { return sizeof(CellData); }
 unsigned int bytes_per_render_cell() { return sizeof(RenderCell); }
+unsigned int bytes_per_render_mass() { return sizeof(RenderMass); }
 
 void deserialize(CellData data[], unsigned short* packet) {
     AddPacket* add_data = (AddPacket*) packet;
@@ -166,7 +174,6 @@ unsigned int draw_cells(CellData data_begin[],
     return count;
 }
 
-
 unsigned int draw_names(CellData data_begin[], 
     CellData data_end[],
     unsigned short offset_table[], 
@@ -218,4 +225,34 @@ unsigned int draw_names(CellData data_begin[],
     end[1] = 0;
 
     return count;
+}
+
+unsigned int draw_mass(CellData data_begin[], 
+    CellData data_end[],
+    RenderMass render_mass[], float minScale,
+    float t, float b, float l, float r) {
+    
+    float w = r - l;
+    float h = t - b;
+    float sizeCutoff = (w < h ? w : h) * minScale;
+
+    unsigned int offset = 0;
+    CellData* begin = data_begin;
+
+    while (begin < data_end) {
+        if (begin->type && begin->currSize > sizeCutoff &&
+            begin->currX - begin->currSize < r &&
+            begin->currX + begin->currSize > l &&
+            begin->currY - begin->currSize < t &&
+            begin->currY + begin->currSize > b) {
+            unsigned short o = offset++;
+            render_mass[o].x = begin->currX;
+            render_mass[o].y = begin->currY;
+            render_mass[o].size = begin->currSize + 0.2f;
+            render_mass[o].mass = begin->currSize * begin->currSize / 100.f;
+        }
+        begin++;
+    }
+
+    return offset;
 }

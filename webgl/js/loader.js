@@ -12,24 +12,24 @@ onmessage = async evt => {
 
     let name_bitmap;
 
-    const name_canvas = new OffscreenCanvas(0, 320);
+    const name_canvas = new OffscreenCanvas(0, 500);
     const name_ctx = name_canvas.getContext("2d");
-    name_ctx.font = "bold 320px Bree Serif";
+    name_ctx.font = "bold 320px Lato";
     name_ctx.fillStyle = "white";
     name_ctx.strokeStyle = "black";
     name_ctx.textAlign = "center";
-    name_ctx.lineWidth = 30;
+    name_ctx.lineWidth = 26;
     name_ctx.textBaseline = "middle";
 
     const m = name_ctx.measureText(data.name);
     
     if (m.width) {
         name_canvas.width = Math.ceil(m.width + 40);
-        name_ctx.font = "bold 320px Bree Serif";
+        name_ctx.font = "bold 320px Lato";
         name_ctx.fillStyle = "white";
         name_ctx.strokeStyle = "black";
         name_ctx.textAlign = "center";
-        name_ctx.lineWidth = 34;
+        name_ctx.lineWidth = 26;
         name_ctx.textBaseline = "middle";
         name_ctx.clearRect(0, 0, name_canvas.width, name_canvas.height);
         name_ctx.strokeText(data.name, name_canvas.width >> 1, name_canvas.height >> 1);

@@ -179,6 +179,95 @@ void main() {
 }
 `;
 
+module.exports.MASS_VERT_SHADER_SOURCE = 
+`#version 300 es
+precision highp float;
+precision highp int;
+
+uniform mat4 u_proj;
+uniform vec2 u_uvs[48];
+
+layout(location=0) in vec4 a_position;
+
+out vec2 v_texcoord;
+flat out int character;
+
+void main() {
+    vec4 world_pos = vec4(a_position.xy, -1.0 / a_position.z, 1.0);
+    gl_Position = u_proj * world_pos;
+    character = int(world_pos.w) / 4;
+    v_texcoord = u_uvs[character];
+}
+`;
+
+module.exports.MASS_FRAG_PEELING_SHADER_SOURCE = 
+`#version 300 es
+
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+precision highp sampler2DArray;
+
+#define MAX_DEPTH 99999.0
+
+uniform sampler2DArray u_mass_char;
+
+uniform sampler2D u_depth;
+uniform sampler2D u_front_color;
+
+in vec2 v_texcoord;
+flat in int character;
+
+layout(location=0) out vec2 depth;  // RG32F, R - negative front depth, G - back depth
+layout(location=1) out vec4 frontColor;
+layout(location=2) out vec4 backColor;
+
+void main() {
+    float fragDepth = gl_FragCoord.z;   // 0 - 1
+
+    ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+    vec2 lastDepth = texelFetch(u_depth, fragCoord, 0).rg;
+    vec4 lastFrontColor = texelFetch(u_front_color, fragCoord, 0);
+
+    // depth value always increases
+    // so we can use MAX blend equation
+    depth.rg = vec2(-MAX_DEPTH);
+
+    // front color always increases
+    // so we can use MAX blend equation
+    frontColor = lastFrontColor;
+
+    // back color is separately blend afterwards each pass
+    backColor = vec4(0.0);
+
+    float nearestDepth = -lastDepth.x;
+    float furthestDepth = lastDepth.y;
+    float alphaMultiplier = 1.0 - lastFrontColor.a;
+
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+        // Skip this depth since it's been peeled.
+        return;
+    }
+
+    if (fragDepth > nearestDepth && fragDepth < furthestDepth) {
+        // This needs to be peeled.
+        // The ones remaining after MAX blended for 
+        // all need-to-peel will be peeled next pass.
+        depth.rg = vec2(-fragDepth, fragDepth);
+        return;
+    }
+    
+    vec4 color = texture(u_mass_char, vec3(v_texcoord, character));
+
+    if (fragDepth == nearestDepth) {
+        frontColor.rgb += color.rgb * color.a * alphaMultiplier;
+        frontColor.a = 1.0 - alphaMultiplier * (1.0 - color.a);
+    } else {
+        backColor += color;
+    }
+}
+`;
+
 module.exports.QUAD_VERT_SHADER_SOURCE = 
 `#version 300 es
 layout(location=0) in vec4 aPosition;

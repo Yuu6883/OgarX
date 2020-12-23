@@ -8,17 +8,20 @@ const WasmCore = require("./wasm-core");
 const { makeProgram, pick, getColor } = require("./util");
 const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
    NAME_VERT_SHADER_SOURCE, NAME_FRAG_PEELING_SHADER_SOURCE,
+   MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE,
    QUAD_VERT_SHADER_SOURCE, 
    BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE } = require("./shaders");
 
 const ZOOM_SPEED = 5;
 
 const NAME_MIN = 0.03;
-const NAME_SCALE = 0.33;
-const NAME_Y_OFFSET = 0;
+const NAME_SCALE = 0.25;
+const NAME_Y_OFFSET = -0.03;
 
+const LONG_MASS = true;
+const MASS_GAP = 0;
 const MASS_MIN = 0.03;
-const MASS_SCALE = 0.33;
+const MASS_SCALE = 0.25;
 const MASS_Y_OFFSET = 0;
 
 // Constants
@@ -31,6 +34,9 @@ const POS_RANGE = 65536;
 const DEPTH_CLEAR_VALUE = -99999.0;
 const MIN_DEPTH = 0.0;
 const MAX_DEPTH = 1.0;
+
+const MASS_CHARS       = "0123456789.k".split("");
+const MASS_CHARS_COUNT = MASS_CHARS.length;
 
 self.log = false;
 
@@ -67,6 +73,7 @@ class Renderer {
 
         this.drawCells = this.drawCells.bind(this);
         this.drawNames = this.drawNames.bind(this);
+        this.drawMass  = this.drawMass.bind(this);
     }
 
     start() {
@@ -126,7 +133,10 @@ class Renderer {
         await this.core.load();
 
         console.log("Loading font");
-        const font = new FontFace("Bree Serif", "url(../font/BreeSerif-Regular.ttf)");
+        let font = new FontFace("Bree Serif", "url(../font/BreeSerif-Regular.ttf)");
+        fonts.add(font);
+        await font.load();
+        font = new FontFace("Bree Serif", "url(../font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
         
@@ -144,13 +154,19 @@ class Renderer {
         console.log(`Render buffers offset: ${this.cellBufferOffset}`);
         this.cellBufferEnd = this.cellBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
         console.log(`Render buffer end ${this.cellBufferEnd}`);
-        this.namesBufferOffset = this.cellBufferEnd + CELL_TYPES * 2;
+        this.nameBufferOffset = this.cellBufferEnd + CELL_TYPES * 2;
+        this.nameBufferEnd = this.nameBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
         console.log(`Memory allocated: ${this.core.buffer.byteLength} bytes`);
 
         this.cellTypesTable = new Uint16Array(this.core.buffer, this.cellTypesTableOffset, CELL_TYPES); 
         this.nameTypesTable = new Uint16Array(this.core.buffer, this.cellBufferEnd, CELL_TYPES);
-        
+
         this.renderBuffer = this.core.HEAPU8.subarray(this.cellBufferOffset, this.cellBufferEnd);
+        /** @type {Map<string, number>} */
+        this.massWidthsTable = new Map();
+
+        // 8 MB cache for mass text
+        this.massBuffer = new Float32Array(new ArrayBuffer(128 * CELL_LIMIT));
 
         // console.log(`Supported WebGL2 extensions: `, gl.getSupportedExtensions());
         if (!gl.getExtension("EXT_color_buffer_float")) {
@@ -166,25 +182,27 @@ class Renderer {
 
         const peel_prog1 = this.peel_prog1 = makeProgram(gl, CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE);
         const peel_prog2 = this.peel_prog2 = makeProgram(gl, NAME_VERT_SHADER_SOURCE, NAME_FRAG_PEELING_SHADER_SOURCE);
+        const peel_prog3 = this.peel_prog3 = makeProgram(gl, MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE);
         const blend_prog = this.blend_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
         const final_prog = this.final_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
         // this.fxaaProg = makeProgram(gl, FXAA_VERT_SHADER_SOURCE, FXAA_FRAG_SHADER_SOURCE);
     
-        this.loadUniform(peel_prog1, "u_proj");
-        this.loadUniform(peel_prog1, "u_depth");
-        this.loadUniform(peel_prog1, "u_front_color");
-
-        this.loadUniform(peel_prog2, "u_proj");
-        this.loadUniform(peel_prog2, "u_depth");
-        this.loadUniform(peel_prog2, "u_front_color");
-
-        this.loadUniform(peel_prog1, "u_circle_color");
+        // Dual depth peeling uniforms
+        for (const p of [peel_prog1, peel_prog2, peel_prog3]) {
+            this.loadUniform(p, "u_proj");
+            this.loadUniform(p, "u_depth");
+            this.loadUniform(p, "u_front_color");
+        }
 
         this.loadUniform(peel_prog1, "u_skin");
         this.loadUniform(peel_prog1, "u_circle");
+        this.loadUniform(peel_prog1, "u_circle_color");
 
         this.loadUniform(peel_prog2, "u_dim");
         this.loadUniform(peel_prog2, "u_name");
+
+        this.loadUniform(peel_prog3, "u_uvs");
+        this.loadUniform(peel_prog3, "u_mass_char");
 
         this.loadUniform(blend_prog, "u_back_color");
 
@@ -193,6 +211,7 @@ class Renderer {
 
         this.setUpPeelingBuffers();
         this.generateQuadVAO();
+        this.generateMassVAO();
         this.generateCircleTexture();
         this.generateMassTextures();
         this.genCells();
@@ -213,6 +232,9 @@ class Renderer {
         gl.useProgram(peel_prog2);
         gl.uniform1i(this.getUniform(peel_prog2, "u_name"), 12);
 
+        gl.useProgram(peel_prog3);
+        gl.uniform1i(this.getUniform(peel_prog3, "u_mass_char"), 13);
+
         gl.useProgram(final_prog);
         gl.uniform1i(this.getUniform(final_prog, "u_back_color"), 6);
         
@@ -230,7 +252,7 @@ class Renderer {
 
     genCells() {
         for (let i = 1; i < 256; i++)
-            this.loadPlayerData({ id: i, skin: pick(this.bots.skins), name: "Luka" });
+            this.loadPlayerData({ id: i, skin: pick(this.bots.skins), name: pick(this.bots.names) });
 
         this.GEN_CELLS = 65536;
         const view = new DataView(this.core.buffer, 0, this.GEN_CELLS * this.BYTES_PER_CELL_DATA);
@@ -260,7 +282,9 @@ class Renderer {
     /** @param {string} name */
     allocBuffer(name) {
         if (this.buffers.has(name)) throw new Error(`Already allocated buffer "${name}"`);
-        this.buffers.set(name, this.gl.createBuffer());
+        const buf = this.gl.createBuffer()
+        this.buffers.set(name, buf);
+        return buf;
     }
 
     /** @param {string} name */
@@ -375,7 +399,7 @@ class Renderer {
         gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
         gl.blendEquation(gl.MAX);
 
-        for (const prog of [this.peel_prog1, this.peel_prog2]) {
+        for (const prog of [this.peel_prog1, this.peel_prog2, this.peel_prog3]) {
             gl.useProgram(prog);
             gl.uniform1i(this.getUniform(prog, "u_depth"), 3);
             gl.uniform1i(this.getUniform(prog, "u_front_color"), 4);
@@ -402,6 +426,31 @@ class Renderer {
     
         {
             const size = 2;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+            gl.enableVertexAttribArray(0);
+        }
+    }
+
+    generateMassVAO() {
+        const gl = this.gl;
+
+        const vao = this.massVAO = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+    
+        const massArray = this.allocBuffer("mass_buffer");
+    
+        gl.bindBuffer(gl.ARRAY_BUFFER, massArray);
+        gl.bufferData(gl.ARRAY_BUFFER, this.massBuffer, gl.DYNAMIC_DRAW);
+
+        // x|y|size|character|uv.x|uv.y
+    
+        // a_position
+        {
+            const size = 4;
             const type = gl.FLOAT;
             const normalize = false;
             const stride = 0;
@@ -446,11 +495,8 @@ class Renderer {
         gl.activeTexture(gl.TEXTURE13);
         gl.bindTexture(gl.TEXTURE_2D_ARRAY, mass_texture_array);
 
-        const MASS_FONT_WIDTH  = 128;
-        const MASS_FONT_HEIGHT = 128;
-        const MASS_CHARS       = "0123456789.k".split("");
-        const MASS_FONT_COUNT  = MASS_CHARS.length;
-        const FONT_WIDTHS = [];
+        const MASS_FONT_WIDTH  = 320;
+        const MASS_FONT_HEIGHT = 320;
 
         {
             gl.texImage3D(
@@ -459,7 +505,7 @@ class Renderer {
                 gl.RGBA,
                 MASS_FONT_WIDTH,
                 MASS_FONT_HEIGHT,
-                MASS_FONT_COUNT,
+                MASS_CHARS_COUNT,
                 0,
                 gl.RGBA,
                 gl.UNSIGNED_BYTE,
@@ -469,18 +515,22 @@ class Renderer {
             const temp = new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
             const temp_ctx = temp.getContext("2d");
 
-            temp_ctx.font = "128px Bree Serif";
+            temp_ctx.font = "bold 280px Lato";
             temp_ctx.fillStyle = "white";
             temp_ctx.strokeStyle = "black";
             temp_ctx.textAlign = "center";
-            temp_ctx.lineWidth = 8;
+            temp_ctx.lineWidth = 30;
             temp_ctx.textBaseline = "middle";
 
-            for (const index in MASS_CHARS) {
+            // uv array (4 uv per char, 2 float per uv)
+            const UVS = new Float32Array(MASS_CHARS_COUNT * 4 * 2); 
+            
+            for (let index = 0; index < MASS_CHARS_COUNT; index++) {
                 const char = MASS_CHARS[index];
                 temp_ctx.strokeText(char, temp.width >> 1, 0);
                 temp_ctx.fillText(char, temp.width >> 1, 0);
-                FONT_WIDTHS.push(temp_ctx.measureText(char).width);
+                const w = temp_ctx.measureText(char).width / temp.width;
+                this.massWidthsTable.set(char, w);
                 gl.texSubImage3D(
                     gl.TEXTURE_2D_ARRAY,
                     0,
@@ -493,6 +543,23 @@ class Renderer {
                     gl.RGBA,
                     gl.UNSIGNED_BYTE,
                     temp);
+                
+                const x0 = 0.5 - w / 2;
+                const x1 = 0.5 + w / 2;
+                const y0 = 0;
+                const y1 = 1;
+
+                UVS[8 * index + 0] = x0;
+                UVS[8 * index + 1] = y0;
+
+                UVS[8 * index + 2] = x1;
+                UVS[8 * index + 3] = y0;
+
+                UVS[8 * index + 4] = x0;
+                UVS[8 * index + 5] = y1;
+
+                UVS[8 * index + 6] = x1;
+                UVS[8 * index + 7] = y1;
             }
         
             gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
@@ -500,6 +567,9 @@ class Renderer {
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        
+            gl.useProgram(this.peel_prog3);
+            gl.uniform2fv(this.getUniform(this.peel_prog3, "u_uvs"), UVS);
         }
     }
 
@@ -590,7 +660,7 @@ class Renderer {
             const textures = this.players.get(i);
             if (!textures.name || !textures.name_dim) continue;
 
-            const begin_offset = this.namesBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
+            const begin_offset = this.nameBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
             const buff = new Float32Array(this.core.buffer, begin_offset, (end - begin) * 3);
 
             gl.uniform4f(this.getUniform(this.peel_prog2, "u_dim"), 
@@ -603,6 +673,85 @@ class Renderer {
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
             gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, (end - begin) * 2);
+        }
+    }
+
+    drawMass(firstPass) {
+        const gl = this.gl;
+        gl.bindVertexArray(this.massVAO);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("mass_buffer"));
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.renderMassBuffer);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        gl.drawArrays(gl.TRIANGLES, 0, this.renderMassBuffer.length >> 2);
+    }
+
+    /** @param {Float32Array} buffer */
+    buildMassBuffer(buffer) {
+        // TODO: make this function in wasm
+        let characters = 0;
+        let write_offset = 0;
+
+        for (let o = 0; o < buffer.length; o += 4) { // 4 floats per render mass
+            const x = buffer[o];
+            const y = buffer[o + 1];
+            const size = buffer[o + 2];
+            const mass = LONG_MASS ? Math.floor(buffer[o + 3]).toString() : "";
+            characters += mass.length;
+            let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
+
+            for (let i = 0; i < mass.length; i++) 
+                width += MASS_SCALE * this.massWidthsTable.get(mass[i]);
+
+            let w = -width / 2;
+            for (let i = 0; i < mass.length; i++) {
+                const char_uv_offset = mass[i] == "." ? 10 : (mass[i] == "k" ? 11 : ~~mass[i]);
+                const char_width = this.massWidthsTable.get(mass[i]);
+
+                const x0 = w * size;
+                const x1 = x0 + MASS_SCALE * char_width * size;
+                const y0 = (+0.5 * MASS_SCALE + MASS_Y_OFFSET) * size;
+                const y1 = (-0.5 * MASS_SCALE + MASS_Y_OFFSET) * size;
+
+                w += MASS_SCALE * char_width + MASS_GAP;
+
+                this.massBuffer[write_offset++] = x + x0;
+                this.massBuffer[write_offset++] = y + y0;
+                this.massBuffer[write_offset++] = size;
+                this.massBuffer[write_offset++] = 4 * char_uv_offset + 0;
+
+                this.massBuffer[write_offset++] = x + x1;
+                this.massBuffer[write_offset++] = y + y0;
+                this.massBuffer[write_offset++] = size;
+                this.massBuffer[write_offset++] = 4 * char_uv_offset + 1;
+
+                this.massBuffer[write_offset++] = x + x0;
+                this.massBuffer[write_offset++] = y + y1;
+                this.massBuffer[write_offset++] = size;
+                this.massBuffer[write_offset++] = 4 * char_uv_offset + 2;
+                
+                this.massBuffer[write_offset++] = x + x1;
+                this.massBuffer[write_offset++] = y + y0;
+                this.massBuffer[write_offset++] = size;
+                this.massBuffer[write_offset++] = 4 * char_uv_offset + 1;
+
+                this.massBuffer[write_offset++] = x + x0;
+                this.massBuffer[write_offset++] = y + y1;
+                this.massBuffer[write_offset++] = size;
+                this.massBuffer[write_offset++] = 4 * char_uv_offset + 2;
+
+                this.massBuffer[write_offset++] = x + x1;
+                this.massBuffer[write_offset++] = y + y1;
+                this.massBuffer[write_offset++] = size;
+                this.massBuffer[write_offset++] = 4 * char_uv_offset + 3;
+            }
+        }
+        this.renderMassBuffer = this.massBuffer.subarray(0, characters * 6);
+        if (self.log) {
+            console.log(`Characters in mass: ${characters}, mass buffer size: ${write_offset}`);
+            this.stop();
+            console.log(this.renderMassBuffer);
         }
     }
 
@@ -631,19 +780,30 @@ class Renderer {
         const cell_count = this.core.instance.exports.draw_cells(0, 
             this.cellTypesTableOffset, this.cellBufferOffset, 0.5,
             this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
-        let name_count;
+        let name_count = 0;
+        let mass_count = 0;
 
         const progs = [this.peel_prog1];
         const funcs = [this.drawCells];
 
         // Configurable if we want to draw mass
-        if (true) {
+        if (false) {
             name_count = this.core.instance.exports.draw_names(0,
                 this.cellTypesTableOffset,
-                this.cellBufferEnd, this.namesBufferOffset, NAME_MIN,
+                this.cellBufferEnd, this.nameBufferOffset, NAME_MIN,
                 this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
             progs.push(this.peel_prog2);
             funcs.push(this.drawNames);
+        }
+
+        if (true) {
+            mass_count = this.core.instance.exports.draw_mass(0, 
+                this.cellTypesTableOffset, 
+                this.nameBufferEnd, MASS_MIN,
+                this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
+            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, mass_count));
+            progs.push(this.peel_prog3);
+            funcs.push(this.drawMass);
         }
 
         offsetBack = this.depthPeelRender(NUM_PASS, progs, funcs);
@@ -651,7 +811,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        if (self.log) console.log(`Drawing ${name_count} names and ${cell_count} cells`);
+        if (self.log) console.log(`Drawing ${name_count} names, ${mass_count} mass text, ${cell_count} cells`);
         
         // Final prog
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
