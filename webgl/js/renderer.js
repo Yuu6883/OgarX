@@ -133,15 +133,15 @@ class Renderer {
         await this.core.load();
 
         console.log("Loading font");
-        let font = new FontFace("Bree Serif", "url(../font/BreeSerif-Regular.ttf)");
+        let font = new FontFace("Bree Serif", "url(/static/font/BreeSerif-Regular.ttf)");
         fonts.add(font);
         await font.load();
-        font = new FontFace("Bree Serif", "url(../font/Lato-Bold.ttf)");
+        font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
         
         console.log("Loading bot skins & names");
-        const res = await fetch("/data/bots.json");
+        const res = await fetch("/static/data/bots.json");
         /** @type {{ names: string[], skins: string[] }} */
         this.bots = await res.json();
 

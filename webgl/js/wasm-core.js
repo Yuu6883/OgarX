@@ -2,7 +2,7 @@ module.exports = class WasmCore {
     async load(page = 1024) {
         if (this.loading || this.instance) return false;
         this.loading = true;
-        const res = await fetch("/wasm/client.wasm");
+        const res = await fetch("/static/wasm/client.wasm");
         const m = new WebAssembly.Memory({ initial: page, maximum: page });
         const e = { env: { memory: m } };
         this.instance = await WebAssembly.instantiate(await WebAssembly.compile(await res.arrayBuffer()), e);

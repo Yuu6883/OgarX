@@ -157,15 +157,15 @@ class Renderer {
         await this.core.load();
 
         console.log("Loading font");
-        let font = new FontFace("Bree Serif", "url(../font/BreeSerif-Regular.ttf)");
+        let font = new FontFace("Bree Serif", "url(/static/font/BreeSerif-Regular.ttf)");
         fonts.add(font);
         await font.load();
-        font = new FontFace("Bree Serif", "url(../font/Lato-Bold.ttf)");
+        font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
         
         console.log("Loading bot skins & names");
-        const res = await fetch("/data/bots.json");
+        const res = await fetch("/static/data/bots.json");
         /** @type {{ names: string[], skins: string[] }} */
         this.bots = await res.json();
 
@@ -1352,7 +1352,7 @@ module.exports = class WasmCore {
     async load(page = 1024) {
         if (this.loading || this.instance) return false;
         this.loading = true;
-        const res = await fetch("/wasm/client.wasm");
+        const res = await fetch("/static/wasm/client.wasm");
         const m = new WebAssembly.Memory({ initial: page, maximum: page });
         const e = { env: { memory: m } };
         this.instance = await WebAssembly.instantiate(await WebAssembly.compile(await res.arrayBuffer()), e);
