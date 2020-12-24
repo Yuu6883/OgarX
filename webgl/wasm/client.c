@@ -174,15 +174,18 @@ unsigned int draw_cells(CellData data_begin[],
     return count;
 }
 
-unsigned int draw_names(CellData data_begin[], 
+unsigned int draw_name_and_mass(CellData data_begin[], 
     CellData data_end[],
     unsigned short offset_table[], 
-    RenderCell render_cells[], float minScale,
+    RenderCell render_name[], RenderMass render_mass[], 
+    float minScale,
     float t, float b, float l, float r) {
 
     float w = r - l;
     float h = t - b;
     float sizeCutoff = (w < h ? w : h) * minScale;
+
+    unsigned int mass_offset = 0;
 
     CellData* begin = data_begin;
     while (begin < data_end) {
@@ -190,8 +193,15 @@ unsigned int draw_names(CellData data_begin[],
             begin->currX - begin->currSize < r &&
             begin->currX + begin->currSize > l &&
             begin->currY - begin->currSize < t &&
-            begin->currY + begin->currSize > b)
+            begin->currY + begin->currSize > b) {
             offset_table[begin->type]++;
+
+            unsigned short o = mass_offset++;
+            render_mass[o].x = begin->currX;
+            render_mass[o].y = begin->currY;
+            render_mass[o].size = begin->currSize + 0.2f;
+            render_mass[o].mass = begin->currSize * begin->currSize / 100.f;
+        }
         begin++;
     }
     
@@ -199,7 +209,7 @@ unsigned int draw_names(CellData data_begin[],
 
     unsigned int count = 0;
 
-    for (unsigned short* ptr = offset_table; (void*) ptr < (void*) render_cells; ptr++)
+    for (unsigned short* ptr = offset_table; (void*) ptr < (void*) render_name; ptr++)
         *ptr = count = count + *ptr;
 
     begin = data_begin;
@@ -210,14 +220,14 @@ unsigned int draw_names(CellData data_begin[],
             begin->currY - begin->currSize < t &&
             begin->currY + begin->currSize > b) {
             unsigned short offset = offset_table[begin->type - 1]++;
-            render_cells[offset].x = begin->currX;
-            render_cells[offset].y = begin->currY;
-            render_cells[offset].size = begin->currSize + 0.1f;
+            render_name[offset].x = begin->currX;
+            render_name[offset].y = begin->currY;
+            render_name[offset].size = begin->currSize + 0.1f;
         }
         begin++;
     }
 
-    unsigned short* end = (unsigned short*) render_cells - 1;
+    unsigned short* end = (unsigned short*) render_name - 1;
 
     while (end-- > offset_table)
         end[1] = end[0];
@@ -225,34 +235,4 @@ unsigned int draw_names(CellData data_begin[],
     end[1] = 0;
 
     return count;
-}
-
-unsigned int draw_mass(CellData data_begin[], 
-    CellData data_end[],
-    RenderMass render_mass[], float minScale,
-    float t, float b, float l, float r) {
-    
-    float w = r - l;
-    float h = t - b;
-    float sizeCutoff = (w < h ? w : h) * minScale;
-
-    unsigned int offset = 0;
-    CellData* begin = data_begin;
-
-    while (begin < data_end) {
-        if (begin->type && begin->currSize > sizeCutoff &&
-            begin->currX - begin->currSize < r &&
-            begin->currX + begin->currSize > l &&
-            begin->currY - begin->currSize < t &&
-            begin->currY + begin->currSize > b) {
-            unsigned short o = offset++;
-            render_mass[o].x = begin->currX;
-            render_mass[o].y = begin->currY;
-            render_mass[o].size = begin->currSize + 0.2f;
-            render_mass[o].mass = begin->currSize * begin->currSize / 100.f;
-        }
-        begin++;
-    }
-
-    return offset;
 }

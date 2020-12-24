@@ -22,7 +22,7 @@ const LONG_MASS = true;
 const MASS_GAP = 0;
 const MASS_MIN = 0.03;
 const MASS_SCALE = 0.25;
-const MASS_Y_OFFSET = 0;
+const MASS_Y_OFFSET = -0.33;
 
 // Constants
 const CELL_TYPES = 256;
@@ -527,9 +527,10 @@ class Renderer {
             
             for (let index = 0; index < MASS_CHARS_COUNT; index++) {
                 const char = MASS_CHARS[index];
-                temp_ctx.strokeText(char, temp.width >> 1, 0);
-                temp_ctx.fillText(char, temp.width >> 1, 0);
-                const w = temp_ctx.measureText(char).width / temp.width;
+                temp_ctx.clearRect(0, 0, temp.width, temp.height);
+                temp_ctx.strokeText(char, temp.width >> 1, temp.height >> 1);
+                temp_ctx.fillText(char, temp.width >> 1, temp.height >> 1);
+                const w = (temp_ctx.measureText(char).width + 20) / temp.width;
                 this.massWidthsTable.set(char, w);
                 gl.texSubImage3D(
                     gl.TEXTURE_2D_ARRAY,
@@ -561,7 +562,6 @@ class Renderer {
                 UVS[8 * index + 6] = x1;
                 UVS[8 * index + 7] = y1;
             }
-        
             gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -693,11 +693,14 @@ class Renderer {
         let characters = 0;
         let write_offset = 0;
 
+        if (self.log) console.log(buffer);
+
         for (let o = 0; o < buffer.length; o += 4) { // 4 floats per render mass
             const x = buffer[o];
             const y = buffer[o + 1];
             const size = buffer[o + 2];
             const mass = LONG_MASS ? Math.floor(buffer[o + 3]).toString() : "";
+            if (self.log) console.log(`Drawing mass "${mass}"`);
             characters += mass.length;
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
@@ -747,7 +750,7 @@ class Renderer {
                 this.massBuffer[write_offset++] = 4 * char_uv_offset + 3;
             }
         }
-        this.renderMassBuffer = this.massBuffer.subarray(0, characters * 6);
+        this.renderMassBuffer = this.massBuffer.subarray(0, write_offset);
         if (self.log) {
             console.log(`Characters in mass: ${characters}, mass buffer size: ${write_offset}`);
             this.stop();
@@ -780,28 +783,24 @@ class Renderer {
         const cell_count = this.core.instance.exports.draw_cells(0, 
             this.cellTypesTableOffset, this.cellBufferOffset, 0.5,
             this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
-        let name_count = 0;
-        let mass_count = 0;
+        let name_mass_count = 0;
 
         const progs = [this.peel_prog1];
         const funcs = [this.drawCells];
 
         // Configurable if we want to draw mass
-        if (false) {
-            name_count = this.core.instance.exports.draw_names(0,
-                this.cellTypesTableOffset,
-                this.cellBufferEnd, this.nameBufferOffset, NAME_MIN,
+        if (true) {
+            name_mass_count = this.core.instance.exports.draw_name_and_mass(0,
+                this.cellTypesTableOffset, // end of cell buffer
+                this.cellBufferEnd,  // table offset
+                this.nameBufferOffset, // name buffer offset
+                this.nameBufferEnd, // mass buffer offset
+                NAME_MIN,
                 this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
+
             progs.push(this.peel_prog2);
             funcs.push(this.drawNames);
-        }
-
-        if (true) {
-            mass_count = this.core.instance.exports.draw_mass(0, 
-                this.cellTypesTableOffset, 
-                this.nameBufferEnd, MASS_MIN,
-                this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
-            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, mass_count));
+            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, name_mass_count * 4));
             progs.push(this.peel_prog3);
             funcs.push(this.drawMass);
         }
@@ -811,7 +810,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        if (self.log) console.log(`Drawing ${name_count} names, ${mass_count} mass text, ${cell_count} cells`);
+        if (self.log) console.log(`Drawing ${name_mass_count} name and mass, ${cell_count} cells`);
         
         // Final prog
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);

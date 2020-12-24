@@ -1,9 +1,4 @@
 const IMG_DIM = 512;
-const resizer = new OffscreenCanvas(IMG_DIM, IMG_DIM);
-const ctx = resizer.getContext("2d");
-
-ctx.imageSmoothingEnabled = true;
-ctx.imageSmoothingQuality = "high";
 
 onmessage = async evt => {
     /** @type {{ data: { id: number, skin: string, name: string }}} */

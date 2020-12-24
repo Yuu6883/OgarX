@@ -195,8 +195,8 @@ flat out int character;
 void main() {
     vec4 world_pos = vec4(a_position.xy, -1.0 / a_position.z, 1.0);
     gl_Position = u_proj * world_pos;
-    character = int(world_pos.w) / 4;
-    v_texcoord = u_uvs[character];
+    character = int(a_position.w) >> 2;
+    v_texcoord = u_uvs[int(a_position.w)];
 }
 `;
 
@@ -258,6 +258,7 @@ void main() {
     }
     
     vec4 color = texture(u_mass_char, vec3(v_texcoord, character));
+    // vec4 color = vec4(v_texcoord, 0, 1);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
