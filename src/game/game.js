@@ -34,7 +34,7 @@ module.exports = class Game {
     }
 
     cli() {
-        RL.createInterface(process.stdin).on("line", input => {
+        this.rl = RL.createInterface(process.stdin).on("line", input => {
             if (input == "d") {
                 this.engine.debug = true;
             }

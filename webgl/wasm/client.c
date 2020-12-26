@@ -28,17 +28,17 @@ typedef struct {
 
 typedef struct {
     unsigned short id;
-    unsigned char type;
+    unsigned short type;
     short x;
     short y;
-    short size;
+    unsigned short size;
 } AddPacket;
 
 typedef struct {
     unsigned short id;
     short x;
     short y;
-    short size;
+    unsigned short size;
 } UpdatePacket;
 
 typedef struct {
@@ -54,15 +54,21 @@ unsigned int bytes_per_cell_data() { return sizeof(CellData); }
 unsigned int bytes_per_render_cell() { return sizeof(RenderCell); }
 unsigned int bytes_per_render_mass() { return sizeof(RenderMass); }
 
+// extern void log_add_packet(
+//     unsigned short id,
+//     unsigned short type,
+//     short x,
+//     short y,
+//     unsigned short size);
+
 void deserialize(CellData data[], unsigned short* packet) {
     AddPacket* add_data = (AddPacket*) packet;
 
     while (add_data->id) {
         data[add_data->id].type = add_data->type;
-        data[add_data->id].oldX = data[add_data->id].currX = data[add_data->id].netX = add_data->x * 2;
-        data[add_data->id].oldY = data[add_data->id].currY = data[add_data->id].netY = add_data->y * 2;
+        data[add_data->id].oldX = data[add_data->id].currX = data[add_data->id].netX = add_data->x;
+        data[add_data->id].oldY = data[add_data->id].currY = data[add_data->id].netY = add_data->y;
         data[add_data->id].oldSize = data[add_data->id].currSize = data[add_data->id].netSize = add_data->size;
-        
         add_data++;
     }
 
@@ -76,8 +82,8 @@ void deserialize(CellData data[], unsigned short* packet) {
         data[update_data->id].oldY = data[update_data->id].currY;
         data[update_data->id].oldSize = data[update_data->id].currSize;
 
-        data[update_data->id].netX = update_data->x * 2;
-        data[update_data->id].netY = update_data->y * 2;
+        data[update_data->id].netX = update_data->x;
+        data[update_data->id].netY = update_data->y;
         data[update_data->id].netSize = update_data->size;
         update_data++;
     }
@@ -88,12 +94,12 @@ void deserialize(CellData data[], unsigned short* packet) {
     EatPacket* eat_data = (EatPacket*) packet;
 
     while (eat_data->id) {
-        data[eat_data->id].oldX = data[eat_data->id].currX;
-        data[eat_data->id].oldY = data[eat_data->id].currY;
-        data[eat_data->id].oldSize = data[eat_data->id].currSize;
         
         data[eat_data->id].netX = data[eat_data->by].netX;
         data[eat_data->id].netY = data[eat_data->by].netY;
+
+        data[eat_data->id].oldX = 0.0f;
+        data[eat_data->id].oldY = 0.0f;
         data[eat_data->id].netSize = 0.0f;
 
         eat_data++;
@@ -118,6 +124,8 @@ void deserialize(CellData data[], unsigned short* packet) {
         data[delete_data->id].netX = 0;
         data[delete_data->id].netY = 0;
         data[delete_data->id].netSize = 0;
+
+        delete_data++;
     }
 }
 
@@ -129,9 +137,22 @@ unsigned int draw_cells(CellData data_begin[],
     CellData* begin = data_begin;
     while ((void*) begin < (void*) offset_table) {
         if (begin->type) {
-            begin->currX = lerp * (begin->netX - begin->oldX) + begin->oldX;
-            begin->currY = lerp * (begin->netY - begin->oldY) + begin->oldY;
-            begin->currSize = lerp * (begin->netSize - begin->oldSize) + begin->oldSize;
+            if (!begin->netSize) {
+                begin->currX = lerp * (begin->netX - begin->currX) + begin->currX;
+                begin->currY = lerp * (begin->netY - begin->currY) + begin->currY;
+
+                begin->oldX += lerp / 2.0f;
+                if (begin->oldX >= 2.0f) {
+                    begin->type = 0;
+                    begin++;
+                    continue;
+                }
+            } else {
+                begin->currX = lerp * (begin->netX - begin->oldX) + begin->oldX;
+                begin->currY = lerp * (begin->netY - begin->oldY) + begin->oldY;
+                begin->currSize = lerp * (begin->netSize - begin->oldSize) + begin->oldSize;
+            }
+
             if (begin->currX - begin->currSize < r &&
                 begin->currX + begin->currSize > l &&
                 begin->currY - begin->currSize < t &&
@@ -174,7 +195,7 @@ unsigned int draw_cells(CellData data_begin[],
     return count;
 }
 
-unsigned int draw_name_and_mass(CellData data_begin[], 
+unsigned int draw_text(CellData data_begin[], 
     CellData data_end[],
     unsigned short offset_table[], 
     RenderCell render_name[], RenderMass render_mass[], 
@@ -189,7 +210,8 @@ unsigned int draw_name_and_mass(CellData data_begin[],
 
     CellData* begin = data_begin;
     while (begin < data_end) {
-        if (begin->type && begin->currSize > sizeCutoff &&
+        if (begin->type && begin->type <= 250 && 
+            begin->currSize > sizeCutoff &&
             begin->currX - begin->currSize < r &&
             begin->currX + begin->currSize > l &&
             begin->currY - begin->currSize < t &&
@@ -214,7 +236,8 @@ unsigned int draw_name_and_mass(CellData data_begin[],
 
     begin = data_begin;
     while (begin < data_end) {
-        if (begin->type && begin->currSize > sizeCutoff &&
+        if (begin->type && begin->type <= 250 && 
+            begin->currSize > sizeCutoff &&
             begin->currX - begin->currSize < r &&
             begin->currX + begin->currSize > l &&
             begin->currY - begin->currSize < t &&

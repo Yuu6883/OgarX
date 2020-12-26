@@ -142,6 +142,6 @@ module.exports = class Cell {
     toString() {
         // if (!this.exists) return `Cell[None]`;
         const s = TYPES_TO_STRING[this.type];
-        return `Cell#${this.id}[type=${s || `Player#${this.type}`},x=${this.x.toFixed(2)},y=${this.y.toFixed(2)},r=${this.r.toFixed(2)},mass=${(this.r * this.r / 100000).toFixed(1)}k,flags=${this.flags.toString(2).padStart(8, "0")}]`;
+        return `Cell#${this.id}[type=${s ? `${s}(${this.type})` : `Player#${this.type}`},x=${this.x.toFixed(2)},y=${this.y.toFixed(2)},r=${this.r.toFixed(2)},mass=${(this.r * this.r / 100000).toFixed(1)}k,flags=${this.flags.toString(2).padStart(8, "0")}]`;
     }
 }

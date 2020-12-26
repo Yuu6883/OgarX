@@ -1,5 +1,4 @@
 const Handler = require("../game/handle");
-const Writer = require("./writer");
 const Protocols = require("./protocols");
 
 module.exports = class Socket extends Handler {

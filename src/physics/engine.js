@@ -87,7 +87,7 @@ module.exports = class Engine {
         /** @type {Set<number>[]} */
         this.counters = Array.from({ length: 256 }, _ => new Set());
         this.shouldRestart = false;
-        this.__next_cell_id = 0;
+        this.__next_cell_id = 1;
     }
 
     async init() {
@@ -308,8 +308,8 @@ module.exports = class Engine {
                 for (const id2 in this.game.controls) {
                     const controller2 = this.game.controls[id2];
                     if (!controller2.handle) continue;
-                    controller2.handle.onSpawn(controller);
                     controller.handle.onSpawn(controller2);
+                    if (controller != controller2) controller2.handle.onSpawn(controller);
                 }
 
                 console.log(`Spawned controller#${controller.id} at x: ${point[0]}, y: ${point[1]}`);
@@ -506,7 +506,7 @@ module.exports = class Engine {
      * @param {number} type
      */
     newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0, insert = true) {
-        if (this.cellCount >= this.options.CELL_LIMIT)
+        if (this.cellCount >= this.options.CELL_LIMIT - 1)
             return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
 
         while (this.cells[this.__next_cell_id].exists)

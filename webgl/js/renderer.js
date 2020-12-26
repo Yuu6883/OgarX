@@ -1,8 +1,10 @@
 importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");
 
 // const { mat4, vec3 } = require("gl-matrix");
+const Cell = require("./cell");
 const Mouse = require("./mouse");
 const Viewport = require("./viewport");
+const GameSocket = require("./socket");
 const WasmCore = require("./wasm-core");
 
 const { makeProgram, pick, getColor } = require("./util");
@@ -14,13 +16,12 @@ const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
 
 const ZOOM_SPEED = 5;
 
-const NAME_MIN = 0.03;
+const NAME_MASS_MIN = 0.03;
 const NAME_SCALE = 0.25;
 const NAME_Y_OFFSET = -0.03;
 
 const LONG_MASS = true;
 const MASS_GAP = 0;
-const MASS_MIN = 0.03;
 const MASS_SCALE = 0.25;
 const MASS_Y_OFFSET = -0.33;
 
@@ -45,6 +46,7 @@ class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
 
+        this.cursor = { position: vec3.create() };
         this.target = { position: vec3.create(), scale: 10 };
         this.camera = { position: vec3.create(), scale: 10 };
 
@@ -63,7 +65,7 @@ class Renderer {
 
         this.mouse = new Mouse();
         this.viewport = new Viewport();
-        this.core = new WasmCore();
+        this.core = new WasmCore(this);
 
         this.proj = mat4.create();
         this.viewbox = { t: 0, b: 0, l: 0, r: 0 };
@@ -139,14 +141,12 @@ class Renderer {
         font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
-        
-        console.log("Loading bot skins & names");
-        const res = await fetch("/static/data/bots.json");
-        /** @type {{ names: string[], skins: string[] }} */
-        this.bots = await res.json();
 
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
+
+        this.cells = Array.from({ length: CELL_LIMIT }, (_, id) => 
+            new Cell(new DataView(this.core.buffer, id * this.BYTES_PER_CELL_DATA, this.BYTES_PER_CELL_DATA), id));
 
         this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
         console.log(`Table offset: ${this.cellTypesTableOffset}`);
@@ -157,11 +157,12 @@ class Renderer {
         this.nameBufferOffset = this.cellBufferEnd + CELL_TYPES * 2;
         this.nameBufferEnd = this.nameBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
         console.log(`Memory allocated: ${this.core.buffer.byteLength} bytes`);
-
+        
         this.cellTypesTable = new Uint16Array(this.core.buffer, this.cellTypesTableOffset, CELL_TYPES); 
         this.nameTypesTable = new Uint16Array(this.core.buffer, this.cellBufferEnd, CELL_TYPES);
 
         this.renderBuffer = this.core.HEAPU8.subarray(this.cellBufferOffset, this.cellBufferEnd);
+        this.renderBufferView = new DataView(this.core.buffer, this.cellBufferOffset, CELL_LIMIT * this.BYTES_PER_RENDER_CELL);
         /** @type {Map<string, number>} */
         this.massWidthsTable = new Map();
 
@@ -214,7 +215,7 @@ class Renderer {
         this.generateMassVAO();
         this.generateCircleTexture();
         this.generateMassTextures();
-        this.genCells();
+        // await this.genCells();
 
         this.allocBuffer("cell_data_buffer");
         gl.bindVertexArray(this.quadVAO);
@@ -248,9 +249,37 @@ class Renderer {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
         this.start();
+
+        this.socket = new GameSocket(this);
+        this.socket.connect("ws://localhost:3000");
+
+        self.socket = this.socket;
     }
 
-    genCells() {
+    printCells() {
+        console.log("All cells: ");
+        const table = [];
+        for (const cell of this.cells) {
+            if (cell.type && cell.type <= 250) table.push(cell.toObject());
+            if (!isFinite(cell.currX)) {
+                this.socket.disconnect();
+                this.stop();
+            }
+        }
+        console.table(table);
+    }
+
+    clearCells() {
+        this.core.HEAPU32.fill(0);
+        this.massBuffer.fill(0);
+    }
+
+    async genCells() { 
+        console.log("Loading bot skins & names");
+        const res = await fetch("/static/data/bots.json");
+        /** @type {{ names: string[], skins: string[] }} */
+        this.bots = await res.json();
+
         for (let i = 1; i < 256; i++)
             this.loadPlayerData({ id: i, skin: pick(this.bots.skins), name: pick(this.bots.names) });
 
@@ -581,7 +610,7 @@ class Renderer {
 
     updateTarget() {
         // Screen space to world space
-        this.screenToWorld(this.target.position,
+        this.screenToWorld(this.cursor.position,
             this.mouse.x / this.viewport.width  * 2 - 1, 
             this.mouse.y / this.viewport.height * 2 - 1);
 
@@ -591,12 +620,12 @@ class Renderer {
     }
 
     // Smooth update camera
-    lerpCamera(d = 1 / 60) {
+    lerpCamera(d = 1 / 60, position) {
         vec3.lerp(this.camera.position, this.camera.position, this.target.position, d);
         this.camera.scale += (this.target.scale - this.camera.scale) * d * ZOOM_SPEED;
 
-        const x = this.camera.position[0];
-        const y = this.camera.position[1];
+        const x = position ? position.x : this.camera.position[0];
+        const y = position ? position.y : this.camera.position[1];
         const hw = this.viewport.width  * this.camera.scale / 2;
         const hh = this.viewport.height * this.camera.scale / 2;
 
@@ -693,14 +722,12 @@ class Renderer {
         let characters = 0;
         let write_offset = 0;
 
-        if (self.log) console.log(buffer);
-
         for (let o = 0; o < buffer.length; o += 4) { // 4 floats per render mass
             const x = buffer[o];
             const y = buffer[o + 1];
             const size = buffer[o + 2];
             const mass = LONG_MASS ? Math.floor(buffer[o + 3]).toString() : "";
-            if (self.log) console.log(`Drawing mass "${mass}"`);
+            
             characters += mass.length;
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
@@ -751,11 +778,6 @@ class Renderer {
             }
         }
         this.renderMassBuffer = this.massBuffer.subarray(0, write_offset);
-        if (self.log) {
-            console.log(`Characters in mass: ${characters}, mass buffer size: ${write_offset}`);
-            this.stop();
-            console.log(this.renderMassBuffer);
-        }
     }
 
     /** @param {number} now */
@@ -772,45 +794,67 @@ class Renderer {
         const gl = this.gl;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-        this.updateTarget();
-        this.lerpCamera(delta / 1000);
-        this.checkViewport();
-
         const NUM_PASS = 2;
         let offsetBack;
         this.clearPeelingBuffers();
         
+        this.cellTypesTable.fill(0);
+        this.nameTypesTable.fill(0);
+
+        const lerp = this.socket.lastPacket ? (Date.now() - this.socket.lastPacket) / 120 : 0;
+        // console.log(`Now: ${now}, lastUpdate: ${this.socket.lastPacket}`);
+        // console.log(`lerp: ${lerp}`);
+
         const cell_count = this.core.instance.exports.draw_cells(0, 
-            this.cellTypesTableOffset, this.cellBufferOffset, 0.5,
+            this.cellTypesTableOffset, 
+            this.cellBufferOffset, lerp,
             this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
-        let name_mass_count = 0;
+        
+        let text_count = 0;
+        
+        this.updateTarget();
+
+        let position = null;
+        if (this.socket.pid) {
+            let begin = this.cellTypesTable[this.socket.pid - 1];
+            let end   = this.cellTypesTable[this.socket.pid];
+            if (begin != end) {
+                if (!end) end = 65536;
+                if (end - begin == 1) {
+                    const x = this.renderBufferView.getFloat32(begin * 3, true);
+                    const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
+                    position = { x, y };
+                }
+            }
+        }
+        this.lerpCamera(delta / 120, position);
+        this.checkViewport();
+
+        // console.log(`x: ${this.cells[11].currX}, v_x: ${this.viewbox.l}`);
 
         const progs = [this.peel_prog1];
         const funcs = [this.drawCells];
 
         // Configurable if we want to draw mass
         if (true) {
-            name_mass_count = this.core.instance.exports.draw_name_and_mass(0,
+            text_count = this.core.instance.exports.draw_text(0,
                 this.cellTypesTableOffset, // end of cell buffer
                 this.cellBufferEnd,  // table offset
                 this.nameBufferOffset, // name buffer offset
                 this.nameBufferEnd, // mass buffer offset
-                NAME_MIN,
+                NAME_MASS_MIN,
                 this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
 
             progs.push(this.peel_prog2);
             funcs.push(this.drawNames);
-            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, name_mass_count * 4));
+            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
             progs.push(this.peel_prog3);
             funcs.push(this.drawMass);
         }
 
         offsetBack = this.depthPeelRender(NUM_PASS, progs, funcs);
 
-        this.cellTypesTable.fill(0);
-        this.nameTypesTable.fill(0);
-
-        if (self.log) console.log(`Drawing ${name_mass_count} name and mass, ${cell_count} cells`);
+        if (self.log) console.log(`Drawing ${text_count} text, ${cell_count} cells`);
         
         // Final prog
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -869,10 +913,10 @@ class Renderer {
             { skin: skin_bitmap && gl.createTexture(), 
               name: name_bitmap && gl.createTexture() };
 
-        if (name_bitmap) {
-            textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
-            // console.log(name_bitmap.width, name_bitmap.height);
-        }
+        if (name_bitmap) textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
+
+        console.log(`Player Textures: [PID: ${id}, SKIN: (${skin_bitmap.width}, ${skin_bitmap.height}), ` +
+            ` NAME: (${name_bitmap.width}, ${name_bitmap.height}) ]`);
 
         this.uploadTexture(textures.skin, skin_bitmap);
         this.uploadTexture(textures.name, name_bitmap);
@@ -945,3 +989,5 @@ self.onmessage = function(e) {
     renderer.viewport.setBuffer(data.viewport);
     self.removeEventListener("message", this);
 };
+
+module.exports = Renderer;

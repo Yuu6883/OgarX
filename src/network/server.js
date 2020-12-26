@@ -46,7 +46,7 @@ module.exports = class SocketServer {
                 this.listening = false;
                 this.sock = sock;
                 this.game.chat = new Chat(this.game);
-                console.log(`Server opened`);
+                console.log(`Server opened on port ${3000}`);
                 resolve(true);
             });
         });

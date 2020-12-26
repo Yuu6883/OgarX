@@ -9,6 +9,8 @@ module.exports = class Reader {
         this.le = le;
     }
 
+    get length() { return this.view.byteLength; }
+
     readUInt8() {
         return this.view.getUint8(this.offset++);
     }
