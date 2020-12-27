@@ -11,7 +11,7 @@ out vec2 v_texcoord;
 
 void main() {
 
-    vec4 world_pos = vec4(a_position * a_data.z + a_data.xy, -1.0 / a_data.z, 1.0);
+    vec4 world_pos = vec4(a_position * a_data.z + a_data.xy, -1.0 / pow(a_data.z, 0.333f), 1.0);
     gl_Position = u_proj * world_pos;
 
     // Map from -1 to 1 -> 0 to 1
@@ -64,8 +64,9 @@ void main() {
     float nearestDepth = -lastDepth.x;
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
+    vec4 circle = texture(u_circle, v_texcoord);
 
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth || circle.a == 0.0f) {
         // Skip this depth since it's been peeled.
         return;
     }
@@ -77,8 +78,6 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-    
-    vec4 circle = texture(u_circle, v_texcoord);
     vec4 skin = texture(u_skin, v_texcoord);
     vec4 color = vec4(mix(u_circle_color, skin.rgb, skin.a), circle.a);
     // vec4 color = vec4(u_circle_color, circle.a);
@@ -106,7 +105,7 @@ out vec2 v_texcoord;
 
 void main() {
     vec2 obj_pos = a_position * u_dim.xy * u_dim.z + vec2(0, u_dim.w);
-    vec4 world_pos = vec4(obj_pos * a_data.z + a_data.xy, -1.0 / a_data.z, 1.0);
+    vec4 world_pos = vec4(obj_pos * a_data.z + a_data.xy, -1.0 / pow(a_data.z, 0.333f), 1.0);
     gl_Position = u_proj * world_pos;
 
     v_texcoord = (vec2(a_position.x, -a_position.y) + 1.0) / 2.0;
@@ -155,7 +154,9 @@ void main() {
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
 
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+    vec4 color = texture(u_name, v_texcoord);
+
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth || color.a == 0.0f) {
         // Skip this depth since it's been peeled.
         return;
     }
@@ -167,8 +168,6 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-    
-    vec4 color = texture(u_name, v_texcoord);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
@@ -193,7 +192,7 @@ out vec2 v_texcoord;
 flat out int character;
 
 void main() {
-    vec4 world_pos = vec4(a_position.xy, -1.0 / a_position.z, 1.0);
+    vec4 world_pos = vec4(a_position.xy, -1.0 / pow(a_position.z, 0.333f), 1.0);
     gl_Position = u_proj * world_pos;
     character = int(a_position.w) >> 2;
     v_texcoord = u_uvs[int(a_position.w)];
@@ -244,7 +243,9 @@ void main() {
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
 
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+    vec4 color = texture(u_mass_char, vec3(v_texcoord, character));
+
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth || color.a == 0.0f) {
         // Skip this depth since it's been peeled.
         return;
     }
@@ -256,9 +257,6 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-    
-    vec4 color = texture(u_mass_char, vec3(v_texcoord, character));
-    // vec4 color = vec4(v_texcoord, 0, 1);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
