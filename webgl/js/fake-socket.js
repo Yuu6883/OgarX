@@ -22,6 +22,6 @@ module.exports = class FakeSocket {
 
     /** @param {BufferSource} buffer */
     send(buffer) {
-        this.port.postMessage({ event: "message", message: buffer });
+        this.port.postMessage({ event: "message", message: buffer }, [buffer]);
     }
 }
