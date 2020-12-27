@@ -1,9 +1,6 @@
-const fs = require("fs");
-const path = require("path");
-const CORE_PATH = path.resolve(__dirname, "wasm", "core.wasm");
-
-const Server = require("./network/ws-server");
+const Server = require("./network/sw-server");
 const Game = require("./game/game");
+
 
 const game = new Game({
     VIRUS_COUNT: 20,
@@ -20,15 +17,14 @@ const game = new Game({
 
 const server = new Server(game);
 const engine = game.engine;
-
-process.on("SIGINT", async () => {
-    engine.stop();
-    await server.close();
-    process.exit(0);
-});
+server.open();
 
 (async () => {
-    await engine.init(fs.readFileSync(CORE_PATH));
-    await server.open();
+    const res = await fetch("/static/wasm/server.wasm");
+    const buffer = await res.arrayBuffer();
+
+    await engine.init(buffer);
     engine.start();
+
+    console.log("Shared worker server running");
 })();

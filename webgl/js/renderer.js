@@ -73,7 +73,6 @@ class Renderer {
         this.viewbox = { t: 0, b: 0, l: 0, r: 0 };
 
         this.initLoader();
-        this.initEngine();
 
         this.drawCells = this.drawCells.bind(this);
         this.drawNames = this.drawNames.bind(this);
@@ -254,9 +253,7 @@ class Renderer {
         this.start();
 
         this.socket = new GameSocket(this);
-        this.socket.connect("ws://localhost:3000");
-
-        self.socket = this.socket;
+        // this.socket.connect("ws://localhost:3000");
     }
 
     printCells() {
@@ -666,7 +663,7 @@ class Renderer {
                 const color = getColor(i);
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
             }
-            
+
             const textures = this.players.get(i) || {};
             
             gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
@@ -987,13 +984,17 @@ class Renderer {
     }
 }
 
-self.onmessage = function(e) {
+self.onmessage = async function(e) {
+    self.removeEventListener("message", this); // One message is enough
+
     const { data } = e;
     const renderer = self.r = new Renderer(data.offscreen);
     renderer.mouse.setBuffer(data.mouse);
     renderer.state.setBuffer(data.state);
     renderer.viewport.setBuffer(data.viewport);
-    self.removeEventListener("message", this);
+    await renderer.initEngine();
+
+    renderer.socket.connect(data.server);
 };
 
 module.exports = Renderer;

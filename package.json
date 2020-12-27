@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "browserify ./webgl/js/main.js -o ./client/js/main.js && browserify ./webgl/js/renderer.js -o ./client/js/renderer.js && cp ./webgl/js/loader.js ./client/js/loader.js"
+    "build": "browserify ./src/worker.js -o ./client/js/sw.js && browserify ./webgl/js/main.js -o ./client/js/main.js && browserify ./webgl/js/renderer.js -o ./client/js/renderer.js && cp ./webgl/js/loader.js ./client/js/loader.js"
   },
   "repository": {
     "type": "git",

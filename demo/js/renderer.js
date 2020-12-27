@@ -1,4 +1,226 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+module.exports = class Reader {
+    /** 
+     * @param {DataView} view
+     * @param {boolean} le
+     */
+    constructor(view, le = true) {
+        this.view = view;
+        this.offset = 0;
+        this.le = le;
+    }
+
+    get length() { return this.view.byteLength; }
+
+    readUInt8() {
+        return this.view.getUint8(this.offset++);
+    }
+    readInt8() {
+        return this.view.getInt8(this.offset++);
+    }
+    readUInt16() {
+        const a = this.view.getUint16(this.offset, this.le);
+        this.offset += 2;
+        return a;
+    }
+    readInt16() {
+        const a = this.view.getUint16(this.offset, this.le);
+        this.offset += 2;
+        return a;
+    }
+    readUInt32() {
+        const a = this.view.getUint32(this.offset, this.le);
+        this.offset += 4;
+        return a;
+    }
+    readInt32() {
+        const a = this.view.getInt32(this.offset, this.le);
+        this.offset += 4;
+        return a;
+    }
+    readFloat32() {
+        const a = this.view.getFloat32(this.offset, this.le);
+        this.offset += 4;
+        return a;
+    }
+    readFloat64() {
+        const a = this.view.getFloat64(this.offset, this.le);
+        this.offset += 8;
+        return a;
+    }
+    /** @param {number} count */
+    skip(count) {
+        this.offset += count;
+    }
+    readUTF8String() {
+        const chars = [];
+        while (this.offset < this.view.byteLength) {
+            const ch = this.readUInt8();
+            if (!ch) break;
+            chars.push(String.fromCharCode(ch));
+        }
+        return chars.join("");
+    }
+    readUTF16String() {
+        const chars = [];
+        while (this.offset < this.view.byteLength) {
+            const ch = this.readUInt16();
+            if (!ch) break;
+            chars.push(String.fromCharCode(ch));
+        }
+        return chars.join("");
+    }
+}
+
+},{}],2:[function(require,module,exports){
+const PoolSize = 1048576;
+const BufferPool = new DataView(new ArrayBuffer(PoolSize));
+
+module.exports = class Writer {
+    
+    constructor(le = true) {
+        this.offset = 0;
+        this.le = le;
+    }
+
+    /** @param {number} a */
+    writeUInt8(a) {
+        BufferPool.setUint8(this.offset++, a);
+    }
+    
+    /** @param {number} a */
+    writeInt8(a) {
+        BufferPool.setInt8(this.offset++, a);
+    }
+
+    /** @param {number} a */
+    writeUInt16(a) {
+        BufferPool.setUint16(this.offset, a, this.le);
+        this.offset += 2;
+    }
+
+    /** @param {number} a */
+    writeInt16(a) {
+        BufferPool.setInt16(this.offset, a, this.le);
+        this.offset += 2;
+    }
+
+    /** @param {number} a */
+    writeUInt32(a) {
+        BufferPool.setUint32(this.offset, a, this.le);
+        this.offset += 4;
+    }
+
+    /**
+     * @param {number} a
+     */
+    writeInt32(a) {
+        BufferPool.setInt32(this.offset, a, this.le);
+        this.offset += 4;
+    }
+
+    /** @param {number} a */
+    writeFloat32(a) {
+        BufferPool.setFloat32(this.offset, a, this.le);
+        this.offset += 4;
+    }
+
+    /** @param {number} a */
+    writeFloat64(a) {
+        BufferPool.setFloat64(this.offset, a, this.le);
+        this.offset += 8;
+    }
+
+    /** @param {string} a */
+    writeUTF8String(a) {
+        for (let i = 0; i < a.length; i++)
+            this.writeUInt8(a.charCodeAt(i));
+        this.writeUInt8(0);
+    }
+
+    /** @param {string} a */
+    writeUTF16String(a) {
+        for (let i = 0; i < a.length; i++)
+            this.writeUInt16(a.charCodeAt(i));
+        this.writeUInt16(0);
+    }
+    
+    finalize() {
+        return BufferPool.buffer.slice(0, this.offset);
+    }
+}
+
+},{}],3:[function(require,module,exports){
+module.exports = class Cell {
+    /**
+     * 
+     * @param {DataView} view 
+     * @param {number} id 
+     */
+    constructor(view, id) {
+        this.view = view;
+        this.id = id;
+    }
+
+    get type() { return this.view.getUint32(0, true); }
+    get oldX() { return this.view.getFloat32(4, true); }
+    get oldY() { return this.view.getFloat32(8, true); }
+    get oldSize() { return this.view.getFloat32(12, true); }
+    get currX() { return this.view.getFloat32(16, true); }
+    get currY() { return this.view.getFloat32(20, true); }
+    get currSize() { return this.view.getFloat32(24, true); }
+    get netX() { return this.view.getFloat32(28, true); }
+    get netY() { return this.view.getFloat32(32, true); }
+    get netSize() { return this.view.getFloat32(36, true); }
+
+    toString() {
+        return `Cell#${this.id} [type: ${this.type}, x: ${this.netX}, y: ${this.netY}, size: ${this.netSize}]`;
+    }
+
+    toObject() {
+        return {
+            type: this.type,
+            oldX: this.oldX,
+            oldY: this.oldY,
+            oldSize: this.oldSize,
+            currX: this.currX,
+            currY: this.currY,
+            currSize: this.currSize,
+            netX: this.netX,
+            netY: this.netY,
+            netSize: this.netSize
+        }
+    }
+}
+},{}],4:[function(require,module,exports){
+module.exports = class FakeSocket {
+    /** @param {MessagePort} port */
+    constructor(port) {
+        this.port = port;
+        this.readyState = WebSocket.OPEN;
+
+        port.onmessage = e => {
+            const { data } = e;
+            if (data.event === "message") {
+                this.onmessage({ data: data.message });
+            } else if (data.event === "error") {
+                this.onerror({ message: data.message });
+            } else if (data.event === "close") {
+                this.onclose({ code: data.code, reason: data.message });
+            } else if (data.event === "open") {
+                this.onopen();
+            }
+        }
+        port.start();
+        this.onopen = this.onmessage = this.onerror = this.onclose = () => {};
+    }
+
+    /** @param {BufferSource} buffer */
+    send(buffer) {
+        this.port.postMessage({ event: "message", message: buffer });
+    }
+}
+},{}],5:[function(require,module,exports){
 module.exports = class Mouse {
     constructor () {
         this.setBuffer();
@@ -21,12 +243,15 @@ module.exports = class Mouse {
     updateScroll(v) { Atomics.add(this.buffer, 2, v); }
     resetScroll() { return Atomics.exchange(this.buffer, 2, 0); }
 }
-},{}],2:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");
 
 // const { mat4, vec3 } = require("gl-matrix");
+const Cell = require("./cell");
 const Mouse = require("./mouse");
+const State = require("./state");
 const Viewport = require("./viewport");
+const GameSocket = require("./socket");
 const WasmCore = require("./wasm-core");
 
 const { makeProgram, pick, getColor } = require("./util");
@@ -38,13 +263,12 @@ const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
 
 const ZOOM_SPEED = 5;
 
-const NAME_MIN = 0.03;
+const NAME_MASS_MIN = 0.03;
 const NAME_SCALE = 0.25;
 const NAME_Y_OFFSET = -0.03;
 
 const LONG_MASS = true;
 const MASS_GAP = 0;
-const MASS_MIN = 0.03;
 const MASS_SCALE = 0.25;
 const MASS_Y_OFFSET = -0.33;
 
@@ -69,6 +293,7 @@ class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
 
+        this.cursor = { position: vec3.create() };
         this.target = { position: vec3.create(), scale: 10 };
         this.camera = { position: vec3.create(), scale: 10 };
 
@@ -86,14 +311,14 @@ class Renderer {
         this.updates = new Map();
 
         this.mouse = new Mouse();
+        this.state = new State();
         this.viewport = new Viewport();
-        this.core = new WasmCore();
+        this.core = new WasmCore(this);
 
         this.proj = mat4.create();
         this.viewbox = { t: 0, b: 0, l: 0, r: 0 };
 
         this.initLoader();
-        this.initEngine();
 
         this.drawCells = this.drawCells.bind(this);
         this.drawNames = this.drawNames.bind(this);
@@ -163,14 +388,12 @@ class Renderer {
         font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
-        
-        console.log("Loading bot skins & names");
-        const res = await fetch("/static/data/bots.json");
-        /** @type {{ names: string[], skins: string[] }} */
-        this.bots = await res.json();
 
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
+
+        this.cells = Array.from({ length: CELL_LIMIT }, (_, id) => 
+            new Cell(new DataView(this.core.buffer, id * this.BYTES_PER_CELL_DATA, this.BYTES_PER_CELL_DATA), id));
 
         this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
         console.log(`Table offset: ${this.cellTypesTableOffset}`);
@@ -181,11 +404,12 @@ class Renderer {
         this.nameBufferOffset = this.cellBufferEnd + CELL_TYPES * 2;
         this.nameBufferEnd = this.nameBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
         console.log(`Memory allocated: ${this.core.buffer.byteLength} bytes`);
-
+        
         this.cellTypesTable = new Uint16Array(this.core.buffer, this.cellTypesTableOffset, CELL_TYPES); 
         this.nameTypesTable = new Uint16Array(this.core.buffer, this.cellBufferEnd, CELL_TYPES);
 
         this.renderBuffer = this.core.HEAPU8.subarray(this.cellBufferOffset, this.cellBufferEnd);
+        this.renderBufferView = new DataView(this.core.buffer, this.cellBufferOffset, CELL_LIMIT * this.BYTES_PER_RENDER_CELL);
         /** @type {Map<string, number>} */
         this.massWidthsTable = new Map();
 
@@ -238,7 +462,7 @@ class Renderer {
         this.generateMassVAO();
         this.generateCircleTexture();
         this.generateMassTextures();
-        this.genCells();
+        // await this.genCells();
 
         this.allocBuffer("cell_data_buffer");
         gl.bindVertexArray(this.quadVAO);
@@ -271,10 +495,37 @@ class Renderer {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
+        this.loadPlayerData({ id: 253, name: "virus", skin: "https://i.imgur.com/OzizeVQ.png" });
         this.start();
+
+        this.socket = new GameSocket(this);
+        // this.socket.connect("ws://localhost:3000");
     }
 
-    genCells() {
+    printCells() {
+        console.log("All cells: ");
+        const table = [];
+        for (const cell of this.cells) {
+            if (cell.type && cell.type <= 250) table.push(cell.toObject());
+            if (!isFinite(cell.currX)) {
+                this.socket.disconnect();
+                this.stop();
+            }
+        }
+        console.table(table);
+    }
+
+    clearCells() {
+        this.core.HEAPU32.fill(0);
+        this.massBuffer.fill(0);
+    }
+
+    async genCells() { 
+        console.log("Loading bot skins & names");
+        const res = await fetch("/static/data/bots.json");
+        /** @type {{ names: string[], skins: string[] }} */
+        this.bots = await res.json();
+
         for (let i = 1; i < 256; i++)
             this.loadPlayerData({ id: i, skin: pick(this.bots.skins), name: pick(this.bots.names) });
 
@@ -605,7 +856,7 @@ class Renderer {
 
     updateTarget() {
         // Screen space to world space
-        this.screenToWorld(this.target.position,
+        this.screenToWorld(this.cursor.position,
             this.mouse.x / this.viewport.width  * 2 - 1, 
             this.mouse.y / this.viewport.height * 2 - 1);
 
@@ -615,12 +866,12 @@ class Renderer {
     }
 
     // Smooth update camera
-    lerpCamera(d = 1 / 60) {
+    lerpCamera(d = 1 / 60, position) {
         vec3.lerp(this.camera.position, this.camera.position, this.target.position, d);
         this.camera.scale += (this.target.scale - this.camera.scale) * d * ZOOM_SPEED;
 
-        const x = this.camera.position[0];
-        const y = this.camera.position[1];
+        const x = position ? position.x : this.camera.position[0];
+        const y = position ? position.y : this.camera.position[1];
         const hw = this.viewport.width  * this.camera.scale / 2;
         const hh = this.viewport.height * this.camera.scale / 2;
 
@@ -652,8 +903,12 @@ class Renderer {
             const begin_offset = this.cellBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
             const buff = new Float32Array(this.core.buffer, begin_offset, (end - begin) * 3);
 
-            const color = getColor(i);
-            gl.uniform3f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2]);
+            if (i == 253) { // virus
+                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0, 0, 0, 0);    
+            } else {
+                const color = getColor(i);
+                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
+            }
 
             const textures = this.players.get(i) || {};
             
@@ -714,18 +969,14 @@ class Renderer {
     /** @param {Float32Array} buffer */
     buildMassBuffer(buffer) {
         // TODO: make this function in wasm
-        let characters = 0;
         let write_offset = 0;
-
-        if (self.log) console.log(buffer);
 
         for (let o = 0; o < buffer.length; o += 4) { // 4 floats per render mass
             const x = buffer[o];
             const y = buffer[o + 1];
             const size = buffer[o + 2];
             const mass = LONG_MASS ? Math.floor(buffer[o + 3]).toString() : "";
-            if (self.log) console.log(`Drawing mass "${mass}"`);
-            characters += mass.length;
+            
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
             for (let i = 0; i < mass.length; i++) 
@@ -775,11 +1026,6 @@ class Renderer {
             }
         }
         this.renderMassBuffer = this.massBuffer.subarray(0, write_offset);
-        if (self.log) {
-            console.log(`Characters in mass: ${characters}, mass buffer size: ${write_offset}`);
-            this.stop();
-            console.log(this.renderMassBuffer);
-        }
     }
 
     /** @param {number} now */
@@ -796,45 +1042,67 @@ class Renderer {
         const gl = this.gl;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-        this.updateTarget();
-        this.lerpCamera(delta / 1000);
-        this.checkViewport();
-
         const NUM_PASS = 2;
         let offsetBack;
         this.clearPeelingBuffers();
         
+        this.cellTypesTable.fill(0);
+        this.nameTypesTable.fill(0);
+
+        const lerp = this.socket.lastPacket ? (Date.now() - this.socket.lastPacket) / 120 : 0;
+        // console.log(`Now: ${now}, lastUpdate: ${this.socket.lastPacket}`);
+        // console.log(`lerp: ${lerp}`);
+
         const cell_count = this.core.instance.exports.draw_cells(0, 
-            this.cellTypesTableOffset, this.cellBufferOffset, 0.5,
+            this.cellTypesTableOffset, 
+            this.cellBufferOffset, lerp,
             this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
-        let name_mass_count = 0;
+        
+        let text_count = 0;
+        
+        this.updateTarget();
+
+        let position = null;
+        if (this.socket.pid) {
+            let begin = this.cellTypesTable[this.socket.pid - 1];
+            let end   = this.cellTypesTable[this.socket.pid];
+            if (begin != end) {
+                if (!end) end = 65536;
+                if (end - begin == 1) {
+                    const x = this.renderBufferView.getFloat32(begin * 3, true);
+                    const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
+                    position = { x, y };
+                }
+            }
+        }
+        this.lerpCamera(delta / 120, position);
+        this.checkViewport();
+
+        // console.log(`x: ${this.cells[11].currX}, v_x: ${this.viewbox.l}`);
 
         const progs = [this.peel_prog1];
         const funcs = [this.drawCells];
 
         // Configurable if we want to draw mass
         if (true) {
-            name_mass_count = this.core.instance.exports.draw_name_and_mass(0,
+            text_count = this.core.instance.exports.draw_text(0,
                 this.cellTypesTableOffset, // end of cell buffer
                 this.cellBufferEnd,  // table offset
                 this.nameBufferOffset, // name buffer offset
                 this.nameBufferEnd, // mass buffer offset
-                NAME_MIN,
+                NAME_MASS_MIN,
                 this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
 
             progs.push(this.peel_prog2);
             funcs.push(this.drawNames);
-            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, name_mass_count * 4));
+            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
             progs.push(this.peel_prog3);
             funcs.push(this.drawMass);
         }
 
         offsetBack = this.depthPeelRender(NUM_PASS, progs, funcs);
 
-        this.cellTypesTable.fill(0);
-        this.nameTypesTable.fill(0);
-
-        if (self.log) console.log(`Drawing ${name_mass_count} name and mass, ${cell_count} cells`);
+        if (self.log) console.log(`Drawing ${text_count} text, ${cell_count} cells`);
         
         // Final prog
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -893,10 +1161,10 @@ class Renderer {
             { skin: skin_bitmap && gl.createTexture(), 
               name: name_bitmap && gl.createTexture() };
 
-        if (name_bitmap) {
-            textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
-            // console.log(name_bitmap.width, name_bitmap.height);
-        }
+        if (name_bitmap) textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
+
+        console.log(`Player Textures: [PID: ${id}, SKIN: (${skin_bitmap.width}, ${skin_bitmap.height}), ` +
+            ` NAME: (${name_bitmap.width}, ${name_bitmap.height}) ]`);
 
         this.uploadTexture(textures.skin, skin_bitmap);
         this.uploadTexture(textures.name, name_bitmap);
@@ -962,15 +1230,21 @@ class Renderer {
     }
 }
 
-self.onmessage = function(e) {
+self.onmessage = async function(e) {
+    self.removeEventListener("message", this); // One message is enough
+
     const { data } = e;
     const renderer = self.r = new Renderer(data.offscreen);
     renderer.mouse.setBuffer(data.mouse);
+    renderer.state.setBuffer(data.state);
     renderer.viewport.setBuffer(data.viewport);
-    self.removeEventListener("message", this);
+    await renderer.initEngine();
+
+    renderer.socket.connect(data.server);
 };
 
-},{"./mouse":1,"./shaders":3,"./util":4,"./viewport":5,"./wasm-core":6}],3:[function(require,module,exports){
+module.exports = Renderer;
+},{"./cell":3,"./mouse":5,"./shaders":7,"./socket":8,"./state":9,"./util":10,"./viewport":11,"./wasm-core":12}],7:[function(require,module,exports){
 module.exports.CELL_VERT_SHADER_SOURCE = 
 `#version 300 es
 precision highp float;
@@ -984,7 +1258,7 @@ out vec2 v_texcoord;
 
 void main() {
 
-    vec4 world_pos = vec4(a_position * a_data.z + a_data.xy, -1.0 / a_data.z, 1.0);
+    vec4 world_pos = vec4(a_position * a_data.z + a_data.xy, -1.0 / pow(a_data.z, 0.333f), 1.0);
     gl_Position = u_proj * world_pos;
 
     // Map from -1 to 1 -> 0 to 1
@@ -1001,7 +1275,7 @@ precision highp sampler2D;
 
 #define MAX_DEPTH 99999.0
 
-uniform vec3 u_circle_color;
+uniform vec4 u_circle_color;
 
 uniform sampler2D u_skin;
 uniform sampler2D u_circle;
@@ -1037,8 +1311,9 @@ void main() {
     float nearestDepth = -lastDepth.x;
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
+    vec4 circle = texture(u_circle, v_texcoord);
 
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth || circle.a == 0.0f) {
         // Skip this depth since it's been peeled.
         return;
     }
@@ -1050,11 +1325,9 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-    
-    vec4 circle = texture(u_circle, v_texcoord);
     vec4 skin = texture(u_skin, v_texcoord);
-    vec4 color = vec4(mix(u_circle_color, skin.rgb, skin.a), circle.a);
-    // vec4 color = vec4(u_circle_color, circle.a);
+    vec4 color = vec4(mix(u_circle_color.rgb * u_circle_color.a, skin.rgb, skin.a), 
+        mix(skin.a, circle.a, u_circle_color.a));
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
@@ -1079,7 +1352,7 @@ out vec2 v_texcoord;
 
 void main() {
     vec2 obj_pos = a_position * u_dim.xy * u_dim.z + vec2(0, u_dim.w);
-    vec4 world_pos = vec4(obj_pos * a_data.z + a_data.xy, -1.0 / a_data.z, 1.0);
+    vec4 world_pos = vec4(obj_pos * a_data.z + a_data.xy, -1.0 / pow(a_data.z, 0.333f), 1.0);
     gl_Position = u_proj * world_pos;
 
     v_texcoord = (vec2(a_position.x, -a_position.y) + 1.0) / 2.0;
@@ -1128,7 +1401,9 @@ void main() {
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
 
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+    vec4 color = texture(u_name, v_texcoord);
+
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth || color.a == 0.0f) {
         // Skip this depth since it's been peeled.
         return;
     }
@@ -1140,8 +1415,6 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-    
-    vec4 color = texture(u_name, v_texcoord);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
@@ -1166,7 +1439,7 @@ out vec2 v_texcoord;
 flat out int character;
 
 void main() {
-    vec4 world_pos = vec4(a_position.xy, -1.0 / a_position.z, 1.0);
+    vec4 world_pos = vec4(a_position.xy, -1.0 / pow(a_position.z, 0.333f), 1.0);
     gl_Position = u_proj * world_pos;
     character = int(a_position.w) >> 2;
     v_texcoord = u_uvs[int(a_position.w)];
@@ -1217,7 +1490,9 @@ void main() {
     float furthestDepth = lastDepth.y;
     float alphaMultiplier = 1.0 - lastFrontColor.a;
 
-    if (fragDepth < nearestDepth || fragDepth > furthestDepth) {
+    vec4 color = texture(u_mass_char, vec3(v_texcoord, character));
+
+    if (fragDepth < nearestDepth || fragDepth > furthestDepth || color.a == 0.0f) {
         // Skip this depth since it's been peeled.
         return;
     }
@@ -1229,9 +1504,6 @@ void main() {
         depth.rg = vec2(-fragDepth, fragDepth);
         return;
     }
-    
-    vec4 color = texture(u_mass_char, vec3(v_texcoord, character));
-    // vec4 color = vec4(v_texcoord, 0, 1);
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
@@ -1283,7 +1555,164 @@ void main() {
         frontColor.a + backColor.a
     );
 }`;
-},{}],4:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
+const Reader = require("../../src/network/reader");
+const Writer = require("../../src/network/writer");
+const FakeSocket = require("./fake-socket");
+
+const PING = new ArrayBuffer(1);
+new Uint8Array(PING)[0] = 69;
+
+module.exports = class GameSocket {
+    /** @param {import("./renderer")} renderer */
+    constructor(renderer) {
+        this.pid = 0;
+        this.bandwidth = 0;
+        this.renderer = renderer;
+        
+        this.pingInterval = self.setInterval(() => {
+            this.send(PING);
+            console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`)
+            this.bandwidth = 0;
+        }, 1000);
+
+        const state = this.renderer.state;
+
+        this.mouseInterval = self.setInterval(() => {
+            const writer = new Writer();
+            writer.writeUInt8(3);
+            writer.writeFloat32(this.renderer.cursor.position[0]);
+            writer.writeFloat32(this.renderer.cursor.position[1]);
+
+            const currState = state.exchange();
+
+            writer.writeUInt8(currState.spectate);
+            writer.writeUInt8(currState.splits);
+            writer.writeUInt8(currState.ejects);
+            writer.writeUInt8(currState.macro);
+
+            this.send(writer.finalize());
+        }, 1000 / 30); // TODO?
+    }
+
+    connect(urlOrPort) {
+        this.disconnect();
+
+        this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
+        this.ws.binaryType = "arraybuffer";
+
+        this.ws.onopen = () => {
+            console.log("Connected to server");
+            const writer = new Writer();
+            writer.writeUInt8(69);
+            writer.writeInt16(420);
+            this.ws.send(writer.finalize());
+        }
+
+        /** @param {{ data: ArrayBuffer }} e */
+        this.ws.onmessage = e => {
+            const reader = new Reader(new DataView(e.data));
+            const OP = reader.readUInt8();
+            this.bandwidth += e.data.byteLength;
+            switch (OP) {
+                case 1:
+                    this.pid = reader.readUInt16();
+                    const map = { 
+                        width: 2 * reader.readUInt16(), 
+                        height: 2 * reader.readUInt16()
+                    };
+                    console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
+                    this.spawn("Yuu", "https://skins.vanis.io/s/GljCi6");
+                    break;
+                case 2:
+                    console.log("Clear map");
+                    this.renderer.clearCells();
+                    break;
+                case 3:
+                    const id = reader.readUInt16();
+                    const name = reader.readUTF16String();
+                    const skin = reader.readUTF16String();
+                    console.log(`Received player data`, { id, name, skin });
+                    this.renderer.loadPlayerData({ id, name, skin });
+                    break;
+                case 4:
+                    this.parseCellData(e.data);
+                    break;
+            }
+        }
+        this.ws.onerror = e => console.error(e);
+        this.ws.onclose = e => console.error(e.code, e.reason);
+    }
+
+    send(data) {
+        if (this.ws && this.ws.readyState == WebSocket.OPEN)
+            this.ws.send(data);
+    }
+
+    /** @param {ArrayBuffer} buffer */
+    parseCellData(buffer) {
+        this.lastPacket = Date.now();
+
+        const core = this.renderer.core;
+        const viewport = new DataView(buffer, 1, 8);
+        
+        this.renderer.target.position[0] = viewport.getFloat32(0, true);
+        this.renderer.target.position[1] = viewport.getFloat32(4, true);
+        // console.log(`Received packet: ${buffer.byteLength} bytes, viewport: { x: ${view_x}, y: ${view_y} }`);
+        core.HEAPU8.set(new Uint8Array(buffer, 9), this.renderer.cellTypesTableOffset);                 
+        core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
+    }
+
+    disconnect() {
+        if (this.ws) this.ws.close();
+        this.ws = null;
+    }
+
+    /**
+     * @param {string} name 
+     * @param {string} skin 
+     */
+    spawn(name, skin) {
+        const writer = new Writer();
+        writer.writeUInt8(1);
+        writer.writeUTF16String(name);
+        writer.writeUTF16String(skin);
+        this.send(writer.finalize());
+    }
+}
+},{"../../src/network/reader":1,"../../src/network/writer":2,"./fake-socket":4}],9:[function(require,module,exports){
+module.exports = class State {
+    constructor () {
+        this.setBuffer();
+    }
+
+    setBuffer(buf = new SharedArrayBuffer(4)) {
+        this.sharedBuffer = buf;
+        this.buffer = new Uint8Array(this.sharedBuffer);
+    }
+
+    get spectate() { return Atomics.load(this.buffer, 0); }
+    set spectate(v) { Atomics.store(this.buffer, 0, v) }
+
+    get splits() { return Atomics.load(this.buffer, 1); }
+    set splits(v) { Atomics.add(this.buffer, 1, v); }
+
+    get ejects() { return Atomics.load(this.buffer, 2); }
+    set ejects(v) { Atomics.add(this.buffer, 2, v); }
+
+    get macro() { return Atomics.load(this.buffer, 3); }
+    set macro(v) { Atomics.store(this.buffer, 3, v); }
+
+    exchange() {
+        return {
+            spectate: Atomics.exchange(this.buffer, 0, 0),
+            splits: Atomics.exchange(this.buffer, 1, 0),
+            ejects: Atomics.exchange(this.buffer, 2, 0),
+            macro: this.macro
+        }
+    }
+}
+},{}],10:[function(require,module,exports){
 /** @template T @param {T[]} array */
 module.exports.pick = array => array[~~(Math.random() * array.length)];
 
@@ -1330,7 +1759,7 @@ const COLORS = [
     [255,0,127]].map(rgb => rgb.map(c => c / 255));
 
 module.exports.getColor = id => COLORS[id % COLORS.length];
-},{}],5:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = class Viewport {
     constructor () {
         this.setBuffer();
@@ -1347,14 +1776,22 @@ module.exports = class Viewport {
     get height() { return Atomics.load(this.buffer, 1); }
     set height(v) { Atomics.store(this.buffer, 1, v); }
 }
-},{}],6:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 module.exports = class WasmCore {
+    /** @param {import("./renderer")} renderer */
+    constructor(renderer) {
+        this.renderer = renderer;
+    }
     async load(page = 1024) {
         if (this.loading || this.instance) return false;
         this.loading = true;
         const res = await fetch("/static/wasm/client.wasm");
         const m = new WebAssembly.Memory({ initial: page, maximum: page });
-        const e = { env: { memory: m } };
+        const e = { env: { memory: m, 
+            log_add_packet: (id, type, x, y, size) => {
+                console.log("Add Packet: ", { id, type, x, y, size });
+            }
+        } };
         this.instance = await WebAssembly.instantiate(await WebAssembly.compile(await res.arrayBuffer()), e);
         this.buffer = m.buffer;
         this.HEAPU8  = new Uint8Array(m.buffer);
@@ -1365,4 +1802,4 @@ module.exports = class WasmCore {
         return true;
     }
 }
-},{}]},{},[2]);
+},{}]},{},[6]);

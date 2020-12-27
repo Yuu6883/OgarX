@@ -3,6 +3,7 @@ const State = require("./state");
 const Viewport = require("./viewport");
 window.onload = () => {
     const worker = new Worker("js/renderer.js");
+    const sharedServer = new SharedWorker("js/sw.js", "ogar-x-server");
     const canvas = document.getElementById("canvas");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -16,7 +17,12 @@ window.onload = () => {
         canvas.style.height = window.innerHeight;
     })();
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({ offscreen, mouse: mouse.sharedBuffer, viewport: viewport.sharedBuffer, state: state.sharedBuffer }, [offscreen]);
+    worker.postMessage({ offscreen, 
+        mouse: mouse.sharedBuffer, 
+        viewport: viewport.sharedBuffer, 
+        state: state.sharedBuffer,
+        server: sharedServer.port
+    }, [offscreen, sharedServer.port]);
     window.addEventListener("keydown", e => {
         if (e.key == "w") state.macro = 1;
         if (e.key == " ") state.splits = 1;

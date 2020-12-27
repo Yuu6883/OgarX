@@ -1,12 +1,12 @@
-const fs = require("fs");
-const path = require("path");
-const { performance } = require("perf_hooks");
+
+if (typeof performance == "undefined") {
+    eval(`global.performance = require("perf_hooks").performance;`);
+}
 
 const Cell = require("./cell");
 const { QuadTree } = require("./quadtree");
 const Controller = require("../game/controller");
 
-const CORE_PATH = path.resolve(__dirname, "..", "wasm", "core.wasm");
 const DefaultSettings = {
     TPS: 25,
     MAX_CELL_PER_TICK: 50,
@@ -78,7 +78,8 @@ module.exports = class Engine {
 
     /** 
      * @param {import("../game/game")} game
-     * @param {typeof DefaultSettings} options */
+     * @param {typeof DefaultSettings} options 
+     */
     constructor(game, options) {
         this.game = game;
         this.options = Object.assign({}, DefaultSettings);
@@ -90,7 +91,8 @@ module.exports = class Engine {
         this.__next_cell_id = 1;
     }
 
-    async init() {
+    /** @param {ArrayBuffer|Buffer} */
+    async init(core_buffer) {
         if (this.updateInterval) return;
 
         this.__start = performance.now();
@@ -101,7 +103,7 @@ module.exports = class Engine {
 
         // Load wasm module
         const module = await WebAssembly.instantiate(
-            fs.readFileSync(CORE_PATH), { env: { 
+            core_buffer, { env: { 
                 memory: this.memory,
                 console_log: cell_id => {
                     if (this.cells[cell_id].type > 250) return;

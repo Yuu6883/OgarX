@@ -1,6 +1,9 @@
 const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
-const PING = new Uint8Array([69]);
+const FakeSocket = require("./fake-socket");
+
+const PING = new ArrayBuffer(1);
+new Uint8Array(PING)[0] = 69;
 
 module.exports = class GameSocket {
     /** @param {import("./renderer")} renderer */
@@ -34,19 +37,20 @@ module.exports = class GameSocket {
         }, 1000 / 30); // TODO?
     }
 
-    connect(url = "") {
+    connect(urlOrPort) {
         this.disconnect();
 
-        this.ws = new WebSocket(url);
+        this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
         this.ws.binaryType = "arraybuffer";
 
         this.ws.onopen = () => {
-            console.log("Connected");
+            console.log("Connected to server");
             const writer = new Writer();
             writer.writeUInt8(69);
             writer.writeInt16(420);
             this.ws.send(writer.finalize());
         }
+
         /** @param {{ data: ArrayBuffer }} e */
         this.ws.onmessage = e => {
             const reader = new Reader(new DataView(e.data));
@@ -99,9 +103,6 @@ module.exports = class GameSocket {
         // console.log(`Received packet: ${buffer.byteLength} bytes, viewport: { x: ${view_x}, y: ${view_y} }`);
         core.HEAPU8.set(new Uint8Array(buffer, 9), this.renderer.cellTypesTableOffset);                 
         core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
-        
-        // self.log = true;
-        // this.renderer.printCells();
     }
 
     disconnect() {

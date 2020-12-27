@@ -2,8 +2,11 @@ const Protocol = require("../protocol");
 const Reader = require("../reader");
 const Writer = require("../writer");
 
-const CLEAR_SCREEN = new Uint8Array([2]);
-const PONG = new Uint8Array([69]);
+const CLEAR_SCREEN = new ArrayBuffer(1);
+new Uint8Array(CLEAR_SCREEN)[0] = 2;
+
+const PONG = new ArrayBuffer(1);
+new Uint8Array(PONG)[0] = 69;
 
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
