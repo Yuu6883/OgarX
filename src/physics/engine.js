@@ -166,6 +166,13 @@ module.exports = class Engine {
 
     tick(dt = 1) {
 
+        // Loop through clients
+        for (const id in this.game.controls) {
+            const controller = this.game.controls[id];
+            if (!controller.handle) continue;
+            controller.handle.onUpdate();
+        }
+
         // Spawn "some" new cells
         for (let i = 0; i < this.options.MAX_CELL_PER_TICK; i++) {
             if (this.counters[PELLET_TYPE].size < this.options.PELLET_COUNT) {
@@ -196,8 +203,7 @@ module.exports = class Engine {
             
             // Split
             let attempts = this.options.PLAYER_SPLIT_CAP;
-            while (controller.splitAttempts-- > 0 && attempts-- > 0) {
-
+            while (controller.splitAttempts > 0 && attempts-- > 0) {
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (this.counters[id].size >= this.options.PLAYER_MAX_CELLS) break;
@@ -209,6 +215,7 @@ module.exports = class Engine {
                     else dx /= d, dy /= d;
                     this.splitFromCell(cell, cell.r / Math.SQRT2, dx, dy, this.options.PLAYER_SPLIT_BOOST);
                 }
+                controller.splitAttempts--;
             }
 
             // Eject
@@ -437,13 +444,6 @@ module.exports = class Engine {
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
         // Serialize again so client can select/query viewport
         this.serialize();
-
-        // Loop through clients
-        for (const id in this.game.controls) {
-            const controller = this.game.controls[id];
-            if (!controller.handle) continue;
-            controller.handle.onUpdate();
-        }
 
         this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }

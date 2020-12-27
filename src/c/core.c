@@ -305,7 +305,11 @@ void resolve(Cell* cells,
                          cell->r > other->r * eatMulti) && 
                             d < cell->r - other->r / eatOverlap) {
                         cell->r = sqrtf(r1 * r1 + r2 * r2);
-                        other->eatenBy = ((unsigned int) cell) >> 5;
+                        if (IS_VIRUS(other->type) || IS_MOTHER_CELL(other->type)) {
+                            other->eatenBy = 0;
+                        } else {
+                            other->eatenBy = ((unsigned int) cell) >> 5;
+                        }
                         other->flags |= REMOVE_BIT;
                         if (IS_PLAYER(cell->type) && IS_EJECTED(other->type)) {
                             float ratio = other->r * other->r / cell->r / cell->r;

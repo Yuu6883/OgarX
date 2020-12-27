@@ -62,6 +62,14 @@ module.exports = class OgarXProtocol extends Protocol {
             case 3:
                 controller.mouseX = reader.readFloat32();
                 controller.mouseY = reader.readFloat32();
+                // controller.spectate TODO:
+                const spectate = reader.readUInt8();
+                const splits = reader.readUInt8();
+                const ejects = reader.readUInt8();
+                const macro = reader.readUInt8();
+                controller.splitAttempts += splits;
+                controller.ejectAttempts += ejects;
+                controller.ejectMarco = Boolean(macro);
                 break;
             case 69:
                 this.handler.ws.send(PONG, true); // PING-PONG
@@ -129,7 +137,7 @@ module.exports = class OgarXProtocol extends Protocol {
         for (const cell_id of this.lastVisible) {
             if (this.currVisible.has(cell_id)) continue;
             const cell = cells[cell_id];
-            if (cell.shouldRemove) eat.push(cell_id);
+            if (cell.shouldRemove && cell.eatenBy) eat.push(cell_id);
             else del.push(cell_id);
         }
 
