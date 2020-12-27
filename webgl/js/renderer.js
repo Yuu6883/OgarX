@@ -250,6 +250,7 @@ class Renderer {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
+        this.loadPlayerData({ id: 253, name: "virus", skin: "https://i.imgur.com/OzizeVQ.png" });
         this.start();
 
         this.socket = new GameSocket(this);
@@ -659,9 +660,13 @@ class Renderer {
             const begin_offset = this.cellBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
             const buff = new Float32Array(this.core.buffer, begin_offset, (end - begin) * 3);
 
-            const color = getColor(i);
-            gl.uniform3f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2]);
-
+            if (i == 253) { // virus
+                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0, 0, 0, 0);    
+            } else {
+                const color = getColor(i);
+                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
+            }
+            
             const textures = this.players.get(i) || {};
             
             gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);

@@ -140,6 +140,7 @@ unsigned int draw_cells(CellData data_begin[],
             if (!begin->netSize) {
                 begin->currX = lerp * (begin->netX - begin->currX) + begin->currX;
                 begin->currY = lerp * (begin->netY - begin->currY) + begin->currY;
+                begin->currSize = lerp * (begin->netSize - begin->currSize) + begin->currSize;
 
                 begin->oldX += lerp / 2.0f;
                 if (begin->oldX >= 2.0f) {

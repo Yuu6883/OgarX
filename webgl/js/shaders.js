@@ -28,7 +28,7 @@ precision highp sampler2D;
 
 #define MAX_DEPTH 99999.0
 
-uniform vec3 u_circle_color;
+uniform vec4 u_circle_color;
 
 uniform sampler2D u_skin;
 uniform sampler2D u_circle;
@@ -79,8 +79,8 @@ void main() {
         return;
     }
     vec4 skin = texture(u_skin, v_texcoord);
-    vec4 color = vec4(mix(u_circle_color, skin.rgb, skin.a), circle.a);
-    // vec4 color = vec4(u_circle_color, circle.a);
+    vec4 color = vec4(mix(u_circle_color.rgb * u_circle_color.a, skin.rgb, skin.a), 
+        mix(skin.a, circle.a, u_circle_color.a));
 
     if (fragDepth == nearestDepth) {
         frontColor.rgb += color.rgb * color.a * alphaMultiplier;
