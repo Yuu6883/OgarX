@@ -3,6 +3,7 @@ importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-
 // const { mat4, vec3 } = require("gl-matrix");
 const Cell = require("./cell");
 const Mouse = require("./mouse");
+const State = require("./state");
 const Viewport = require("./viewport");
 const GameSocket = require("./socket");
 const WasmCore = require("./wasm-core");
@@ -64,6 +65,7 @@ class Renderer {
         this.updates = new Map();
 
         this.mouse = new Mouse();
+        this.state = new State();
         this.viewport = new Viewport();
         this.core = new WasmCore(this);
 
@@ -719,7 +721,6 @@ class Renderer {
     /** @param {Float32Array} buffer */
     buildMassBuffer(buffer) {
         // TODO: make this function in wasm
-        let characters = 0;
         let write_offset = 0;
 
         for (let o = 0; o < buffer.length; o += 4) { // 4 floats per render mass
@@ -728,7 +729,6 @@ class Renderer {
             const size = buffer[o + 2];
             const mass = LONG_MASS ? Math.floor(buffer[o + 3]).toString() : "";
             
-            characters += mass.length;
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
             for (let i = 0; i < mass.length; i++) 
@@ -986,6 +986,7 @@ self.onmessage = function(e) {
     const { data } = e;
     const renderer = self.r = new Renderer(data.offscreen);
     renderer.mouse.setBuffer(data.mouse);
+    renderer.state.setBuffer(data.state);
     renderer.viewport.setBuffer(data.viewport);
     self.removeEventListener("message", this);
 };

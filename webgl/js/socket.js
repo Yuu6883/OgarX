@@ -6,19 +6,32 @@ module.exports = class GameSocket {
     /** @param {import("./renderer")} renderer */
     constructor(renderer) {
         this.pid = 0;
+        this.bandwidth = 0;
         this.renderer = renderer;
         
         this.pingInterval = self.setInterval(() => {
             this.send(PING);
+            console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`)
+            this.bandwidth = 0;
         }, 1000);
+
+        const state = this.renderer.state;
 
         this.mouseInterval = self.setInterval(() => {
             const writer = new Writer();
             writer.writeUInt8(3);
             writer.writeFloat32(this.renderer.cursor.position[0]);
             writer.writeFloat32(this.renderer.cursor.position[1]);
+
+            const currState = state.exchange();
+
+            writer.writeUInt8(currState.spectate);
+            writer.writeUInt8(currState.splits);
+            writer.writeUInt8(currState.ejects);
+            writer.writeUInt8(currState.macro);
+
             this.send(writer.finalize());
-        }, 1000 / 25); // TODO?
+        }, 1000 / 30); // TODO?
     }
 
     connect(url = "") {
@@ -38,7 +51,7 @@ module.exports = class GameSocket {
         this.ws.onmessage = e => {
             const reader = new Reader(new DataView(e.data));
             const OP = reader.readUInt8();
-
+            this.bandwidth += e.data.byteLength;
             switch (OP) {
                 case 1:
                     this.pid = reader.readUInt16();
