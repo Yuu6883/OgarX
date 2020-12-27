@@ -217,7 +217,7 @@ module.exports = class FakeSocket {
 
     /** @param {BufferSource} buffer */
     send(buffer) {
-        this.port.postMessage({ event: "message", message: buffer });
+        this.port.postMessage({ event: "message", message: buffer }, [buffer]);
     }
 }
 },{}],5:[function(require,module,exports){
@@ -1560,9 +1560,6 @@ const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
 const FakeSocket = require("./fake-socket");
 
-const PING = new ArrayBuffer(1);
-new Uint8Array(PING)[0] = 69;
-
 module.exports = class GameSocket {
     /** @param {import("./renderer")} renderer */
     constructor(renderer) {
@@ -1571,7 +1568,11 @@ module.exports = class GameSocket {
         this.renderer = renderer;
         
         this.pingInterval = self.setInterval(() => {
+
+            const PING = new ArrayBuffer(1);
+            new Uint8Array(PING)[0] = 69;
             this.send(PING);
+
             console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`)
             this.bandwidth = 0;
         }, 1000);

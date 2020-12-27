@@ -135,7 +135,7 @@ module.exports = class FakeSocket {
 
     /** @param {BufferSource} buffer */
     send(buffer) {
-        this.port.postMessage({ event: "message", message: buffer });
+        this.port.postMessage({ event: "message", message: buffer }, [buffer]);
     }
 
     end(code = 1006, reason = "") {
@@ -169,9 +169,6 @@ const Writer = require("../writer");
 
 const CLEAR_SCREEN = new ArrayBuffer(1);
 new Uint8Array(CLEAR_SCREEN)[0] = 2;
-
-const PONG = new ArrayBuffer(1);
-new Uint8Array(PONG)[0] = 69;
 
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
@@ -240,6 +237,8 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.ejectMarco = Boolean(macro);
                 break;
             case 69:
+                const PONG = new ArrayBuffer(1);
+                new Uint8Array(PONG)[0] = 69;                
                 this.handler.ws.send(PONG, true); // PING-PONG
                 break;
             default:
