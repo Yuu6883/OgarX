@@ -2,9 +2,6 @@ const Protocol = require("../protocol");
 const Reader = require("../reader");
 const Writer = require("../writer");
 
-const CLEAR_SCREEN = new ArrayBuffer(1);
-new Uint8Array(CLEAR_SCREEN)[0] = 2;
-
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
 const PELLET_TYPE = 254;
@@ -163,8 +160,11 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onSpawn(controller) {
-        if (this.handler.controller == controller)
+        if (this.handler.controller == controller) {
+            const CLEAR_SCREEN = new ArrayBuffer(1);
+            new Uint8Array(CLEAR_SCREEN)[0] = 2;
             this.handler.ws.send(CLEAR_SCREEN, true);
+        }
 
         const writer = new Writer();
         writer.writeUInt8(3);
