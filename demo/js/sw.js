@@ -26,6 +26,7 @@ module.exports = class Controller {
     }
 
     reset() {
+        this.handle = null;
         this.alive = false;
         this.spectate = null;
         this.splitAttempts = 0;
@@ -70,7 +71,8 @@ module.exports = class Game {
     /** @param {import("./handle")} handle */
     removeHandle(handle) {
         if (!handle.controller) return;
-        handle.controller.handle = null;
+        this.engine.kill(handle.controller.id);
+        handle.controller.reset();
         handle.controller = null;
         this.handles--;
     }
@@ -167,9 +169,7 @@ const Protocol = require("../protocol");
 const Reader = require("../reader");
 const Writer = require("../writer");
 
-const CLEAR_SCREEN = new ArrayBuffer(1);
-new Uint8Array(CLEAR_SCREEN)[0] = 2;
-
+const DEAD_CELL_TYPE = 251;
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
 const PELLET_TYPE = 254;
@@ -281,7 +281,7 @@ module.exports = class OgarXProtocol extends Protocol {
         for (const cell_id of addList) {
             const cell = cells[cell_id];
             writer.writeUInt16(cell_id);
-            writer.writeUInt16(cell.type);
+            writer.writeUInt16(cell.isDead ? DEAD_CELL_TYPE : cell.type);
             writer.writeInt16(~~cell.x);
             writer.writeInt16(~~cell.y);
             writer.writeUInt16(~~cell.r);
@@ -328,8 +328,12 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onSpawn(controller) {
-        if (this.handler.controller == controller)
+        if (this.handler.controller == controller) {
+            const CLEAR_SCREEN = new ArrayBuffer(1);
+            new Uint8Array(CLEAR_SCREEN)[0] = 2;
             this.handler.ws.send(CLEAR_SCREEN, true);
+            this.lastVisible.clear();
+        }
 
         const writer = new Writer();
         writer.writeUInt8(3);
@@ -345,7 +349,7 @@ module.exports = class OgarXProtocol extends Protocol {
      */
     onChat(controller, message) {
 
-    };
+    }
 }
 },{"../protocol":6,"../reader":9,"../writer":12}],9:[function(require,module,exports){
 module.exports = class Reader {
@@ -483,7 +487,7 @@ module.exports = class SharedWorkerServer {
     }
 
     open() {
-        self.onconnect = e => {
+        self.onconnect = e => {            
             console.log("Received connection");
             /** @type {MessagePort} */
             const port = e.source;
@@ -673,11 +677,7 @@ module.exports = class Cell {
     get isDead() {
         return this.view.getUint8(13) & CELL_DEAD;
     }
-
-    set dead(value) {
-        value && this.view.setUint8(13, this.view.getUint8(13) | CELL_DEAD);
-    }
-
+    
     get shouldAuto() {
         return this.view.getUint8(13) & CELL_AUTO;
     }
@@ -791,6 +791,7 @@ const DefaultSettings = {
     EAT_MULT: 1.140175425099138
 }
 
+const DEAD_CELL_TYPE = 251;
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
 const PELLET_TYPE = 254;
@@ -801,7 +802,7 @@ const EJECTED_TYPE = 255;
  * y (float) 4 bytes
  * r (float) 4 bytes
  * type (player_id/cell type) 1 byte
- * flags (dead|inside|updated|exist) 1 byte
+ * flags (inside|updated|exist|etc) 1 byte
  * eatenBy 2 bytes
  * age 4 bytes
  * boost { 3 float } = 12 bytes
@@ -842,7 +843,6 @@ module.exports = class Engine {
                 memory: this.memory,
                 console_log: cell_id => {
                     if (this.cells[cell_id].type > 250) return;
-                    console.log(this.cells[cell_id].toString())
                 }
             }});
 
@@ -860,10 +860,11 @@ module.exports = class Engine {
 
         this.indices = 0;
         this.indicesPtr =  BYTES_PER_CELL * this.options.CELL_LIMIT;
-        this.indicesBuffer = new DataView(this.memory.buffer, this.indicesPtr);
-        this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
-        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
-        this.stackPtr = this.treePtr + 69; // hmm
+        this.resolveIndices = new DataView(this.memory.buffer, this.indicesPtr);
+
+        // Not defined here since it's dynamically changed (after indices)
+        this.treePtr = 0;
+        this.treeBuffer = null;
 
         /** @type {number[]} */
         this.profiler = [];
@@ -903,11 +904,14 @@ module.exports = class Engine {
 
     tick(dt = 1) {
 
-        // Loop through clients
-        for (const id in this.game.controls) {
-            const controller = this.game.controls[id];
-            if (!controller.handle) continue;
-            controller.handle.onUpdate();
+        // Skip first time
+        if (this.treePtr) {
+            // Loop through clients
+            for (const id in this.game.controls) {
+                const controller = this.game.controls[id];
+                if (!controller.handle) continue;
+                controller.handle.onUpdate();
+            }
         }
 
         // Spawn "some" new cells
@@ -1036,15 +1040,7 @@ module.exports = class Engine {
                 controller.spawn = false;
                 controller.lastSpawnTick = __now;
 
-                for(const cell_id of this.counters[id]) {
-                    const cell = this.cells[cell_id];
-                    const deadCell = this.newCell(cell.x, cell.y, cell.r, cell.type, 
-                        cell.boostX, cell.boostY, cell.boost, false); // Don't insert it yet
-                    deadCell.dead = true;
-                    this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
-                    cell.remove();
-                }
-                this.counters[id].clear();
+                this.kill(controller.id);
 
                 const point = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
                 this.newCell(point[0], point[1], this.options.PLAYER_SPAWN_SIZE, ~~id);
@@ -1146,8 +1142,7 @@ module.exports = class Engine {
             this.indicesPtr, this.treePtr, 
             this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, 
-            this.options.TPS * this.options.PLAYER_DEAD_DELAY);
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.TPS * this.options.PLAYER_DEAD_DELAY);
         // console.log("resolved");
 
         // Handle pop, update quadtree, remove item
@@ -1183,6 +1178,17 @@ module.exports = class Engine {
         this.serialize();
 
         this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
+    }
+
+    kill(id) {
+        for(const cell_id of this.counters[id]) {
+            const cell = this.cells[cell_id];
+            const deadCell = this.newCell(cell.x, cell.y, cell.r, DEAD_CELL_TYPE, 
+                cell.boostX, cell.boostY, cell.boost, false); // Don't insert it yet
+            this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
+            cell.remove();
+        }
+        this.counters[id].clear();
     }
 
     /**
@@ -1241,10 +1247,13 @@ module.exports = class Engine {
      * @param {number} y 
      * @param {number} size
      * @param {number} type
+     * @return {Cell}
      */
     newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0, insert = true) {
-        if (this.cellCount >= this.options.CELL_LIMIT - 1)
+        if (this.cellCount >= this.options.CELL_LIMIT - 1) {
+            this.stop();
             return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
+        }
 
         while (this.cells[this.__next_cell_id].exists)
             this.__next_cell_id = ((this.__next_cell_id + 1) % this.options.CELL_LIMIT) || 1;
@@ -1260,8 +1269,8 @@ module.exports = class Engine {
         cell.resetFlag();
         if (insert) {
             this.tree.insert(cell);
-            this.counters[cell.type].add(cell.id);
         }
+        this.counters[cell.type].add(cell.id);
         this.cellCount++;
         return cell;
     }
@@ -1275,6 +1284,8 @@ module.exports = class Engine {
 
     /** @param {number} size */
     getSafeSpawnPoint(size) {
+        if (!this.treePtr) return this.randomPoint(size);
+
         let tries = this.options.SAFE_SPAWN_TRIES;
         while (--tries) {
             const point = this.randomPoint(size);
@@ -1294,12 +1305,12 @@ module.exports = class Engine {
             // No need to sort none player cells
             if (type > 250) {
                 for (const cell_id of this.counters[type]) {
-                    this.indicesBuffer.setUint16(offset, cell_id, true);
+                    this.resolveIndices.setUint16(offset, cell_id, true);
                     offset += 2;
                 }
             } else {
-                [...this.counters[type]].map(id => this.cells[id]).sort((a, b) => b.r - a.r).forEach(cell => {
-                    this.indicesBuffer.setUint16(offset, cell.id, true);
+                [...this.counters[type]].sort((a, b) => this.cells[b].r - this.cells[a].r).forEach(id => {
+                    this.resolveIndices.setUint16(offset, id, true);
                     offset += 2;
                 });
             }
@@ -1586,10 +1597,10 @@ const Game = require("./game/game");
 
 const game = new Game({
     VIRUS_COUNT: 20,
-    PLAYER_MAX_CELLS: 256,
+    PLAYER_MAX_CELLS: 1024,
     PLAYER_AUTOSPLIT_SIZE: 0,
     PLAYER_SPLIT_CAP: 4,
-    VIRUS_MONOTONE_POP: false,
+    VIRUS_MONOTONE_POP: true,
     EJECT_SIZE: 40,
     EJECT_LOSS: 40,
     EJECT_DELAY: 25,

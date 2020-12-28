@@ -244,6 +244,138 @@ module.exports = class Mouse {
     resetScroll() { return Atomics.exchange(this.buffer, 2, 0); }
 }
 },{}],6:[function(require,module,exports){
+const Reader = require("../../src/network/reader");
+const Writer = require("../../src/network/writer");
+const FakeSocket = require("./fake-socket");
+
+module.exports = class Protocol {
+    /** @param {import("./renderer")} renderer */
+    constructor(renderer) {
+        this.pid = 0;
+        this.bandwidth = 0;
+        this.renderer = renderer;
+        
+        this.pingInterval = self.setInterval(() => {
+
+            const PING = new ArrayBuffer(1);
+            new Uint8Array(PING)[0] = 69;
+            this.send(PING);
+
+            // console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`);
+            this.bandwidth = 0;
+        }, 1000);
+
+        const state = this.renderer.state;
+
+        this.mouseInterval = self.setInterval(() => {
+            const writer = new Writer();
+            writer.writeUInt8(3);
+            writer.writeFloat32(this.renderer.cursor.position[0]);
+            writer.writeFloat32(this.renderer.cursor.position[1]);
+
+            const currState = state.exchange();
+
+            writer.writeUInt8(currState.spectate);
+            writer.writeUInt8(currState.splits);
+            writer.writeUInt8(currState.ejects);
+            writer.writeUInt8(currState.macro);
+
+            this.send(writer.finalize());
+
+            if (currState.respawn) this.spawn();
+        }, 1000 / 30); // TODO?
+    }
+
+    connect(urlOrPort) {
+        this.disconnect();
+
+        this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
+        this.ws.binaryType = "arraybuffer";
+
+        this.ws.onopen = () => {
+            console.log("Connected to server");
+            const writer = new Writer();
+            writer.writeUInt8(69);
+            writer.writeInt16(420);
+            this.ws.send(writer.finalize());
+        }
+
+        /** @param {{ data: ArrayBuffer }} e */
+        this.ws.onmessage = e => {
+            const reader = new Reader(new DataView(e.data));
+            const OP = reader.readUInt8();
+            this.bandwidth += e.data.byteLength;
+            switch (OP) {
+                case 1:
+                    this.pid = reader.readUInt16();
+                    const map = { 
+                        width: 2 * reader.readUInt16(), 
+                        height: 2 * reader.readUInt16()
+                    };
+                    console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
+                    const rando = this.renderer.randomPlayer();
+                    this.spawn(rando.name, rando.skin);
+                    break;
+                case 2:
+                    console.log("Clear map");
+                    this.renderer.clearCells();
+                    break;
+                case 3:
+                    const id = reader.readUInt16();
+                    const name = reader.readUTF16String();
+                    const skin = reader.readUTF16String();
+                    console.log(`Received player data`, { id, name, skin });
+                    this.renderer.loadPlayerData({ id, name, skin });
+                    break;
+                case 4:
+                    this.parseCellData(e.data);
+                    break;
+            }
+        }
+        this.ws.onerror = e => console.error(e);
+        this.ws.onclose = e => console.error(e.code, e.reason);
+    }
+
+    send(data) {
+        if (this.ws && this.ws.readyState == WebSocket.OPEN)
+            this.ws.send(data);
+    }
+
+    /** @param {ArrayBuffer} buffer */
+    parseCellData(buffer) {
+        this.lastPacket = Date.now();
+
+        const core = this.renderer.core;
+        const viewport = new DataView(buffer, 1, 8);
+        
+        this.renderer.target.position[0] = viewport.getFloat32(0, true);
+        this.renderer.target.position[1] = viewport.getFloat32(4, true);
+        // console.log(`Received packet: ${buffer.byteLength} bytes, viewport: { x: ${view_x}, y: ${view_y} }`);
+        core.HEAPU8.set(new Uint8Array(buffer, 9), this.renderer.cellTypesTableOffset);                 
+        core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
+    }
+
+    disconnect() {
+        if (this.ws) this.ws.close();
+        this.ws = null;
+    }
+
+    /**
+     * @param {string} name 
+     * @param {string} skin 
+     */
+    spawn(name = this.lastName, skin = this.lastSkin) {
+        this.lastName = name;
+        this.lastSkin = skin;
+
+        const writer = new Writer();
+        writer.writeUInt8(1);
+        writer.writeUTF16String(name);
+        writer.writeUTF16String(skin);
+        this.send(writer.finalize());
+    }
+}
+},{"../../src/network/reader":1,"../../src/network/writer":2,"./fake-socket":4}],7:[function(require,module,exports){
 importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");
 
 // const { mat4, vec3 } = require("gl-matrix");
@@ -251,7 +383,7 @@ const Cell = require("./cell");
 const Mouse = require("./mouse");
 const State = require("./state");
 const Viewport = require("./viewport");
-const GameSocket = require("./socket");
+const Protocol = require("./protocol");
 const WasmCore = require("./wasm-core");
 
 const { makeProgram, pick, getColor } = require("./util");
@@ -388,6 +520,11 @@ class Renderer {
         font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
+        
+        console.log("Loading bot skins & names");
+        const res = await fetch("/static/data/bots.json");
+        /** @type {{ names: string[], skins: string[] }} */
+        this.bots = await res.json();
 
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
@@ -498,8 +635,7 @@ class Renderer {
         this.loadPlayerData({ id: 253, name: "virus", skin: "https://i.imgur.com/OzizeVQ.png" });
         this.start();
 
-        this.socket = new GameSocket(this);
-        // this.socket.connect("ws://localhost:3000");
+        this.protocol = new Protocol(this);
     }
 
     printCells() {
@@ -508,7 +644,7 @@ class Renderer {
         for (const cell of this.cells) {
             if (cell.type && cell.type <= 250) table.push(cell.toObject());
             if (!isFinite(cell.currX)) {
-                this.socket.disconnect();
+                this.protocol.disconnect();
                 this.stop();
             }
         }
@@ -520,14 +656,16 @@ class Renderer {
         this.massBuffer.fill(0);
     }
 
-    async genCells() { 
-        console.log("Loading bot skins & names");
-        const res = await fetch("/static/data/bots.json");
-        /** @type {{ names: string[], skins: string[] }} */
-        this.bots = await res.json();
+    randomPlayer() {
+        return {
+            skin: pick(this.bots.skins),
+            name: pick(this.bots.names)
+        }
+    }
 
+    async genCells() {
         for (let i = 1; i < 256; i++)
-            this.loadPlayerData({ id: i, skin: pick(this.bots.skins), name: pick(this.bots.names) });
+            this.loadPlayerData({ id: i, ...randomPlayer() });
 
         this.GEN_CELLS = 65536;
         const view = new DataView(this.core.buffer, 0, this.GEN_CELLS * this.BYTES_PER_CELL_DATA);
@@ -905,6 +1043,8 @@ class Renderer {
 
             if (i == 253) { // virus
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0, 0, 0, 0);    
+            } else if (i == 251) { // dead
+                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0.5, 0.5, 0.5, 0.5);
             } else {
                 const color = getColor(i);
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
@@ -1049,7 +1189,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        const lerp = this.socket.lastPacket ? (Date.now() - this.socket.lastPacket) / 120 : 0;
+        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / 120 : 0;
         // console.log(`Now: ${now}, lastUpdate: ${this.socket.lastPacket}`);
         // console.log(`lerp: ${lerp}`);
 
@@ -1063,15 +1203,15 @@ class Renderer {
         this.updateTarget();
 
         let position = null;
-        if (this.socket.pid) {
-            let begin = this.cellTypesTable[this.socket.pid - 1];
-            let end   = this.cellTypesTable[this.socket.pid];
+        if (this.protocol.pid) {
+            let begin = this.cellTypesTable[this.protocol.pid - 1];
+            let end   = this.cellTypesTable[this.protocol.pid];
             if (begin != end) {
                 if (!end) end = 65536;
                 if (end - begin == 1) {
                     const x = this.renderBufferView.getFloat32(begin * 3, true);
                     const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
-                    position = { x, y };
+                    // position = { x, y };
                 }
             }
         }
@@ -1230,9 +1370,7 @@ class Renderer {
     }
 }
 
-self.onmessage = async function(e) {
-    self.removeEventListener("message", this); // One message is enough
-
+self.addEventListener("message", async function(e) {
     const { data } = e;
     const renderer = self.r = new Renderer(data.offscreen);
     renderer.mouse.setBuffer(data.mouse);
@@ -1240,11 +1378,11 @@ self.onmessage = async function(e) {
     renderer.viewport.setBuffer(data.viewport);
     await renderer.initEngine();
 
-    renderer.socket.connect(data.server);
-};
+    renderer.protocol.connect(data.server || "ws://localhost:3000");
+}, { once: true });
 
 module.exports = Renderer;
-},{"./cell":3,"./mouse":5,"./shaders":7,"./socket":8,"./state":9,"./util":10,"./viewport":11,"./wasm-core":12}],7:[function(require,module,exports){
+},{"./cell":3,"./mouse":5,"./protocol":6,"./shaders":8,"./state":9,"./util":10,"./viewport":11,"./wasm-core":12}],8:[function(require,module,exports){
 module.exports.CELL_VERT_SHADER_SOURCE = 
 `#version 300 es
 precision highp float;
@@ -1555,139 +1693,13 @@ void main() {
         frontColor.a + backColor.a
     );
 }`;
-},{}],8:[function(require,module,exports){
-const Reader = require("../../src/network/reader");
-const Writer = require("../../src/network/writer");
-const FakeSocket = require("./fake-socket");
-
-module.exports = class GameSocket {
-    /** @param {import("./renderer")} renderer */
-    constructor(renderer) {
-        this.pid = 0;
-        this.bandwidth = 0;
-        this.renderer = renderer;
-        
-        this.pingInterval = self.setInterval(() => {
-
-            const PING = new ArrayBuffer(1);
-            new Uint8Array(PING)[0] = 69;
-            this.send(PING);
-
-            console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`)
-            this.bandwidth = 0;
-        }, 1000);
-
-        const state = this.renderer.state;
-
-        this.mouseInterval = self.setInterval(() => {
-            const writer = new Writer();
-            writer.writeUInt8(3);
-            writer.writeFloat32(this.renderer.cursor.position[0]);
-            writer.writeFloat32(this.renderer.cursor.position[1]);
-
-            const currState = state.exchange();
-
-            writer.writeUInt8(currState.spectate);
-            writer.writeUInt8(currState.splits);
-            writer.writeUInt8(currState.ejects);
-            writer.writeUInt8(currState.macro);
-
-            this.send(writer.finalize());
-        }, 1000 / 30); // TODO?
-    }
-
-    connect(urlOrPort) {
-        this.disconnect();
-
-        this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
-        this.ws.binaryType = "arraybuffer";
-
-        this.ws.onopen = () => {
-            console.log("Connected to server");
-            const writer = new Writer();
-            writer.writeUInt8(69);
-            writer.writeInt16(420);
-            this.ws.send(writer.finalize());
-        }
-
-        /** @param {{ data: ArrayBuffer }} e */
-        this.ws.onmessage = e => {
-            const reader = new Reader(new DataView(e.data));
-            const OP = reader.readUInt8();
-            this.bandwidth += e.data.byteLength;
-            switch (OP) {
-                case 1:
-                    this.pid = reader.readUInt16();
-                    const map = { 
-                        width: 2 * reader.readUInt16(), 
-                        height: 2 * reader.readUInt16()
-                    };
-                    console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
-                    this.spawn("Yuu", "https://skins.vanis.io/s/GljCi6");
-                    break;
-                case 2:
-                    console.log("Clear map");
-                    this.renderer.clearCells();
-                    break;
-                case 3:
-                    const id = reader.readUInt16();
-                    const name = reader.readUTF16String();
-                    const skin = reader.readUTF16String();
-                    console.log(`Received player data`, { id, name, skin });
-                    this.renderer.loadPlayerData({ id, name, skin });
-                    break;
-                case 4:
-                    this.parseCellData(e.data);
-                    break;
-            }
-        }
-        this.ws.onerror = e => console.error(e);
-        this.ws.onclose = e => console.error(e.code, e.reason);
-    }
-
-    send(data) {
-        if (this.ws && this.ws.readyState == WebSocket.OPEN)
-            this.ws.send(data);
-    }
-
-    /** @param {ArrayBuffer} buffer */
-    parseCellData(buffer) {
-        this.lastPacket = Date.now();
-
-        const core = this.renderer.core;
-        const viewport = new DataView(buffer, 1, 8);
-        
-        this.renderer.target.position[0] = viewport.getFloat32(0, true);
-        this.renderer.target.position[1] = viewport.getFloat32(4, true);
-        // console.log(`Received packet: ${buffer.byteLength} bytes, viewport: { x: ${view_x}, y: ${view_y} }`);
-        core.HEAPU8.set(new Uint8Array(buffer, 9), this.renderer.cellTypesTableOffset);                 
-        core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
-    }
-
-    disconnect() {
-        if (this.ws) this.ws.close();
-        this.ws = null;
-    }
-
-    /**
-     * @param {string} name 
-     * @param {string} skin 
-     */
-    spawn(name, skin) {
-        const writer = new Writer();
-        writer.writeUInt8(1);
-        writer.writeUTF16String(name);
-        writer.writeUTF16String(skin);
-        this.send(writer.finalize());
-    }
-}
-},{"../../src/network/reader":1,"../../src/network/writer":2,"./fake-socket":4}],9:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 module.exports = class State {
     constructor () {
         this.setBuffer();
     }
 
-    setBuffer(buf = new SharedArrayBuffer(4)) {
+    setBuffer(buf = new SharedArrayBuffer(5)) {
         this.sharedBuffer = buf;
         this.buffer = new Uint8Array(this.sharedBuffer);
     }
@@ -1704,12 +1716,16 @@ module.exports = class State {
     get macro() { return Atomics.load(this.buffer, 3); }
     set macro(v) { Atomics.store(this.buffer, 3, v); }
 
+    get respawn() { return Atomics.load(this.buffer, 4); }
+    set respawn(v) { Atomics.store(this.buffer, 4, v); }
+
     exchange() {
         return {
             spectate: Atomics.exchange(this.buffer, 0, 0),
             splits: Atomics.exchange(this.buffer, 1, 0),
             ejects: Atomics.exchange(this.buffer, 2, 0),
-            macro: this.macro
+            macro: this.macro,
+            respawn: Atomics.exchange(this.buffer, 4, 0)
         }
     }
 }
@@ -1803,4 +1819,4 @@ module.exports = class WasmCore {
         return true;
     }
 }
-},{}]},{},[6]);
+},{}]},{},[7]);
