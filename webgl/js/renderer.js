@@ -984,9 +984,7 @@ class Renderer {
     }
 }
 
-self.onmessage = async function(e) {
-    self.removeEventListener("message", this); // One message is enough
-
+self.addEventListener("message", async function(e) {
     const { data } = e;
     const renderer = self.r = new Renderer(data.offscreen);
     renderer.mouse.setBuffer(data.mouse);
@@ -995,6 +993,6 @@ self.onmessage = async function(e) {
     await renderer.initEngine();
 
     renderer.socket.connect(data.server);
-};
+}, { once: true });
 
 module.exports = Renderer;

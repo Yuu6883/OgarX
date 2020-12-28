@@ -15,7 +15,7 @@ module.exports = class GameSocket {
             new Uint8Array(PING)[0] = 69;
             this.send(PING);
 
-            console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`)
+            // console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`);
             this.bandwidth = 0;
         }, 1000);
 

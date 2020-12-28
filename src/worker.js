@@ -7,7 +7,7 @@ const game = new Game({
     PLAYER_MAX_CELLS: 256,
     PLAYER_AUTOSPLIT_SIZE: 0,
     PLAYER_SPLIT_CAP: 4,
-    VIRUS_MONOTONE_POP: false,
+    VIRUS_MONOTONE_POP: true,
     EJECT_SIZE: 40,
     EJECT_LOSS: 40,
     EJECT_DELAY: 25,
