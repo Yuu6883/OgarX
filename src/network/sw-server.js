@@ -13,7 +13,7 @@ module.exports = class SharedWorkerServer {
     }
 
     open() {
-        self.onconnect = e => {
+        self.onconnect = e => {            
             console.log("Received connection");
             /** @type {MessagePort} */
             const port = e.source;

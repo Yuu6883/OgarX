@@ -17,23 +17,28 @@ window.onload = () => {
         canvas.style.height = window.innerHeight;
     })();
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({ offscreen, 
+    const initObject = { offscreen, 
         mouse: mouse.sharedBuffer, 
         viewport: viewport.sharedBuffer, 
-        state: state.sharedBuffer,
-        server: sharedServer.port
-    }, [offscreen, sharedServer.port]);
+        state: state.sharedBuffer
+    };
+    const transfer = [offscreen];
+    if (true) {
+        initObject.server = sharedServer.port;
+        transfer.push(sharedServer.port);
+    }
+    worker.postMessage(initObject, transfer);
     /** @type {Set<string>} */
     const pressing = new Set();
     window.addEventListener("keydown", e => {
         if (pressing.has(e.key)) return;
         if (e.key == "w") state.macro = 1;
-        if (e.key == " ") state.splits = 1;
+        if (e.key == " ") state.splits = 1; // Atomic add, instead of store
         if (e.key == "g") state.splits = 2;
         if (e.key == "z") state.splits = 3;
         if (e.key == "q") state.splits = 4;
+        if (e.key == "n") state.respawn = 1;
         pressing.add(e.key);
-        console.log(`keydown: ${e.key}`);
     });
     window.addEventListener("keyup", e => {
         if (e.key == "w") state.macro = 0;

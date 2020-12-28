@@ -3,7 +3,7 @@ module.exports = class State {
         this.setBuffer();
     }
 
-    setBuffer(buf = new SharedArrayBuffer(4)) {
+    setBuffer(buf = new SharedArrayBuffer(5)) {
         this.sharedBuffer = buf;
         this.buffer = new Uint8Array(this.sharedBuffer);
     }
@@ -20,12 +20,16 @@ module.exports = class State {
     get macro() { return Atomics.load(this.buffer, 3); }
     set macro(v) { Atomics.store(this.buffer, 3, v); }
 
+    get respawn() { return Atomics.load(this.buffer, 4); }
+    set respawn(v) { Atomics.store(this.buffer, 4, v); }
+
     exchange() {
         return {
             spectate: Atomics.exchange(this.buffer, 0, 0),
             splits: Atomics.exchange(this.buffer, 1, 0),
             ejects: Atomics.exchange(this.buffer, 2, 0),
-            macro: this.macro
+            macro: this.macro,
+            respawn: Atomics.exchange(this.buffer, 4, 0)
         }
     }
 }

@@ -1,6 +1,8 @@
 # Node modules
 node_modules/*
 
+.vscode*
+
 config.json*
 
 debug.log*

@@ -4,7 +4,7 @@ const Game = require("./game/game");
 
 const game = new Game({
     VIRUS_COUNT: 20,
-    PLAYER_MAX_CELLS: 256,
+    PLAYER_MAX_CELLS: 1024,
     PLAYER_AUTOSPLIT_SIZE: 0,
     PLAYER_SPLIT_CAP: 4,
     VIRUS_MONOTONE_POP: true,

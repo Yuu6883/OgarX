@@ -2,7 +2,7 @@ const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
 const FakeSocket = require("./fake-socket");
 
-module.exports = class GameSocket {
+module.exports = class Protocol {
     /** @param {import("./renderer")} renderer */
     constructor(renderer) {
         this.pid = 0;
@@ -35,6 +35,8 @@ module.exports = class GameSocket {
             writer.writeUInt8(currState.macro);
 
             this.send(writer.finalize());
+
+            if (currState.respawn) this.spawn();
         }, 1000 / 30); // TODO?
     }
 
@@ -65,7 +67,8 @@ module.exports = class GameSocket {
                         height: 2 * reader.readUInt16()
                     };
                     console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
-                    this.spawn("Yuu", "https://skins.vanis.io/s/GljCi6");
+                    const rando = this.renderer.randomPlayer();
+                    this.spawn(rando.name, rando.skin);
                     break;
                 case 2:
                     console.log("Clear map");
@@ -115,7 +118,10 @@ module.exports = class GameSocket {
      * @param {string} name 
      * @param {string} skin 
      */
-    spawn(name, skin) {
+    spawn(name = this.lastName, skin = this.lastSkin) {
+        this.lastName = name;
+        this.lastSkin = skin;
+
         const writer = new Writer();
         writer.writeUInt8(1);
         writer.writeUTF16String(name);

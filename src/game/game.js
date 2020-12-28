@@ -28,7 +28,8 @@ module.exports = class Game {
     /** @param {import("./handle")} handle */
     removeHandle(handle) {
         if (!handle.controller) return;
-        handle.controller.handle = null;
+        this.engine.kill(handle.controller.id);
+        handle.controller.reset();
         handle.controller = null;
         this.handles--;
     }

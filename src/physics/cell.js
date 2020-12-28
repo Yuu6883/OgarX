@@ -86,11 +86,7 @@ module.exports = class Cell {
     get isDead() {
         return this.view.getUint8(13) & CELL_DEAD;
     }
-
-    set dead(value) {
-        value && this.view.setUint8(13, this.view.getUint8(13) | CELL_DEAD);
-    }
-
+    
     get shouldAuto() {
         return this.view.getUint8(13) & CELL_AUTO;
     }

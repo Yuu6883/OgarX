@@ -25,6 +25,7 @@ module.exports = class Controller {
     }
 
     reset() {
+        this.handle = null;
         this.alive = false;
         this.spectate = null;
         this.splitAttempts = 0;

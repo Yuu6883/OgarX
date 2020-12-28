@@ -2,6 +2,7 @@ const Protocol = require("../protocol");
 const Reader = require("../reader");
 const Writer = require("../writer");
 
+const DEAD_CELL_TYPE = 251;
 const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
 const PELLET_TYPE = 254;
@@ -113,7 +114,7 @@ module.exports = class OgarXProtocol extends Protocol {
         for (const cell_id of addList) {
             const cell = cells[cell_id];
             writer.writeUInt16(cell_id);
-            writer.writeUInt16(cell.type);
+            writer.writeUInt16(cell.isDead ? DEAD_CELL_TYPE : cell.type);
             writer.writeInt16(~~cell.x);
             writer.writeInt16(~~cell.y);
             writer.writeUInt16(~~cell.r);
@@ -164,6 +165,7 @@ module.exports = class OgarXProtocol extends Protocol {
             const CLEAR_SCREEN = new ArrayBuffer(1);
             new Uint8Array(CLEAR_SCREEN)[0] = 2;
             this.handler.ws.send(CLEAR_SCREEN, true);
+            this.lastVisible.clear();
         }
 
         const writer = new Writer();
@@ -180,5 +182,5 @@ module.exports = class OgarXProtocol extends Protocol {
      */
     onChat(controller, message) {
 
-    };
+    }
 }

@@ -5,7 +5,7 @@ const Cell = require("./cell");
 const Mouse = require("./mouse");
 const State = require("./state");
 const Viewport = require("./viewport");
-const GameSocket = require("./socket");
+const Protocol = require("./protocol");
 const WasmCore = require("./wasm-core");
 
 const { makeProgram, pick, getColor } = require("./util");
@@ -142,6 +142,11 @@ class Renderer {
         font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
         fonts.add(font);
         await font.load();
+        
+        console.log("Loading bot skins & names");
+        const res = await fetch("/static/data/bots.json");
+        /** @type {{ names: string[], skins: string[] }} */
+        this.bots = await res.json();
 
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
@@ -252,8 +257,7 @@ class Renderer {
         this.loadPlayerData({ id: 253, name: "virus", skin: "https://i.imgur.com/OzizeVQ.png" });
         this.start();
 
-        this.socket = new GameSocket(this);
-        // this.socket.connect("ws://localhost:3000");
+        this.protocol = new Protocol(this);
     }
 
     printCells() {
@@ -262,7 +266,7 @@ class Renderer {
         for (const cell of this.cells) {
             if (cell.type && cell.type <= 250) table.push(cell.toObject());
             if (!isFinite(cell.currX)) {
-                this.socket.disconnect();
+                this.protocol.disconnect();
                 this.stop();
             }
         }
@@ -274,14 +278,16 @@ class Renderer {
         this.massBuffer.fill(0);
     }
 
-    async genCells() { 
-        console.log("Loading bot skins & names");
-        const res = await fetch("/static/data/bots.json");
-        /** @type {{ names: string[], skins: string[] }} */
-        this.bots = await res.json();
+    randomPlayer() {
+        return {
+            skin: pick(this.bots.skins),
+            name: pick(this.bots.names)
+        }
+    }
 
+    async genCells() {
         for (let i = 1; i < 256; i++)
-            this.loadPlayerData({ id: i, skin: pick(this.bots.skins), name: pick(this.bots.names) });
+            this.loadPlayerData({ id: i, ...randomPlayer() });
 
         this.GEN_CELLS = 65536;
         const view = new DataView(this.core.buffer, 0, this.GEN_CELLS * this.BYTES_PER_CELL_DATA);
@@ -659,6 +665,8 @@ class Renderer {
 
             if (i == 253) { // virus
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0, 0, 0, 0);    
+            } else if (i == 251) { // dead
+                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0.5, 0.5, 0.5, 0.5);
             } else {
                 const color = getColor(i);
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
@@ -803,7 +811,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        const lerp = this.socket.lastPacket ? (Date.now() - this.socket.lastPacket) / 120 : 0;
+        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / 120 : 0;
         // console.log(`Now: ${now}, lastUpdate: ${this.socket.lastPacket}`);
         // console.log(`lerp: ${lerp}`);
 
@@ -817,15 +825,15 @@ class Renderer {
         this.updateTarget();
 
         let position = null;
-        if (this.socket.pid) {
-            let begin = this.cellTypesTable[this.socket.pid - 1];
-            let end   = this.cellTypesTable[this.socket.pid];
+        if (this.protocol.pid) {
+            let begin = this.cellTypesTable[this.protocol.pid - 1];
+            let end   = this.cellTypesTable[this.protocol.pid];
             if (begin != end) {
                 if (!end) end = 65536;
                 if (end - begin == 1) {
                     const x = this.renderBufferView.getFloat32(begin * 3, true);
                     const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
-                    position = { x, y };
+                    // position = { x, y };
                 }
             }
         }
@@ -992,7 +1000,7 @@ self.addEventListener("message", async function(e) {
     renderer.viewport.setBuffer(data.viewport);
     await renderer.initEngine();
 
-    renderer.socket.connect(data.server);
+    renderer.protocol.connect(data.server || "ws://localhost:3000");
 }, { once: true });
 
 module.exports = Renderer;

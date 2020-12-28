@@ -25,6 +25,8 @@ typedef struct {
 } QuadNode;
 
 #define IS_PLAYER(type) type <= 250
+#define IS_DEAD(type) type == 251
+#define IS_ALIVE(type) type != 251
 #define IS_MOTHER_CELL(type) type == 252
 #define IS_VIRUS(type) type == 253
 #define IS_PELLET(type) type == 254
@@ -33,11 +35,15 @@ typedef struct {
 #define EXIST_BIT 0x1
 #define UPDATE_BIT 0x2
 #define INSIDE_BIT 0x4
-#define DEAD_BIT 0x8
+// Removed dead bit to type 251
 #define AUTOSPLIT_BIT 0x10
 #define REMOVE_BIT 0x20
 #define MERGE_BIT 0x40
 #define POP_BIT 0x80
+
+#define CLEAR_BITS 0x9
+
+extern void console_log(unsigned short id);
 
 void update(Cell* cell, Cell* end, float dt_multi) {
     while (cell != end) {
@@ -55,8 +61,7 @@ void update(Cell* cell, Cell* end, float dt_multi) {
                 cell->boost = 0.f;
             } else {
                 cell->age++;
-                if (cell->flags & DEAD_BIT) cell->flags = DEAD_BIT | EXIST_BIT;
-                else cell->flags = EXIST_BIT;
+                cell->flags &= CLEAR_BITS;
                 if (cell->boost > 1) {
                     float d = cell->boost / 9.0f * dt_multi;
                     cell->x += cell->boostX * d;
@@ -170,8 +175,6 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-extern void console_log(unsigned short id);
-
 void resolve(Cell* cells, 
     unsigned short* id_start, unsigned short* id_end, 
     QuadNode* root, void** node_stack_pointer, 
@@ -180,7 +183,6 @@ void resolve(Cell* cells,
 
     while (id_start != id_end) {
 
-        // console_log(*id_start);
         Cell* cell = &cells[*id_start++];
 
         unsigned char flags = cell->flags;
@@ -194,9 +196,11 @@ void resolve(Cell* cells,
             continue;
         }
 
-        if (flags & DEAD_BIT && cell->age > removeTick) {
-            cell->flags = flags | REMOVE_BIT;
-            cell->eatenBy = 0;
+        if (IS_DEAD(cell->type)) {
+            if (cell->age > removeTick) {
+                cell->flags |= REMOVE_BIT;
+                cell->eatenBy = 0;
+            }
             continue;
         }
 
@@ -238,10 +242,10 @@ void resolve(Cell* cells,
                 // Check player x player
                 if (IS_PLAYER(cell->type)) {
                     if (IS_PLAYER(other->type) && cell->type == other->type) {
-                        if (flags & DEAD_BIT) {
-                            if (other_flags & DEAD_BIT) action = PHYSICS_COL;
+                        if (IS_DEAD(cell->type)) {
+                            if (IS_DEAD(other->type)) action = PHYSICS_COL;
                         } else {
-                            if (other_flags & DEAD_BIT) action = PHYSICS_EAT;
+                            if (IS_DEAD(other->type)) action = PHYSICS_EAT;
                             else if (cell->age < noColliDelay || other->age < noColliDelay)
                                 action = PHYSICS_NON;
                             else if ((flags & MERGE_BIT) && (other_flags & MERGE_BIT))
@@ -249,7 +253,7 @@ void resolve(Cell* cells,
                             else if (!(flags & INSIDE_BIT)) action = PHYSICS_COL;
                         }
                     // Dead cell can not eat others
-                    } else if (!(flags & DEAD_BIT)) action = PHYSICS_EAT;
+                    } else if (IS_ALIVE(cell->type)) action = PHYSICS_EAT;
                 } else if (IS_VIRUS(cell->type) && IS_EJECTED(other->type)) {
                     // Virus can only eat ejected cell
                     action = PHYSICS_EAT;
