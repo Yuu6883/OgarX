@@ -23,15 +23,21 @@ window.onload = () => {
         state: state.sharedBuffer,
         server: sharedServer.port
     }, [offscreen, sharedServer.port]);
+    /** @type {Set<string>} */
+    const pressing = new Set();
     window.addEventListener("keydown", e => {
+        if (pressing.has(e.key)) return;
         if (e.key == "w") state.macro = 1;
         if (e.key == " ") state.splits = 1;
         if (e.key == "g") state.splits = 2;
         if (e.key == "z") state.splits = 3;
         if (e.key == "q") state.splits = 4;
+        pressing.add(e.key);
+        console.log(`keydown: ${e.key}`);
     });
     window.addEventListener("keyup", e => {
         if (e.key == "w") state.macro = 0;
+        pressing.delete(e.key);
     });
     canvas.addEventListener("mousemove", e => (mouse.x = e.clientX, mouse.y = e.clientY));
     canvas.addEventListener("wheel", e => mouse.updateScroll(e.deltaY), { passive: true });
