@@ -1,11 +1,13 @@
 const fs = require("fs");
 const path = require("path");
-const CORE_PATH = path.resolve(__dirname, "wasm", "core.wasm");
+const CORE_PATH = path.resolve(__dirname, "..", "static", "wasm", "server.wasm");
 
 const Server = require("./network/ws-server");
-const Game = require("./game/game");
 
-const game = new Game({
+const server = new Server();
+const engine = server.game.engine;
+
+engine.setOptions({
     VIRUS_COUNT: 20,
     PLAYER_MAX_CELLS: 1024,
     PLAYER_AUTOSPLIT_SIZE: 0,
@@ -17,9 +19,6 @@ const game = new Game({
     PELLET_COUNT: 1000,
     PLAYER_SPAWN_SIZE: 1500
 });
-
-const server = new Server(game);
-const engine = game.engine;
 
 process.on("SIGINT", async () => {
     engine.stop();

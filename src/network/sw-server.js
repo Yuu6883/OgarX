@@ -1,13 +1,13 @@
-const Socket = require("./socket");
+const SocketHandler = require("./socket");
 const FakeSocket = require("./fake-socket");
 
 const Chat = require("./chat");
+const Game = require("../game");
 
 module.exports = class SharedWorkerServer {
 
-    /** @param {import("../game/game")} game */
-    constructor(game) {
-        this.game = game;
+    constructor() {
+        this.game = new Game();
         /** @type {Set<MessagePort>} */
         this.ports = new Set();
     }
@@ -18,18 +18,29 @@ module.exports = class SharedWorkerServer {
             /** @type {MessagePort} */
             const port = e.source;
             const ws = new FakeSocket(port);
-            ws.sock = new Socket(this.game, ws);
-            this.game.addHandle(ws.sock);
+            ws.sock = new SocketHandler(this.game, ws);
+            this.game.addHandler(ws.sock);
             this.ports.add(port);
 
-            ws.onmessage = view => ws.sock.onMessage(view);
+            ws.onmessage = view => {
+                port.lastMessage = Date.now();
+                ws.sock.onMessage(view);
+            }
+
             ws.onclose = (code, reason) => {
                 console.log(`Disconnected: (handle#${ws.sock.controller.id}) code: ${code}, message: ${reason}`);
-                this.game.removeHandle(ws);
+                this.game.removeHandler(ws);
                 this.ports.delete(port);
             }
         }
         this.game.chat = new Chat(this.game);
+
+        // Mimic uWS idleTimeout behavior
+        setInterval(() => {
+            for (const port of this.ports)
+                if (Date.now() - port.lastMessage > 75000) 
+                    port.ws.end(1001, "No PING received");
+        }, 3000);
     }
 
     close() {

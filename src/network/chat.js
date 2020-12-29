@@ -1,6 +1,6 @@
 module.exports = class Chat {
 
-    /** @param {import("../game/game")} game */
+    /** @param {import("../game")} game */
     constructor(game) {
         this.game = game;
     }

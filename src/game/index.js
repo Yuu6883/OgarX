@@ -4,18 +4,15 @@ const Engine = require("../physics/engine");
 const MAX_PLAYER = 250;
 
 module.exports = class Game {
-    /** 
-     * @param {ArrayBuffer} core_buffer
-     * @param {typeof import("../physics/engine").DefaultSettings} options 
-     */
-    constructor(options = {}) {
+
+    constructor() {
         this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(i));
-        this.engine = new Engine(this, options); // TODO
+        this.engine = new Engine(this);
         this.handles = 0;
     }
 
     /** @param {import("./handle")} handle */
-    addHandle(handle) {
+    addHandler(handle) {
         if (this.isFull) handle.onError("Server full");
         if (handle.controller) return;
         let i = 1; // 0 is occupied ig
@@ -26,7 +23,7 @@ module.exports = class Game {
     }
 
     /** @param {import("./handle")} handle */
-    removeHandle(handle) {
+    removeHandler(handle) {
         if (!handle.controller) return;
         this.engine.kill(handle.controller.id);
         handle.controller.reset();

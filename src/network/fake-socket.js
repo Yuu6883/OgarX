@@ -1,6 +1,7 @@
 module.exports = class FakeSocket {
     /** @param {MessagePort} port */
     constructor(port) {
+        port.ws = this;
         this.port = port;
         this.readyState = WebSocket.OPEN;
 
@@ -26,5 +27,6 @@ module.exports = class FakeSocket {
 
     end(code = 1006, reason = "") {
         this.port.postMessage({ event: "close", code, reason });
+        this.onclose(code, reason);
     }
 }

@@ -24,4 +24,9 @@ module.exports = class FakeSocket {
     send(buffer) {
         this.port.postMessage({ event: "message", message: buffer }, [buffer]);
     }
+
+    close() {
+        this.port.postMessage({ event: "close", code: 1001, message: "Client closed connection" });
+        this.port.close();
+    }
 }

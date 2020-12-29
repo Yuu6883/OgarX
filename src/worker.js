@@ -1,8 +1,9 @@
 const Server = require("./network/sw-server");
-const Game = require("./game/game");
 
+const server = new Server();
+const engine = server.game.engine;
 
-const game = new Game({
+engine.setOptions({
     VIRUS_COUNT: 20,
     PLAYER_MAX_CELLS: 1024,
     PLAYER_AUTOSPLIT_SIZE: 0,
@@ -12,11 +13,11 @@ const game = new Game({
     EJECT_LOSS: 40,
     EJECT_DELAY: 25,
     PELLET_COUNT: 1000,
-    PLAYER_SPAWN_SIZE: 1500
+    PLAYER_SPAWN_SIZE: 1500,
+    MAP_HW: 32767 >> 3, // MAX signed short
+    MAP_HH: 32767 >> 3, // MAX signed short,
 });
 
-const server = new Server(game);
-const engine = game.engine;
 server.open();
 
 (async () => {
@@ -25,6 +26,6 @@ server.open();
 
     await engine.init(buffer);
     engine.start();
-
+    
     console.log("Shared worker server running");
 })();

@@ -1,9 +1,9 @@
 const Handler = require("../game/handle");
 const Protocols = require("./protocols");
 
-module.exports = class Socket extends Handler {
+module.exports = class SocketHandler extends Handler {
     /** 
-     * @param {import("../game/game")} game
+     * @param {import("../game")} game
      * @param {import("uWebSockets.js").WebSocket} ws 
      */
     constructor(game, ws) {

@@ -5,23 +5,26 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "browserify ./src/worker.js -o ./client/js/sw.js && browserify ./webgl/js/main.js -o ./client/js/main.js && browserify ./webgl/js/renderer.js -o ./client/js/renderer.js && cp ./webgl/js/loader.js ./client/js/loader.js"
+    "build": "node build.js",
+    "demo": "rm -rf ./demo/* && cp -r ./client/* ./demo/"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Yuu6883/Ogar69.git"
+    "url": "git+https://github.com/Yuu6883/OgarX.git"
   },
   "author": "Yuu6883",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Yuu6883/Ogar69/issues"
+    "url": "https://github.com/Yuu6883/OgarX/issues"
   },
-  "homepage": "https://github.com/Yuu6883/Ogar69#readme",
+  "homepage": "https://github.com/Yuu6883/OgarX#readme",
   "devDependencies": {
-    "@types/node": "^14.0.27"
+    "@types/node": "^14.0.27",
+    "babel-minify": "^0.5.1",
+    "browserify": "^17.0.0",
+    "gl-matrix": "^3.3.0"
   },
   "dependencies": {
-    "gl-matrix": "^3.3.0",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v18.4.0"
   }
 }

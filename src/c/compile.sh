@@ -1,1 +1,1 @@
-emcc -O2 -s SIDE_MODULE=1 ./core.c -o ../wasm/core.wasm
+emcc -O2 -s SIDE_MODULE=1 ./core.c -o ../../static/wasm/server.wasm

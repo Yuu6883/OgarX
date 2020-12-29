@@ -1,5 +1,5 @@
 module.exports = class Handle {
-    /** @param {import("./game")} game */
+    /** @param {import(".")} game */
     constructor(game) {
         this.game = game;
         /** @type {import("./controller")} */

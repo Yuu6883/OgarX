@@ -247,4 +247,6 @@ class QuadTree {
     }
 }
 
-module.exports = { QuadNode, QuadTree };
+QuadTree.Node = QuadNode;
+
+module.exports = QuadTree;

@@ -4,7 +4,7 @@ if (typeof performance == "undefined") {
 }
 
 const Cell = require("./cell");
-const { QuadTree } = require("./quadtree");
+const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
 
 const DefaultSettings = {
@@ -77,13 +77,14 @@ const BYTES_PER_CELL = 32;
 
 module.exports = class Engine {
 
-    /** 
-     * @param {import("../game/game")} game
-     * @param {typeof DefaultSettings} options 
-     */
-    constructor(game, options) {
+    /** @param {import("../game")} game */
+    constructor(game) {
         this.game = game;
         this.options = Object.assign({}, DefaultSettings);
+    }
+    
+    /** @param {typeof DefaultSettings} options */
+    setOptions(options) {
         Object.assign(this.options, options);
 
         /** @type {Set<number>[]} */
@@ -92,9 +93,9 @@ module.exports = class Engine {
         this.__next_cell_id = 1;
     }
 
-    /** @param {ArrayBuffer|Buffer} */
+    /** @param {ArrayBuffer|Buffer} core_buffer */
     async init(core_buffer) {
-        if (this.updateInterval) return;
+        if (this.wasm) return;
 
         this.__start = performance.now();
         this.__ltick = performance.now();
@@ -112,6 +113,12 @@ module.exports = class Engine {
             }});
 
         this.wasm = module.instance.exports;
+        this.bindBuffers();
+    }
+
+    bindBuffers() {
+        // Fill 0 in case we are reusing the buffer
+        new Uint32Array(this.memory.buffer).fill(0);
 
         // Default CELL_LIMIT uses 2mb ram
         this.cells = Array.from({ length: this.options.CELL_LIMIT }, (_, i) =>
@@ -310,8 +317,7 @@ module.exports = class Engine {
                 const point = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
                 this.newCell(point[0], point[1], this.options.PLAYER_SPAWN_SIZE, ~~id);
 
-                for (const id2 in this.game.controls) {
-                    const controller2 = this.game.controls[id2];
+                for (const controller2 of this.game.controls) {
                     if (!controller2.handle) continue;
                     controller.handle.onSpawn(controller2);
                     if (controller != controller2) controller2.handle.onSpawn(controller);
@@ -532,9 +538,9 @@ module.exports = class Engine {
         cell.boostY = boostY;
         cell.boost = boost;
         cell.resetFlag();
-        if (insert) {
-            this.tree.insert(cell);
-        }
+        
+        if (insert) this.tree.insert(cell);
+
         this.counters[cell.type].add(cell.id);
         this.cellCount++;
         return cell;

@@ -8,7 +8,6 @@ const CELL_MERGE  = 0x40;
 const CELL_POP    = 0x80;
 
 const TYPES_TO_STRING = { 252: "Mother Cell", 253: "Virus", 254: "Pellet", 255: "Ejected" };
-const { QuadNode } = require("./quadtree");
 
 module.exports = class Cell {
     /**
@@ -16,7 +15,7 @@ module.exports = class Cell {
      * @param {number} id
      */
     constructor(view, id) {
-        /** @type {QuadNode} */
+        /** @type {import("./quadtree").Node} */
         this.__root = null;
         this.view = view;
         this.id = id;
@@ -86,7 +85,7 @@ module.exports = class Cell {
     get isDead() {
         return this.view.getUint8(13) & CELL_DEAD;
     }
-    
+
     get shouldAuto() {
         return this.view.getUint8(13) & CELL_AUTO;
     }

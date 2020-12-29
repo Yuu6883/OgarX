@@ -2,8 +2,7 @@ const Mouse = require("./mouse");
 const State = require("./state");
 const Viewport = require("./viewport");
 window.onload = () => {
-    const worker = new Worker("js/renderer.js");
-    const sharedServer = new SharedWorker("js/sw.js", "ogar-x-server");
+    const worker = new Worker("js/renderer.min.js");
     const canvas = document.getElementById("canvas");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -22,12 +21,14 @@ window.onload = () => {
         viewport: viewport.sharedBuffer, 
         state: state.sharedBuffer
     };
-    const transfer = [offscreen];
-    if (true) {
-        initObject.server = sharedServer.port;
-        transfer.push(sharedServer.port);
+    worker.postMessage(initObject, [offscreen]);
+    worker.onmessage = e => {
+        if (e.data === "ready") {
+            const sharedServer = new SharedWorker("js/sw.min.js", "ogar-x-server");
+            worker.postMessage(sharedServer.port, [sharedServer.port]);
+        }
     }
-    worker.postMessage(initObject, transfer);
+
     /** @type {Set<string>} */
     const pressing = new Set();
     window.addEventListener("keydown", e => {
