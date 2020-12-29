@@ -12,6 +12,9 @@ const RENDERER_OUT = path.resolve(__dirname, "client", "js", "renderer.min.js");
 const LOADER_IN  = path.resolve(__dirname, "webgl", "client", "loader.js");
 const LOADER_OUT = path.resolve(__dirname, "client", "js", "loader.min.js");
 
+const CONTROL_IN  = path.resolve(__dirname, "webgl", "control", "control.js");
+const CONTROL_OUT = path.resolve(__dirname, "client", "js", "control.min.js");
+
 const SW_IN  = path.resolve(__dirname, "src", "worker.js");
 const SW_OUT = path.resolve(__dirname, "client", "js", "sw.min.js");
 
@@ -34,6 +37,9 @@ const streamToString = stream => {
 
     code = await streamToString(browserify(MAIN_IN).bundle());
     fs.writeFileSync(MAIN_OUT, minifier(code).code);
+
+    code = await streamToString(browserify(CONTROL_IN).bundle());
+    fs.writeFileSync(CONTROL_OUT, minifier(code).code);
 
     fs.writeFileSync(LOADER_OUT, minifier(fs.readFileSync(LOADER_IN)).code);
 })();

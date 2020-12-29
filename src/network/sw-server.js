@@ -13,10 +13,10 @@ module.exports = class SharedWorkerServer {
     }
 
     open() {
-        self.onconnect = e => {            
-            console.log("Received connection");
+        self.onconnect = e => {
+            
             /** @type {MessagePort} */
-            const port = e.source;
+            const port = e.source;  
             const ws = new FakeSocket(port);
             ws.sock = new SocketHandler(this.game, ws);
             this.game.addHandler(ws.sock);
