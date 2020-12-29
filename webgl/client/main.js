@@ -45,6 +45,9 @@ window.onload = () => {
         if (e.key == "w") state.macro = 0;
         pressing.delete(e.key);
     });
+    window.addEventListener("blur", _ => state.focused = 0);
+    window.addEventListener("focus", _ => state.focused = 1);
+    state.focused = 1;
     canvas.addEventListener("mousemove", e => (mouse.x = e.clientX, mouse.y = e.clientY));
     canvas.addEventListener("wheel", e => mouse.updateScroll(e.deltaY), { passive: true });
 }

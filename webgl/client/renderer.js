@@ -127,7 +127,7 @@ class Renderer {
     }
 
     async initEngine() {
-        const gl = this.gl = this.canvas.getContext("webgl2", { premultipliedAlpha: false });
+        const gl = this.gl = this.canvas.getContext("webgl2", { premultipliedAlpha: false, powerPreference: "high-performance" });
         if (!gl) return console.error("WebGL2 Not Supported");
 
         console.log("Loading WASM...");
@@ -785,13 +785,6 @@ class Renderer {
 
         const delta = now - this.lastTimestamp;
         this.lastTimestamp = now;
-
-        const gl = this.gl;
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-        const NUM_PASS = 2;
-        let offsetBack;
-        this.clearPeelingBuffers();
         
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
@@ -808,20 +801,32 @@ class Renderer {
         this.updateTarget();
 
         let position = null;
-        if (this.protocol.pid) {
-            let begin = this.cellTypesTable[this.protocol.pid - 1];
-            let end   = this.cellTypesTable[this.protocol.pid];
-            if (begin != end) {
-                if (!end) end = 65536;
-                if (end - begin == 1) {
-                    const x = this.renderBufferView.getFloat32(begin * 3, true);
-                    const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
-                    // position = { x, y };
-                }
-            }
-        }
+        // Client side camera centering for single cell
+        // if (this.protocol.pid) {
+        //     let begin = this.cellTypesTable[this.protocol.pid - 1];
+        //     let end   = this.cellTypesTable[this.protocol.pid];
+        //     if (begin != end) {
+        //         if (!end) end = 65536;
+        //         if (end - begin == 1) {
+        //             const x = this.renderBufferView.getFloat32(begin * 3, true);
+        //             const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
+        //             // position = { x, y };
+        //         }
+        //     }
+        // }
         this.lerpCamera(delta / 120, position);
         this.checkViewport();
+
+        if (!this.state.focused) {
+            this.updateTextures();
+            return;
+        }
+
+        const gl = this.gl;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        const NUM_PASS = 2;
+        let offsetBack;
+        this.clearPeelingBuffers();
 
         const progs = [this.peel_prog1];
         const funcs = [this.drawCells];
@@ -869,7 +874,11 @@ class Renderer {
         // gl.drawArrays(gl.TRIANGLES, 0, 6);
         // this.stop();
         // setTimeout(() => this.stop(), 3000);
+        this.updateTextures();
+    }
 
+    updateTextures() {
+        const gl = this.gl;
         if (this.updates.size) {
             gl.activeTexture(gl.TEXTURE11);
             let limit = 0;
