@@ -39,7 +39,6 @@ module.exports = class SharedWorkerServer {
                     console.log(`Disconnected: code: ${code}, message: ${reason}`);
                 }
 
-                this.game.removeHandler(ws.sock);
                 this.ports.delete(port);
                 ws.sock.onDisconnect(code, reason);
             }

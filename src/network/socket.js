@@ -14,10 +14,6 @@ class SocketHandler extends Handler {
         this.protocol = null;
     }
 
-    onProtocol() {
-        this.game.addHandler(this);
-    }
-
     /** @param {import("../game/controller")} controller */
     onSpawn(controller) {
         this.protocol && this.protocol.onSpawn(controller);
@@ -33,7 +29,6 @@ class SocketHandler extends Handler {
             if (!this.protocol) {
                 const Protocol = SocketHandler.protocols.find(p => p.handshake(view));
                 if (!Protocol) this.ws.end(1003, "Ambiguous protocol");
-                this.onProtocol();
                 this.protocol = new Protocol(this);
             } else this.protocol.onMessage(view);
         } catch (e) {
@@ -51,7 +46,6 @@ class SocketHandler extends Handler {
 
     onDisconnect(code, reason) {
         this.protocol && this.protocol.onDisconnect(code, reason);
-        this.game.removeHandler(this);
     }
 }
 

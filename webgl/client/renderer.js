@@ -265,7 +265,7 @@ class Renderer {
 
     randomPlayer() {
         return {
-            skin: pick(this.bots.skins),
+            skin: "", // pick(this.bots.skins),
             name: pick(this.bots.names)
         }
     }

@@ -3,8 +3,6 @@ if (typeof performance == "undefined") {
     eval(`global.performance = require("perf_hooks").performance;`);
 }
 
-const { EventEmitter } = require("events");
-
 const Cell = require("./cell");
 const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
@@ -77,11 +75,10 @@ const EJECTED_TYPE = 255;
 
 const BYTES_PER_CELL = 32;
 
-module.exports = class Engine extends EventEmitter {
+module.exports = class Engine {
 
     /** @param {import("../game")} game */
     constructor(game) {
-        super();
         this.game = game;
         this.options = Object.assign({}, DefaultSettings);
     }
@@ -153,7 +150,7 @@ module.exports = class Engine extends EventEmitter {
             this.__ltick = now;
             this.usage = (performance.now() - now) / delay;
 
-            this.emit("tick");
+            this.game.emit("tick");
         }, delay);
     }
 
@@ -314,6 +311,8 @@ module.exports = class Engine extends EventEmitter {
                     controller.handle.onSpawn(controller2);
                     if (controller != controller2) controller2.handle.onSpawn(controller);
                 }
+                
+                this.game.emit("spawn", controller);
 
                 console.log(`Spawned controller#${controller.id} at x: ${point[0]}, y: ${point[1]}`);
             } else controller.spawn = false;

@@ -27,6 +27,7 @@ module.exports = class OgarXProtocol extends Protocol {
         /** @type {Set<number>} */
         this.currVisible = new Set();
 
+        this.handler.join();
         this.sendInitPacket();
     }
 
@@ -50,9 +51,6 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.name = reader.readUTF16String();
                 controller.skin = reader.readUTF16String();
                 controller.spawn = true;
-                console.log(`Player#${controller.id}: ` +
-                    `{ name: ${controller.name}, ` +
-                      `skin: ${controller.skin} } requested spawn`);
                 break;
             case 2:
                 if (controller.alive) return;
@@ -182,5 +180,9 @@ module.exports = class OgarXProtocol extends Protocol {
      */
     onChat(controller, message) {
 
+    }
+
+    onDisconnect(code, reason) {
+        this.handler.remove();
     }
 }

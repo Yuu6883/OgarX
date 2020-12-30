@@ -37,3 +37,15 @@ html, body {
 .text-center {
     text-align: center;
 }
+
+.info-field {
+    padding: 10px;
+}
+
+.margin-small {
+    margin: 5px;
+}
+
+#player-list p {
+    margin: 3px;
+}

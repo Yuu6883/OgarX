@@ -5,6 +5,8 @@ module.exports = class Handle {
         /** @type {import("./controller")} */
         this.controller = null; 
     };
+    join() { this.game.addHandler(this); }
+    remove() { this.game.removeHandler(this); }
     onSpawn() {};
     onUpdate() {};
     /** @param {string} err */
