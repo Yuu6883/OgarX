@@ -3,11 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/3.14.5/xterm.min.js" integrity="sha512-2PRgAav8Os8vLcOAh1gSaDoNLe1fAyq8/G3QSdyjFFD+OqNjLeHE/8q4+S4MEZgPsuo+itHopj+hJvqS8XUQ8A==" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/3.14.5/xterm.min.css" integrity="sha512-iLYuqv+v/P4u9erpk+KM83Ioe/l7SEmr7wB6g+Kg1qmEit8EShDKnKtLHlv2QXUp7GGJhmqDI+1PhJYLTsfb8w==" crossorigin="anonymous" />
     <script src="js/control.min.js"></script>
+    <link rel="stylesheet" href="css/control.css" />
     <title>OgarX Local Server Panel</title>
 </head>
 <body>
+    <div id="container">
+        <div class="column">
+            <div class="row card">
+                <h3 class="text-center margin-small">Server Info</h3>
+                <div class="info-field">Usage: <span id="usage"></span></div>
+                <div class="info-field">Cells: <span id="cells"></span></div>
+                <div class="info-field">Players: <span id="players"></span></div>
+            </div>
+            <div class="row card">
+                <h3 class="text-center margin-small">Players</h3>
+                <div id="player-list" class="margin-small"></div>
+            </div>
+        </div>
+        <div class="column card">
+            <div id="console">
+                <h3 class="text-center margin-small">Console</h3>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
