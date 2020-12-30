@@ -32,6 +32,7 @@ window.onload = () => {
     /** @type {Set<string>} */
     const pressing = new Set();
     window.addEventListener("keydown", e => {
+        if (e.key == "Tab") e.preventDefault();
         if (pressing.has(e.key)) return;
         if (e.key == "w") state.macro = 1;
         if (e.key == " ") state.splits = 1; // Atomic add, instead of store
