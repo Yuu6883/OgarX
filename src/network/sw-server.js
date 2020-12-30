@@ -1,14 +1,18 @@
-const SocketHandler = require("./socket");
+const FakeSocketHandler = require("./socket");
 const FakeSocket = require("./fake-socket");
+const WebConsoleProtocol = require("./protocols/web-console");
 
 const Chat = require("./chat");
 const Game = require("../game");
+
+// Register console protocol
+FakeSocketHandler.protocols.push(WebConsoleProtocol);
 
 module.exports = class SharedWorkerServer {
 
     constructor() {
         this.game = new Game();
-        /** @type {Set<MessagePort>} */
+        /** @type {Set<MessagePort & { ws: FakeSocket }>} */
         this.ports = new Set();
     }
 
@@ -18,8 +22,8 @@ module.exports = class SharedWorkerServer {
             /** @type {MessagePort} */
             const port = e.source;  
             const ws = new FakeSocket(port);
-            ws.sock = new SocketHandler(this.game, ws);
-            this.game.addHandler(ws.sock);
+            ws.sock = new FakeSocketHandler(this.game, ws);
+            
             this.ports.add(port);
 
             ws.onmessage = view => {
@@ -28,9 +32,16 @@ module.exports = class SharedWorkerServer {
             }
 
             ws.onclose = (code, reason) => {
-                console.log(`Disconnected: (handle#${ws.sock.controller.id}) code: ${code}, message: ${reason}`);
-                this.game.removeHandler(ws);
+
+                if (ws.sock.controller) {
+                    console.log(`Disconnected: (handle#${ws.sock.controller.id}) code: ${code}, message: ${reason}`);
+                } else {
+                    console.log(`Disconnected: code: ${code}, message: ${reason}`);
+                }
+
+                this.game.removeHandler(ws.sock);
                 this.ports.delete(port);
+                ws.sock.onDisconnect(code, reason);
             }
         }
         this.game.chat = new Chat(this.game);
@@ -38,9 +49,9 @@ module.exports = class SharedWorkerServer {
         // Mimic uWS idleTimeout behavior
         setInterval(() => {
             for (const port of this.ports)
-                if (Date.now() - port.lastMessage > 75000) 
+                if (Date.now() - port.lastMessage > 3000) 
                     port.ws.end(1001, "No PING received");
-        }, 3000);
+        }, 1000);
     }
 
     close() {

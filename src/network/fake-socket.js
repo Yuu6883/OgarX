@@ -18,6 +18,8 @@ module.exports = class FakeSocket {
         port.postMessage({ event: "open" });
 
         this.subscribe = this.onmessage = this.onclose = () => {};
+        /** @type {import("./socket")<FakeSocket>} */
+        this.sock = null;
     }
 
     /** @param {BufferSource} buffer */
@@ -27,6 +29,7 @@ module.exports = class FakeSocket {
 
     end(code = 1006, reason = "") {
         this.port.postMessage({ event: "close", code, reason });
+        this.port.close();
         this.onclose(code, reason);
     }
 }

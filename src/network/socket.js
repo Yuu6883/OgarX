@@ -1,16 +1,21 @@
 const Handler = require("../game/handle");
-const Protocols = require("./protocols");
 
-module.exports = class SocketHandler extends Handler {
+/** @template T */
+class SocketHandler extends Handler {
+    
     /** 
      * @param {import("../game")} game
-     * @param {import("uWebSockets.js").WebSocket} ws 
+     * @param {T} ws 
      */
     constructor(game, ws) {
         super(game);
         this.ws = ws;
+        /** @type {import("./protocol")} */
         this.protocol = null;
-        this.ws.subscribe("broadcast");
+    }
+
+    onProtocol() {
+        this.game.addHandler(this);
     }
 
     /** @param {import("../game/controller")} controller */
@@ -26,8 +31,9 @@ module.exports = class SocketHandler extends Handler {
     onMessage(view) {
         try {
             if (!this.protocol) {
-                const Protocol = Protocols.find(p => p.handshake(view));
+                const Protocol = SocketHandler.protocols.find(p => p.handshake(view));
                 if (!Protocol) this.ws.end(1003, "Ambiguous protocol");
+                this.onProtocol();
                 this.protocol = new Protocol(this);
             } else this.protocol.onMessage(view);
         } catch (e) {
@@ -42,4 +48,13 @@ module.exports = class SocketHandler extends Handler {
     onChat(controller, message) {
         this.protocol && this.protocol.onChat(controller, message);
     }
+
+    onDisconnect(code, reason) {
+        this.protocol && this.protocol.onDisconnect(code, reason);
+        this.game.removeHandler(this);
+    }
 }
+
+SocketHandler.protocols = require("./protocols");
+
+module.exports = SocketHandler;

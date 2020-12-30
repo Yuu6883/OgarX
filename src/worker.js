@@ -13,7 +13,7 @@ engine.setOptions({
     EJECT_LOSS: 40,
     EJECT_DELAY: 25,
     PELLET_COUNT: 1000,
-    PLAYER_SPAWN_SIZE: 1500,
+    PLAYER_SPAWN_SIZE: 30,
     MAP_HW: 32767 >> 3, // MAX signed short
     MAP_HH: 32767 >> 3, // MAX signed short,
 });

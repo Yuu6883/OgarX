@@ -1,11 +1,18 @@
 const uWS = require("uWebSockets.js");
 
-const SocketHandler = require("./socket");
+const WebSocketHandler = require("./socket");
 const Game = require("../game");
 const Chat = require("./chat");
 
 /** @param {ArrayBuffer} buffer */
-const bufferToString = buffer => new Uint8Array(buffer).map(ch => String.fromCharCode(ch)).join("");
+const bufferToString = buffer => {
+    const array = new Uint8Array(buffer);
+    const chars = [];
+    let index = 0;
+    while (array[index] && index++ < array.length)
+        chars.push(String.fromCharCode(array[index]));
+    return chars.join("");
+}
 
 module.exports = class SocketServer {
 
@@ -30,18 +37,12 @@ module.exports = class SocketServer {
                         req.getHeader('sec-websocket-extensions'),
                         context);
                 },
-                open: ws => {
-                    ws.sock = new SocketHandler(this.game, ws);
-                    this.game.addHandler(ws.sock);
-                },
+                open: ws => ws.sock = new WebSocketHandler(this.game, ws),
                 message: (ws, message, isBinary) => {
                     if (!isBinary) ws.end(1003);
                     ws.sock.onMessage(new DataView(message));
                 },
-                close: (ws, code, message) => {
-                    console.log(`Disconnected: (handle#${ws.sock.controller.id}) code: ${code}, message: ${bufferToString(message)}`);
-                    this.game.removeHandler(ws.sock);
-                }
+                close: (ws, code, message) => ws.sock.onDisconnect(code, bufferToString(message))
             }).listen("0.0.0.0", 3000, sock => {
                 this.listening = false;
                 this.sock = sock;

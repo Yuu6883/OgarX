@@ -30,6 +30,7 @@ typedef struct {
 #define IS_MOTHER_CELL(type) type == 252
 #define IS_VIRUS(type) type == 253
 #define IS_PELLET(type) type == 254
+#define NOT_PELLET(type) type != 254
 #define IS_EJECTED(type) type == 255
 
 #define EXIST_BIT 0x1
@@ -102,7 +103,7 @@ void decay_and_auto(Cell* cell, Cell* end, float dt_multi, float auto_size, floa
 
 void edge_check(Cell* cell, Cell* end, float l, float r, float b, float t) {
     while (cell != end) {
-        if (cell->flags & EXIST_BIT) {
+        if (cell->flags & EXIST_BIT && NOT_PELLET(cell->type)) {
             unsigned char bounce = cell->boost > 1;
             float hr = cell->r / 2;
             if (cell->x < l + hr) {

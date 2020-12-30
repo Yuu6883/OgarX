@@ -14,4 +14,5 @@ module.exports = class Protocol {
      * @param {string} message
      */
     onChat(controller, message) {};
+    onDisconnect(code, reason) {};
 }

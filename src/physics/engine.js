@@ -3,6 +3,8 @@ if (typeof performance == "undefined") {
     eval(`global.performance = require("perf_hooks").performance;`);
 }
 
+const { EventEmitter } = require("events");
+
 const Cell = require("./cell");
 const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
@@ -75,10 +77,11 @@ const EJECTED_TYPE = 255;
 
 const BYTES_PER_CELL = 32;
 
-module.exports = class Engine {
+module.exports = class Engine extends EventEmitter {
 
     /** @param {import("../game")} game */
     constructor(game) {
+        super();
         this.game = game;
         this.options = Object.assign({}, DefaultSettings);
     }
@@ -137,11 +140,6 @@ module.exports = class Engine {
         // Not defined here since it's dynamically changed (after indices)
         this.treePtr = 0;
         this.treeBuffer = null;
-
-        /** @type {number[]} */
-        this.profiler = [];
-
-        this.debug = false;
     }
 
     start() {
@@ -153,16 +151,10 @@ module.exports = class Engine {
             const now = performance.now();
             this.tick((now - this.__ltick) / delay);
             this.__ltick = now;
-            this.profiler.push((performance.now() - now) / delay);
-            this.profiler.length > this.options.TPS && this.profiler.shift();
-        }, delay);
+            this.usage = (performance.now() - now) / delay;
 
-        if (this.debug) {
-            setInterval(() => {
-                console.log("Cells: " + this.cellCount + ", " + 
-                    (this.profiler.reduce((a, b) => a + b, 0) / this.profiler.length * 100).toFixed(3) + "%");
-            }, 1000);
-        }
+            this.emit("tick");
+        }, delay);
     }
 
     stop() {
