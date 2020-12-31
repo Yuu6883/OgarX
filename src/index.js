@@ -9,15 +9,14 @@ const engine = server.game.engine;
 
 engine.setOptions({
     VIRUS_COUNT: 20,
-    PLAYER_MAX_CELLS: 1024,
+    PLAYER_DECAY_SPEED: 0.005,
+    PLAYER_MAX_CELLS: 256,
     PLAYER_AUTOSPLIT_SIZE: 0,
-    PLAYER_SPLIT_CAP: 4,
+    PLAYER_SPLIT_CAP: 8,
     VIRUS_MONOTONE_POP: true,
-    EJECT_SIZE: 40,
-    EJECT_LOSS: 40,
-    EJECT_DELAY: 25,
+    EJECT_DELAY: 75,
     PELLET_COUNT: 1000,
-    PLAYER_SPAWN_SIZE: 1500
+    PLAYER_SPAWN_SIZE: 1000
 });
 
 process.on("SIGINT", async () => {
