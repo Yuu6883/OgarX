@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const CORE_PATH = path.resolve(__dirname, "..", "static", "wasm", "server.wasm");
+const CORE_PATH = path.resolve(__dirname, "..", "public", "static", "wasm", "server.wasm");
 
 const Server = require("./network/ws-server");
 
