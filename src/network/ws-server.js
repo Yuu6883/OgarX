@@ -1,4 +1,5 @@
 const uWS = require("uWebSockets.js");
+const path = require("path");
 
 const WebSocketHandler = require("./socket");
 const Game = require("../game");
@@ -24,7 +25,11 @@ module.exports = class SocketServer {
         if (this.listening || this.sock) return;
         this.listening = true;
         return new Promise(resolve => {
-            uWS.App().ws("/", {
+            uWS.App({
+                key_file_name: path.resolve(__dirname, "..", "..", "ssl", "key.pem"),
+                cert_file_name: path.resolve(__dirname, "..", "..", "ssl", "cert.pem"),
+                passphrase: "Ogar69"
+            }).ws("/", {
                 idleTimeout: 10,
                 maxBackpressure: 1024,
                 maxPayloadLength: 512,
