@@ -28,8 +28,10 @@ class SocketHandler extends Handler {
         try {
             if (!this.protocol) {
                 const Protocol = SocketHandler.protocols.find(p => p.handshake(view));
-                if (!Protocol) this.ws.end(1003, "Ambiguous protocol");
-                this.protocol = new Protocol(this);
+                if (!Protocol) {
+                    console.log("Message received: ", view.buffer);
+                    this.ws.end(1003, "Ambiguous protocol");
+                } else this.protocol = new Protocol(this);
             } else this.protocol.onMessage(view);
         } catch (e) {
             console.error(e);

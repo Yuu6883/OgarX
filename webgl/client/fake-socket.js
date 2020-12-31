@@ -11,7 +11,7 @@ module.exports = class FakeSocket {
             } else if (data.event === "error") {
                 this.onerror({ message: data.message });
             } else if (data.event === "close") {
-                this.onclose({ code: data.code, reason: data.message });
+                this.onclose({ code: data.code, reason: data.reason });
             } else if (data.event === "open") {
                 this.onopen();
             }
@@ -28,5 +28,7 @@ module.exports = class FakeSocket {
     close() {
         this.port.postMessage({ event: "close", code: 1001, message: "Client closed connection" });
         this.port.close();
+
+        this.readyState = WebSocket.CLOSED;
     }
 }

@@ -985,7 +985,13 @@ self.addEventListener("message", async function(e) {
     renderer.viewport.setBuffer(data.viewport);
     await renderer.initEngine();
 
-    self.addEventListener("message", e => renderer.protocol.connect(e.data || "ws://localhost:3000"));
+    self.addEventListener("message", e => {
+        const p = renderer.protocol;
+        if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000")
+        if (e.data.spawn) p.once("open", 
+            () => p.spawn(e.data.name, e.data.skin));
+    });
+
     self.postMessage("ready");
 }, { once: true });
 

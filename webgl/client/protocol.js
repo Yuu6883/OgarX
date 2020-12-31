@@ -1,10 +1,13 @@
+const { EventEmitter } = require("events");
 const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
 const FakeSocket = require("./fake-socket");
 
-module.exports = class Protocol {
+module.exports = class Protocol extends EventEmitter {
+    
     /** @param {import("./renderer")} renderer */
     constructor(renderer) {
+        super();
         this.pid = 0;
         this.bandwidth = 0;
         this.renderer = renderer;
@@ -22,6 +25,9 @@ module.exports = class Protocol {
         const state = this.renderer.state;
 
         this.mouseInterval = self.setInterval(() => {
+
+            if (!this.pid) return;
+
             const writer = new Writer();
             writer.writeUInt8(3);
             writer.writeFloat32(this.renderer.cursor.position[0]);
@@ -52,6 +58,7 @@ module.exports = class Protocol {
             writer.writeUInt8(69);
             writer.writeInt16(420);
             this.ws.send(writer.finalize());
+            this.emit("open");
         }
 
         /** @param {{ data: ArrayBuffer }} e */
@@ -67,8 +74,6 @@ module.exports = class Protocol {
                         height: 2 * reader.readUInt16()
                     };
                     console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
-                    const rando = this.renderer.randomPlayer();
-                    this.spawn(rando.name, rando.skin);
                     break;
                 case 2:
                     console.log("Clear map");
@@ -87,7 +92,10 @@ module.exports = class Protocol {
             }
         }
         this.ws.onerror = e => console.error(e);
-        this.ws.onclose = e => console.error(e.code, e.reason);
+        this.ws.onclose = e => {
+            this.emit("close");
+            console.error(e.code, e.reason);
+        }
     }
 
     send(data) {
