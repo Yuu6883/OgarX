@@ -134,6 +134,8 @@ unsigned int draw_cells(CellData data_begin[],
     RenderCell render_cells[], float lerp,
     float t, float b, float l, float r) {
 
+    lerp = lerp > 1 ? 1 : lerp < 0 ? 0 : lerp;
+
     CellData* begin = data_begin;
     while ((void*) begin < (void*) offset_table) {
         if (begin->type) {
