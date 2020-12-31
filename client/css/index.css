@@ -1,0 +1,69 @@
+body {
+    background-color: black;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    height: 100%;
+    margin: 0px;
+    overflow: hidden;
+}
+#canvas {
+    position: absolute;
+    top:  0px;
+    left: 0px;
+}
+#hud {
+    padding: 20px;
+    max-width: 1000px;
+    height: auto;
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: transparent;
+    text-align: center;
+    transition: opacity 0.25s linear;
+    z-index: 1;
+    background-color: #000000dd;
+}
+#skin {
+    width: 200px;
+    height: 200px;
+}
+input {
+    padding: 5px;
+    font-size: 20px;
+    background-color: transparent;
+    color: #eee;
+    outline: none;
+    border: none;
+    border-bottom: solid 3px rgba(255, 255, 255, 0.25);
+    transition: 0.2s linear;
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+}
+input:focus {
+    background-color: #22222277;
+    border-bottom: solid 3px #93a7e1;
+}
+button {
+    outline: none;
+    padding: 8px;
+    font-size: 20px;
+    background-color: transparent;
+    color: #eee;
+    border: solid 3px rgba(255, 255, 255, 0.25);
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+button:hover {
+    border: solid 3px #93a7e1;
+}
+.danger {
+    border: solid 3px #e19393!important;
+}
