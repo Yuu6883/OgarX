@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "node build.js",
-    "demo": "rm -rf ./demo/* && cp -r ./client/* ./demo/"
+    "demo": "rm -rf ./public/demo/* && cp -r ./public/client/* ./public/demo/"
   },
   "repository": {
     "type": "git",

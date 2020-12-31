@@ -25,11 +25,7 @@ module.exports = class SocketServer {
         if (this.listening || this.sock) return;
         this.listening = true;
         return new Promise(resolve => {
-            uWS.App({
-                key_file_name: path.resolve(__dirname, "..", "..", "ssl", "key.pem"),
-                cert_file_name: path.resolve(__dirname, "..", "..", "ssl", "cert.pem"),
-                passphrase: "Ogar69"
-            }).ws("/", {
+            uWS.App().ws("/", {
                 idleTimeout: 10,
                 maxBackpressure: 1024,
                 maxPayloadLength: 512,
