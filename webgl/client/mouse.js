@@ -3,7 +3,12 @@ module.exports = class Mouse {
         this.setBuffer();
     }
 
-    setBuffer(buf = new SharedArrayBuffer(12)) {
+    setBuffer(buf) {
+        if (!buf) {
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(12);
+            else buf = new ArrayBuffer(12);
+        }
+
         this.sharedBuffer = buf;
         this.buffer = new Int32Array(this.sharedBuffer);
     }

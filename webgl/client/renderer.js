@@ -1,6 +1,7 @@
-importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");
+if (self.importScripts) {
+    importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");    
+}
 
-// const { mat4, vec3 } = require("gl-matrix");
 const Cell = require("./cell");
 const Mouse = require("./mouse");
 const State = require("./state");
@@ -45,10 +46,6 @@ class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
 
-        this.cursor = { position: vec3.create() };
-        this.target = { position: vec3.create(), scale: 10 };
-        this.camera = { position: vec3.create(), scale: 10 };
-
         /** @type {Map<string, WebGLFramebuffer|WebGLFramebuffer[]>} */
         this.fbo = new Map();
         /** @type {Map<string, WebGLFramebuffer>} */
@@ -66,8 +63,6 @@ class Renderer {
         this.state = new State();
         this.viewport = new Viewport();
         this.core = new WasmCore(this);
-
-        this.proj = mat4.create();
         this.viewbox = { t: 0, b: 0, l: 0, r: 0 };
 
         this.initLoader();
@@ -104,7 +99,7 @@ class Renderer {
     }
 
     initLoader() {
-        this.loader = new Worker("loader.min.js");
+        this.loader = new Worker(self.window ? "js/loader.min.js" : "loader.min.js");
         /** @param {{ data: { id: number, skin: ImageBitmap, name: ImageBitmap }}} e */
         this.loader.onmessage = e => this.updates.set(e.data.id, [e.data.skin, e.data.name]);
     }
@@ -135,11 +130,24 @@ class Renderer {
 
         console.log("Loading font");
         let font = new FontFace("Bree Serif", "url(/static/font/BreeSerif-Regular.ttf)");
-        fonts.add(font);
+        self.fonts && fonts.add(font);
         await font.load();
-        font = new FontFace("Bree Serif", "url(/static/font/Lato-Bold.ttf)");
-        fonts.add(font);
+        font = new FontFace("Lato", "url(/static/font/Lato-Bold.ttf)");
+        self.fonts && fonts.add(font);
         await font.load();
+
+        if (!self.mat4) {
+            console.log("Loading glMatrix library");
+            const glMatrixScript = document.createElement("script");
+            glMatrixScript.src = "https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js";
+            document.body.appendChild(glMatrixScript);
+            await new Promise(resolve => glMatrixScript.onload = resolve);
+        }
+        
+        this.cursor = { position: vec3.create() };
+        this.target = { position: vec3.create(), scale: 10 };
+        this.camera = { position: vec3.create(), scale: 10 };
+        this.proj = mat4.create();
         
         console.log("Loading bot skins & names");
         const res = await fetch("/static/data/bots.json");
@@ -490,8 +498,9 @@ class Renderer {
         {
             const CIRCLE_RADIUS = 2048;
             const MARGIN = 10;
-            console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS * 2} circle texture`);
-            const temp = new OffscreenCanvas(CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2);
+            console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS << 1} circle texture`);
+            const temp = self.window ? document.createElement("canvas") : new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
+            if (self.window) temp.width = temp.height = CIRCLE_RADIUS << 1;
             const temp_ctx = temp.getContext("2d");
             temp_ctx.fillStyle = "white";
             temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS - MARGIN, 0, 2 * Math.PI, false);
@@ -532,7 +541,12 @@ class Renderer {
                 null
             );
 
-            const temp = new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
+            const temp = self.window ? document.createElement("canvas") : new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
+            if (self.window) {
+                temp.width = MASS_FONT_WIDTH;
+                temp.height = MASS_FONT_HEIGHT;
+            }
+            
             const temp_ctx = temp.getContext("2d");
 
             temp_ctx.font = "bold 280px Lato";
@@ -890,9 +904,13 @@ class Renderer {
         }
     }
 
+    /**
+     * @param {WebGLTexture} texture 
+     * @param {ImageBitmap} bitmap 
+     */
     uploadTexture(texture, bitmap) {
         const gl = this.gl;
-        if (!bitmap) return;
+        if (!bitmap) return gl.deleteTexture(texture);
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
@@ -907,9 +925,10 @@ class Renderer {
     /** @param {ImageBitmap} skin_bitmap @param {ImageBitmap} name_bitmap */
     uploadPlayerTextures(id = 0, skin_bitmap, name_bitmap) {
         const gl = this.gl;
-        const textures = this.players.has(id) ? this.players.get(id) : 
-            { skin: skin_bitmap && gl.createTexture(), 
-              name: name_bitmap && gl.createTexture() };
+        const textures = this.players.has(id) ? this.players.get(id) : {}; 
+            
+        textures.skin = textures.skin || (skin_bitmap && gl.createTexture());
+        textures.name = textures.name || (name_bitmap && gl.createTexture());
 
         if (name_bitmap) textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
 
@@ -977,22 +996,24 @@ class Renderer {
     }
 }
 
-self.addEventListener("message", async function(e) {
-    const { data } = e;
-    const renderer = self.r = new Renderer(data.offscreen);
-    renderer.mouse.setBuffer(data.mouse);
-    renderer.state.setBuffer(data.state);
-    renderer.viewport.setBuffer(data.viewport);
-    await renderer.initEngine();
-
-    self.addEventListener("message", e => {
-        const p = renderer.protocol;
-        if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000")
-        if (e.data.spawn) p.once("open", 
-            () => p.spawn(e.data.name, e.data.skin));
-    });
-
-    self.postMessage("ready");
-}, { once: true });
+if (!self.window) {
+    self.addEventListener("message", async function(e) {
+        const { data } = e;
+        const renderer = self.r = new Renderer(data.offscreen);
+        renderer.mouse.setBuffer(data.mouse);
+        renderer.state.setBuffer(data.state);
+        renderer.viewport.setBuffer(data.viewport);
+        await renderer.initEngine();
+    
+        self.addEventListener("message", e => {
+            const p = renderer.protocol;
+            if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000")
+            if (e.data.spawn) p.once("open", 
+                () => p.spawn(e.data.name, e.data.skin));
+        });
+    
+        self.postMessage("ready");
+    }, { once: true });
+} else self.Renderer = Renderer;
 
 module.exports = Renderer;

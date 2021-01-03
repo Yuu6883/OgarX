@@ -5,7 +5,7 @@ const Viewport = require("./viewport");
 module.exports = class HUD {
 
     constructor() {
-        this.worker = new Worker("js/renderer.min.js");
+
         this.canvas = document.getElementById("canvas");
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
@@ -14,29 +14,51 @@ module.exports = class HUD {
         this.mouse = new Mouse();
         this.state = new State();
         this.viewport = new Viewport();
+        
+        if (navigator.userAgent.includes("Chrome")) {
 
-        const offscreen = canvas.transferControlToOffscreen();
-        const initObject = { 
-            offscreen, 
-            mouse: this.mouse.sharedBuffer, 
-            state: this.state.sharedBuffer,
-            viewport: this.viewport.sharedBuffer 
-        };
+            this.worker = new Worker("js/renderer.min.js");
+            const offscreen = canvas.transferControlToOffscreen();
+            const initObject = { 
+                offscreen, 
+                mouse: this.mouse.sharedBuffer, 
+                state: this.state.sharedBuffer,
+                viewport: this.viewport.sharedBuffer 
+            };
+    
+            this.worker.postMessage(initObject, [offscreen]);
+            this.worker.onmessage = e => {
+                if (e.data === "ready") this.ready = true;
+            }
 
-        this.worker.postMessage(initObject, [offscreen]);
-        this.worker.onmessage = e => {
-            if (e.data === "ready") this.ready = true;
+            this.registerEvents();
+            this.resize();
+            this.initUIComponents();
+        } else if (navigator.userAgent.includes("Firefox")) {
+            fetch("js/renderer.min.js")
+                .then(res => res.text())
+                .then(code => {
+                    eval(code);
+
+                    /** @type {import("./renderer")} */
+                    this.renderer = new Renderer(this.canvas);
+                    this.renderer.mouse = this.mouse;
+                    this.renderer.state = this.state;
+                    this.renderer.viewport = this.viewport;
+                })
+                .then(() => this.renderer.initEngine())
+                .then(() => {
+                    this.registerEvents();
+                    this.resize();
+                    this.initUIComponents();
+                });
         }
-
-        this.registerEvents();
-        this.resize();
-        this.initUIComponents();
     }
 
     show() {
         this.showing = true;
         this.hudElem.style.opacity = 1;
-        setTimeout(() => this.hudElem.style.zIndex = 1, 250);
+        this.hudElem.style.zIndex = 1;
     }
 
     hide() {
@@ -50,7 +72,6 @@ module.exports = class HUD {
     }
 
     resize() {
-        console.log("RESIZING");
         this.viewport.width  = window.devicePixelRatio * window.innerWidth;
         this.viewport.height = window.devicePixelRatio * window.innerHeight;
         this.canvas.style.width = window.innerWidth;
@@ -58,7 +79,7 @@ module.exports = class HUD {
     }
 
     registerEvents() {
-        window.onresize = () => this.resize.bind(this);
+        window.onresize = this.resize.bind(this);
 
         /** @type {Set<string>} */
         this.pressing = new Set();
@@ -121,15 +142,29 @@ module.exports = class HUD {
 
     spawn() {
         this.server == "local" ? this.connectToLocal() : this.connectToURL(this.server);
-        this.worker.postMessage({ spawn: true, name: this.name, skin: this.skin });
+        
+        if (this.worker) {
+            this.worker.postMessage({ spawn: true, name: this.name, skin: this.skin });
+        } else {
+            const p = this.renderer.protocol;
+            p.once("open", () => p.spawn(this.name, this.skin));
+        }
     }
 
     connectToLocal() {
         const sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
-        this.worker.postMessage({ connect: sw.port }, [sw.port]);
+        if (this.worker) {
+            this.worker.postMessage({ connect: sw.port }, [sw.port]);
+        } else {
+            this.renderer.protocol.connect(sw.port);
+        }
     }
 
     connectToURL(url) {
-        this.worker.postMessage({ connect: url });
+        if (this.worker) {
+            this.worker.postMessage({ connect: url });
+        } else {
+            this.renderer.protocol.connect(url);
+        }
     }
 }

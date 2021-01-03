@@ -3,7 +3,12 @@ module.exports = class Viewport {
         this.setBuffer();
     }
 
-    setBuffer(buf = new SharedArrayBuffer(8)) {
+    setBuffer(buf) {
+        if (!buf) {
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(8);
+            else buf = new ArrayBuffer(8);
+        }
+
         this.sharedBuffer = buf;
         this.buffer = new Int32Array(this.sharedBuffer);
     }

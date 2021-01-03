@@ -221,12 +221,14 @@ module.exports = class Engine {
             }
 
             // Eject
-            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY && (controller.ejectAttempts-- > 0 || controller.ejectMarco)) {
-                
+            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY && (controller.ejectAttempts > 0 || controller.ejectMarco)) {
+                controller.ejectAttempts--;
+
                 const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
+                    if (cell.age < this.options.PLAYER_NO_COLLI_DELAY) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);

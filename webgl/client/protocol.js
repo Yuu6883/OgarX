@@ -118,7 +118,10 @@ module.exports = class Protocol extends EventEmitter {
     }
 
     disconnect() {
-        if (this.ws) this.ws.close();
+        if (!this.ws) return;
+
+        console.log("Disconnecting on client");
+        this.ws.close();
         this.ws = null;
     }
 

@@ -3,7 +3,12 @@ module.exports = class State {
         this.setBuffer();
     }
 
-    setBuffer(buf = new SharedArrayBuffer(6)) {
+    setBuffer(buf) {
+        if (!buf) {
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(6);
+            else buf = new ArrayBuffer(6);
+        }
+
         this.sharedBuffer = buf;
         this.buffer = new Uint8Array(this.sharedBuffer);
     }
