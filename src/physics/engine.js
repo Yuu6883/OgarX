@@ -228,7 +228,7 @@ module.exports = class Engine {
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
-                    if (cell.age < this.options.PLAYER_NO_COLLI_DELAY) continue;
+                    if (cell.age < this.options.PLAYER_NO_COLLI_DELAY - 5) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);

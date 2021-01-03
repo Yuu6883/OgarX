@@ -18,7 +18,7 @@ module.exports = class HUD {
         if (navigator.userAgent.includes("Chrome")) {
 
             this.worker = new Worker("js/renderer.min.js");
-            const offscreen = canvas.transferControlToOffscreen();
+            const offscreen = this.canvas.transferControlToOffscreen();
             const initObject = { 
                 offscreen, 
                 mouse: this.mouse.sharedBuffer, 

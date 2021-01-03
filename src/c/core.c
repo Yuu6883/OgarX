@@ -294,17 +294,14 @@ void resolve(Cell* cells,
                     float b = r2 * r2;
                     float aM = b / (a + b);
                     float bM = a / (a + b);
-                    cell->x -= dx * (m < r1 ? m : r1) * aM;
-                    cell->y -= dy * (m < r1 ? m : r1) * aM;
-                    other->x += dx * (m < r2 ? m : r2) * bM;
-                    other->y += dy * (m < r2 ? m : r2) * bM;
+                    cell->x -= dx * (m < r1 ? m : r1) * aM; // * 0.8f;
+                    cell->y -= dy * (m < r1 ? m : r1) * aM; // * 0.8f;
+                    other->x += dx * (m < r2 ? m : r2) * bM; // * 0.8f;
+                    other->y += dy * (m < r2 ? m : r2) * bM; // * 0.8f;
                     // Mark the cell as updated
                     cell->flags |= UPDATE_BIT;
                     other->flags |= UPDATE_BIT;
 
-                    dx = other->x - cell->x;
-                    dy = other->y - cell->y;
-                    d = sqrtf(dx * dx + dy * dy);
                 } else if (action == PHYSICS_EAT) {
                     if ((cell->type == other->type || 
                          cell->r > other->r * eatMulti) && 
@@ -317,10 +314,10 @@ void resolve(Cell* cells,
                         }
                         other->flags |= REMOVE_BIT;
                         if (IS_PLAYER(cell->type) && IS_EJECTED(other->type)) {
-                            float ratio = other->r * other->r / cell->r / cell->r;
-                            cell->boost  += ratio / 10 * other->boost;
-                            float bx = cell->boostX + ratio / 10 * other->boostX;
-                            float by = cell->boostY + ratio / 10 * other->boostY;
+                            float ratio = other->r / (cell->r + 100.f);
+                            cell->boost += ratio * 0.02f * other->boost;
+                            float bx = cell->boostX + ratio * 0.02f * other->boostX;
+                            float by = cell->boostY + ratio * 0.02f * other->boostY;
                             float norm = sqrt(bx * bx + by * by);
                             cell->boostX = bx / norm;
                             cell->boostY = by / norm;
