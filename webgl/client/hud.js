@@ -149,22 +149,23 @@ module.exports = class HUD {
                 if (message) {
                     this.sendChat(message);
                     this.chatInput.value = "";
-                } else {
-                    this.hide(this.chatInput);
-                    this.canvas.focus();
                 }
+                this.hide(this.chatInput);
+                this.canvas.focus();
             }
         });
         this.chatElem.addEventListener("focus", () => {
             this.chatElem.blur();
             this.canvas.focus();
         });
-        this.chatElem.addEventListener("wheel", e => e.stopPropagation());
+        this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
         this.serverInput.value = localStorage.getItem("ogarx_server") || "local";
         this.nameInput.value = localStorage.getItem("ogarx_name") || "";
         this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
         updateSkin(true);
+
+        this.chatInput.addEventListener("blur", () => this.hide(this.chatInput));
     }
 
     sendChat(chat) {

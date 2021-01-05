@@ -265,7 +265,7 @@ module.exports = class Engine {
             //     controller.viewportHH = 1080 / 2;
             //     continue;
             // }
-            
+
             if (this.counters[id].size) {
                 // Update viewport
                 let size = 0, size_x = 0, size_y = 0;
@@ -375,17 +375,19 @@ module.exports = class Engine {
             }
         }
 
+        this.sortIndices(false);
+
         // Boost cells, reset flags, increment age
-        this.wasm.update(0, this.treePtr, dt);
+        this.wasm.update(0, this.indicesPtr, dt);
 
         // Decay player cells
-        this.wasm.decay_and_auto(0, this.treePtr, dt,
+        this.wasm.decay_and_auto(0, this.indicesPtr, dt,
             this.options.PLAYER_AUTOSPLIT_SIZE,
             this.options.PLAYER_DECAY_SPEED,
             this.options.PLAYER_DECAY_MIN_SIZE);
             
         // Bound & bounce cells
-        this.wasm.edge_check(0, this.treePtr,
+        this.wasm.edge_check(0, this.indicesPtr,
             -this.options.MAP_HW, this.options.MAP_HW,
             -this.options.MAP_HH, this.options.MAP_HH);
         
@@ -574,22 +576,20 @@ module.exports = class Engine {
         return this.randomPoint(size);
     }
 
-    sortIndices() {
+    // Sort all the cell indices according to their size (to make solotrick work)
+    sortIndices(sort = true) {
         let offset = 0;
         for (let type = 0; type < this.counters.length; type++) {
             // No need to resolve pellet since they don't collide with or eat other cells
             if (type == PELLET_TYPE) continue;
             // No need to sort none player cells
-            if (type > 250) {
-                for (const cell_id of this.counters[type]) {
-                    this.resolveIndices.setUint16(offset, cell_id, true);
-                    offset += 2;
-                }
-            } else {
-                [...this.counters[type]].sort((a, b) => this.cells[b].r - this.cells[a].r).forEach(id => {
-                    this.resolveIndices.setUint16(offset, id, true);
-                    offset += 2;
-                });
+
+            const iter = (type > 250 || !sort) ? this.counters[type] : 
+            [...this.counters[type]].sort((a, b) => this.cells[b].r - this.cells[a].r);
+            
+            for (const cell_id of iter) {
+                this.resolveIndices.setUint16(offset, cell_id, true);
+                offset += 2;
             }
         }
         this.treePtr = this.indicesPtr + offset;

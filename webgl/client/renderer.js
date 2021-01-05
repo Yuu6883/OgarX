@@ -71,6 +71,13 @@ class Renderer {
         this.drawCells = this.drawCells.bind(this);
         this.drawNames = this.drawNames.bind(this);
         this.drawMass  = this.drawMass.bind(this);
+
+        this.options = {
+            DRAW_DELAY: 120,
+            DRAW_NAME: true,
+            DRAW_MASS: true,
+            DRAW_SKIN: true,
+        }
     }
 
     start() {
@@ -274,12 +281,13 @@ class Renderer {
     }
 
     clearData() {
-        this.playerData.clear();
-        for (const [_, v] of this.playerTextures) {
+        this.playerData.clear(); // eh no need to worry about none-player cells
+        for (const [id, v] of this.playerTextures.entries()) {
+            if (id > 250) break;
             if (v.name) this.gl.deleteTexture(v.name);
             if (v.skin) this.gl.deleteTexture(v.skin);
+            this.playerTextures.delete(id);
         }
-        this.playerTextures.clear();
     }
 
     randomPlayer() {
@@ -664,6 +672,10 @@ class Renderer {
         gl.bindVertexArray(this.quadVAO);
         gl.activeTexture(gl.TEXTURE11);
 
+        if (!this.options.DRAW_SKIN) {
+            gl.bindTexture(gl.TEXTURE_2D, this.empty_texture);
+        }
+
         for (let i = 1; i < CELL_TYPES; i++) {
             let begin = this.cellTypesTable[i - 1];
             let end   = this.cellTypesTable[i];
@@ -684,7 +696,9 @@ class Renderer {
 
             const textures = this.playerTextures.get(i) || {};
             
-            gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
+            if (this.options.DRAW_SKIN) {
+                gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);    
+            }
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
@@ -814,7 +828,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / 120 : 0;
+        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / this.options.DRAW_DELAY : 0;
 
         const cell_count = this.core.instance.exports.draw_cells(0, 
             this.cellTypesTableOffset, 
@@ -839,7 +853,7 @@ class Renderer {
         //         }
         //     }
         // }
-        this.lerpCamera(delta / 120, position);
+        this.lerpCamera(delta / this.options.DRAW_DELAY, position);
         this.checkViewport();
 
         if (!this.state.focused) {
@@ -857,7 +871,7 @@ class Renderer {
         const funcs = [this.drawCells];
 
         // Configurable if we want to draw mass
-        if (true) {
+        if (this.options.DRAW_MASS || this.options.DRAW_NAME) {
             text_count = this.core.instance.exports.draw_text(0,
                 this.cellTypesTableOffset, // end of cell buffer
                 this.cellBufferEnd,  // table offset
@@ -866,11 +880,16 @@ class Renderer {
                 NAME_MASS_MIN,
                 this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
 
-            progs.push(this.peel_prog2);
-            funcs.push(this.drawNames);
-            this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
-            progs.push(this.peel_prog3);
-            funcs.push(this.drawMass);
+            if (this.options.DRAW_NAME) {
+                progs.push(this.peel_prog2);
+                funcs.push(this.drawNames);
+            }
+
+            if (this.options.DRAW_MASS) {
+                this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
+                progs.push(this.peel_prog3);
+                funcs.push(this.drawMass);
+            }
         }
 
         offsetBack = this.depthPeelRender(NUM_PASS, progs, funcs);
@@ -894,11 +913,10 @@ class Renderer {
         // gl.clearColor(0, 0, 0, 1);
         // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         // gl.useProgram(fxaaProg);
-
         // gl.bindVertexArray(vao);
         // gl.drawArrays(gl.TRIANGLES, 0, 6);
         // this.stop();
-        // setTimeout(() => this.stop(), 3000);
+        
         this.updateTextures();
     }
 
@@ -936,7 +954,7 @@ class Renderer {
     /** @param {ImageBitmap} skin_bitmap @param {ImageBitmap} name_bitmap */
     uploadPlayerTextures(id = 0, skin_bitmap, name_bitmap) {
         const gl = this.gl;
-        const textures = this.playerTextures.has(id) ? this.playerTextures.get(id) : {}; 
+        const textures = this.playerTextures.get(id) || {}; 
             
         if (textures.skin) gl.deleteTexture(textures.skin);
         if (textures.name) gl.deleteTexture(textures.name);
