@@ -38,7 +38,7 @@ onmessage = async evt => {
     }
 
     try {
-        if (!/https?:\/\//.test(data.skin) || data.skin != "/static/img/virus.png") throw new Error("Invalid skin");
+        if (!/https?:\/\//.test(data.skin) && data.skin != "/static/img/virus.png") throw new Error("Invalid skin");
         const res = await fetch(data.skin);
         const blob = await res.blob();
         const skin_bitmap = await createImageBitmap(blob, {
