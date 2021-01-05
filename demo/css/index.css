@@ -28,9 +28,31 @@ body {
     z-index: 1;
     background-color: #000000dd;
 }
+#chat {
+    overflow-y: scroll;
+    background-color: #0000007a;
+    color: #eee;
+    position: absolute;
+    bottom: 0px;
+    left: 0px;
+    width: 30vw;
+    height: 40vh;
+    z-index: 1;
+}
+#chat p {
+    margin: 4px;
+}
 #skin {
     width: 200px;
     height: 200px;
+}
+#chat-input {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    z-index: 1;
 }
 input {
     padding: 5px;
@@ -66,4 +88,16 @@ button:hover {
 }
 .danger {
     border: solid 3px #e19393!important;
+}
+::-webkit-scrollbar {
+    width: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #00000055; 
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(136, 136, 136, 0.5); 
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(238, 238, 238, 0.8); 
 }
