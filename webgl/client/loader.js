@@ -34,10 +34,11 @@ onmessage = async evt => {
             name_bitmap = name_canvas.transferToImageBitmap();
         }
     } catch (e) {
-        name_bitmap = data.name;
+        console.error(data, e);
     }
 
     try {
+        if (!/https?:\/\//.test(data.skin)) throw new Error("Invalid skin");
         const res = await fetch(data.skin);
         const blob = await res.blob();
         const skin_bitmap = await createImageBitmap(blob, {
@@ -48,8 +49,8 @@ onmessage = async evt => {
         });
         postMessage({ id: data.id, skin: skin_bitmap, name: name_bitmap }, 
             name_bitmap ? [skin_bitmap, name_bitmap] : [skin_bitmap]);    
-    } catch {
-        name_bitmap ? postMessage({ id: data.id, skin: null, name: name_bitmap }) :
-            postMessage({ id: data.id, skin: null, name: null });    
+    } catch (e) {
+        console.log(`Failed to load skin: "${data.skin}" (pid: ${data.id})`);
+        postMessage({ id: data.id, skin: null, name: name_bitmap });
     }
 };

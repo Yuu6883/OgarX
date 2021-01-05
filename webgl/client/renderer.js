@@ -53,8 +53,9 @@ class Renderer {
         /** @type {Map<WebGLProgram, Map<string, WebGLUniformLocation>} */
         this.uniforms = new Map();
 
-        /** @type {Map<number, { skin: WebGLTexture, name: WebGLTexture, name_dim: [width: number, height: number] }>} player data */
-        this.players = new Map();
+        /** @type {Map<number, { skin: WebGLTexture, name: WebGLTexture, name_dim: [width: number, height: number] }>} player textures */
+        this.playerTextures = new Map();
+        this.playerData = new Map([[0, { name: "Server", skin: "" }]]);
 
         /** @type {Map<number, [ImageBitmap, ImageBitmap]>} */
         this.updates = new Map();
@@ -96,6 +97,7 @@ class Renderer {
     /** @param {{ id: number, skin: string, name: string }} data */
     loadPlayerData(data) {
         this.loader.postMessage(data);
+        this.playerData.set(data.id, { skin: data.skin, name: data.name });
     }
 
     initLoader() {
@@ -269,6 +271,15 @@ class Renderer {
     clearCells() {
         this.core.HEAPU32.fill(0);
         this.massBuffer.fill(0);
+    }
+
+    clearData() {
+        this.playerData.clear();
+        for (const [_, v] of this.playerTextures) {
+            if (v.name) this.gl.deleteTexture(v.name);
+            if (v.skin) this.gl.deleteTexture(v.skin);
+        }
+        this.playerTextures.clear();
     }
 
     randomPlayer() {
@@ -671,7 +682,7 @@ class Renderer {
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
             }
 
-            const textures = this.players.get(i) || {};
+            const textures = this.playerTextures.get(i) || {};
             
             gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
 
@@ -691,13 +702,13 @@ class Renderer {
 
         for (let i = 1; i < CELL_TYPES; i++) {
 
-            if (!this.players.has(i)) continue;
+            if (!this.playerTextures.has(i)) continue;
             let begin = this.nameTypesTable[i - 1];
             let end   = this.nameTypesTable[i];
             if (begin == end) continue;
             if (!end) end = 65536;
 
-            const textures = this.players.get(i);
+            const textures = this.playerTextures.get(i);
             if (!textures.name || !textures.name_dim) continue;
 
             const begin_offset = this.nameBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
@@ -910,7 +921,7 @@ class Renderer {
      */
     uploadTexture(texture, bitmap) {
         const gl = this.gl;
-        if (!bitmap) return gl.deleteTexture(texture);
+        if (!bitmap) return;
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
@@ -925,16 +936,19 @@ class Renderer {
     /** @param {ImageBitmap} skin_bitmap @param {ImageBitmap} name_bitmap */
     uploadPlayerTextures(id = 0, skin_bitmap, name_bitmap) {
         const gl = this.gl;
-        const textures = this.players.has(id) ? this.players.get(id) : {}; 
+        const textures = this.playerTextures.has(id) ? this.playerTextures.get(id) : {}; 
             
-        textures.skin = textures.skin || (skin_bitmap && gl.createTexture());
-        textures.name = textures.name || (name_bitmap && gl.createTexture());
+        if (textures.skin) gl.deleteTexture(textures.skin);
+        if (textures.name) gl.deleteTexture(textures.name);
+
+        textures.skin = gl.createTexture();
+        textures.name = gl.createTexture();
 
         if (name_bitmap) textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
 
         this.uploadTexture(textures.skin, skin_bitmap);
         this.uploadTexture(textures.name, name_bitmap);
-        this.players.set(id, textures);
+        this.playerTextures.set(id, textures);
     }
 
     /**  @param {WebGLProgram[]} progs @param {(() => void)[]} funcs */
@@ -1010,9 +1024,10 @@ if (!self.window) {
             if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000")
             if (e.data.spawn) p.once("open", 
                 () => p.spawn(e.data.name, e.data.skin));
+            if (e.data.chat) p.sendChat(e.data.chat);
         });
     
-        self.postMessage("ready");
+        self.postMessage({ event: "ready" });
     }, { once: true });
 } else self.Renderer = Renderer;
 

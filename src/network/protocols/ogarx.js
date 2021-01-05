@@ -8,7 +8,7 @@ const VIRUS_TYPE = 253;
 const PELLET_TYPE = 254;
 const EJECTED_TYPE = 255;
 
-/** @extends {Protocol<import("../socket")>} */
+/** @extends {Protocol<import("../socket")<import("uWebSockets.js").WebSocket & import("../fake-socket")>>} */
 module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {DataView} view */
@@ -29,6 +29,10 @@ module.exports = class OgarXProtocol extends Protocol {
 
         this.handler.join();
         this.sendInitPacket();
+
+        for (const c of this.handler.game.controls) {
+            if (c.handle) this.onSpawn(c);
+        }
     }
 
     sendInitPacket() {
@@ -66,6 +70,10 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.splitAttempts += splits;
                 controller.ejectAttempts += ejects;
                 controller.ejectMarco = Boolean(macro);
+                break;
+            case 10:
+                const message = reader.readUTF16String();
+                this.handler.game.chat.broadcast(this.handler.controller, message);
                 break;
             case 69:
                 const PONG = new ArrayBuffer(1);
@@ -159,19 +167,19 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onSpawn(controller) {
-        if (this.handler.controller == controller) {
-            const CLEAR_SCREEN = new ArrayBuffer(1);
-            new Uint8Array(CLEAR_SCREEN)[0] = 2;
-            this.handler.ws.send(CLEAR_SCREEN, true);
-            this.lastVisible.clear();
-        }
-
         const writer = new Writer();
         writer.writeUInt8(3);
         writer.writeUInt16(controller.id);
         writer.writeUTF16String(controller.name);
         writer.writeUTF16String(controller.skin);
         this.handler.ws.send(writer.finalize(), true);
+        
+        if (this.handler.controller == controller) {
+            const CLEAR_SCREEN = new ArrayBuffer(1);
+            new Uint8Array(CLEAR_SCREEN)[0] = 2;
+            this.handler.ws.send(CLEAR_SCREEN, true);
+            this.lastVisible.clear();
+        }
     };
 
     /** 
@@ -179,7 +187,15 @@ module.exports = class OgarXProtocol extends Protocol {
      * @param {string} message
      */
     onChat(controller, message) {
+        // Igore own chat
+        if (controller == this.handler.controller) return;
 
+        const writer = new Writer();
+        writer.writeUInt8(10);
+        writer.writeUInt16(controller.id);
+        writer.writeUTF16String(message);
+
+        this.handler.ws.send(writer.finalize(), true);
     }
 
     onDisconnect(code, reason) {

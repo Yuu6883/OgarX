@@ -1,9 +1,7 @@
 const uWS = require("uWebSockets.js");
-const path = require("path");
 
 const WebSocketHandler = require("./socket");
 const Game = require("../game");
-const Chat = require("./chat");
 
 /** @param {ArrayBuffer} buffer */
 const bufferToString = buffer => {
@@ -47,7 +45,6 @@ module.exports = class SocketServer {
             }).listen("0.0.0.0", 3000, sock => {
                 this.listening = false;
                 this.sock = sock;
-                this.game.chat = new Chat(this.game);
                 console.log(`Server opened on port ${3000}`);
                 resolve(true);
             });

@@ -2,7 +2,6 @@ const FakeSocketHandler = require("./socket");
 const FakeSocket = require("./fake-socket");
 const WebConsoleProtocol = require("./protocols/web-console");
 
-const Chat = require("./chat");
 const Game = require("../game");
 
 // Register console protocol
@@ -43,7 +42,6 @@ module.exports = class SharedWorkerServer {
                 ws.sock.onDisconnect(code, reason);
             }
         }
-        this.game.chat = new Chat(this.game);
 
         // Mimic uWS idleTimeout behavior
         setInterval(() => {

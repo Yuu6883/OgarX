@@ -2,9 +2,10 @@
 module.exports = class Controller {
     constructor(id = 0) {
         this.id = id;
-        this.name = "";
-        this.skin = "";
+        this.__name = "";
+        this.__skin = "";
         this.spawn = false;
+        this.updated = false;
         this.alive = false;
         this.spectate = null;
         this.mouseX = 0;
@@ -24,7 +25,28 @@ module.exports = class Controller {
         this.handle = null;
     }
 
+    get name() { return this.__name; }
+    get skin() { return this.__skin; }
+
+    set name(v) {
+        if (v != this.__name) {
+            this.__name = v;
+            this.updated = true;
+        }
+    }
+
+    set skin(v) {
+        if (v != this.__skin) {
+            this.__skin = v;
+            this.updated = true;
+        }
+    }
+
     reset() {
+        this.__name = "";
+        this.__skin = "";
+        this.updated = false;
+        
         this.handle = null;
         this.alive = false;
         this.spectate = null;

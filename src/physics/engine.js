@@ -6,6 +6,7 @@ if (typeof performance == "undefined") {
 const Cell = require("./cell");
 const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
+const Bot = require("../bot");
 
 const DefaultSettings = {
     TPS: 25,
@@ -13,8 +14,8 @@ const DefaultSettings = {
     CELL_LIMIT: 65536,
     QUADTREE_MAX_ITEMS: 16,
     QUADTREE_MAX_LEVEL: 16,
-    MAP_HW: 32767 >> 2, // MAX signed short
-    MAP_HH: 32767 >> 2, // MAX signed short,
+    MAP_HW: 32767, // MAX signed short
+    MAP_HH: 32767, // MAX signed short,
     SAFE_SPAWN_TRIES: 64,
     SAFE_SPAWN_RADIUS: 1.5,
     PELLET_COUNT: 1000,
@@ -28,7 +29,7 @@ const DefaultSettings = {
     MOTHER_CELL_SIZE: 149,
     PLAYER_SPEED: 1,
     PLAYER_SPAWN_DELAY: 3000,
-    PLAYER_DECAY_SPEED: 0.001,
+    PLAYER_DECAY_SPEED: 0.01,
     PLAYER_DECAY_MIN_SIZE: 1000,
     PLAYER_AUTOSPLIT_SIZE: 1500,
     PLAYER_MAX_CELLS: 16,
@@ -45,6 +46,7 @@ const DefaultSettings = {
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_VIEW_SCALE: 1,
     PLAYER_DEAD_DELAY: 5,
+    BOTS: 1,
     EJECT_DISPERSION: 0.3,
     EJECT_SIZE: 38,
     EJECT_LOSS: 43,
@@ -143,6 +145,12 @@ module.exports = class Engine {
         if (this.updateInterval) return;
         this.__ltick = performance.now();
 
+        /** @type {Bot[]} */
+        this.bots = [];
+
+        for (let i = 0; i < this.options.BOTS; i++)
+            this.bots.push(new Bot(this.game));
+
         const delay = 1000 / this.options.TPS;
         this.updateInterval = setInterval(() => {
             const now = performance.now();
@@ -165,14 +173,17 @@ module.exports = class Engine {
 
     tick(dt = 1) {
 
-        // Skip first time
-        if (this.treePtr) {
-            // Loop through clients
-            for (const id in this.game.controls) {
-                const controller = this.game.controls[id];
-                if (!controller.handle) continue;
-                controller.handle.onUpdate();
-            }
+        // No need to reserve space for indices now since we are only going to query it
+        this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
+        // Serialize again so client can select/query viewport
+        this.serialize();
+
+        // Loop through clients
+        for (const id in this.game.controls) {
+            const controller = this.game.controls[id];
+            if (!controller.handle) continue;
+            controller.handle.onUpdate();
         }
 
         // Spawn "some" new cells
@@ -228,7 +239,7 @@ module.exports = class Engine {
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
-                    if (cell.age < this.options.PLAYER_NO_COLLI_DELAY - 5) continue;
+                    if (cell.age < this.options.PLAYER_NO_COLLI_DELAY - 8) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);
@@ -247,57 +258,60 @@ module.exports = class Engine {
             }
 
             // Idle spectate
-            if (!this.counters[id].size && !controller.spawn) {
-                controller.viewportX = 0;
-                controller.viewportY = 0;
-                controller.viewportHW = 1920 / 2;
-                controller.viewportHH = 1080 / 2;
-                continue;
-            }
+            // if (!this.counters[id].size && !controller.spawn) {
+            //     controller.viewportX = 0;
+            //     controller.viewportY = 0;
+            //     controller.viewportHW = 1920 / 2;
+            //     controller.viewportHH = 1080 / 2;
+            //     continue;
+            // }
             
-            // Update viewport
-            let size = 0, size_x = 0, size_y = 0;
-            let x = 0, y = 0, score = 0, factor = 0;
-            let min_x = this.options.MAP_HW, max_x = -this.options.MAP_HW;
-            let min_y = this.options.MAP_HH, max_y = -this.options.MAP_HH;
-            for (const cell_id of this.counters[id]) {
-                const cell = this.cells[cell_id];
-                x += cell.x * cell.r;
-                y += cell.y * cell.r;
-                min_x = cell.x < min_x ? cell.x : min_x;
-                max_x = cell.x > max_x ? cell.x : max_x;
-                min_y = cell.y < min_y ? cell.y : min_y;
-                max_y = cell.y > max_y ? cell.y : max_y;
-                score += cell.r * cell.r / 100;
-                size += cell.r;
-            }
-            size = size || 1;
-            factor = Math.pow(this.counters[id].size + 50, 0.1);
-            controller.viewportX = x / size;
-            controller.viewportY = y / size;
-            size = (factor + 1) * Math.sqrt(score * 100);
-            size_x = size_y = Math.max(size, 4000);
-            size_x = Math.max(size_x, (controller.viewportX - min_x) * 1.75);
-            size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
-            size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
-            size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
-            controller.viewportHW = size_x * this.options.PLAYER_VIEW_SCALE;
-            controller.viewportHH = size_y * this.options.PLAYER_VIEW_SCALE;
-
-            controller.score = score;
-            controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
-            if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
-                if (this.options.WORLD_KILL_OVERSIZE) {
-                    // TODO: kill the player and the cells
-                    for (const cell_id of this.counters[id])
-                        this.cells[cell_id].remove();
-
-                    this.counters[id].clear();
-                } else {
-                    this.shouldRestart = true;
+            if (this.counters[id].size) {
+                // Update viewport
+                let size = 0, size_x = 0, size_y = 0;
+                let x = 0, y = 0, score = 0, factor = 0;
+                let min_x = this.options.MAP_HW, max_x = -this.options.MAP_HW;
+                let min_y = this.options.MAP_HH, max_y = -this.options.MAP_HH;
+                for (const cell_id of this.counters[id]) {
+                    const cell = this.cells[cell_id];
+                    x += cell.x * cell.r;
+                    y += cell.y * cell.r;
+                    min_x = cell.x < min_x ? cell.x : min_x;
+                    max_x = cell.x > max_x ? cell.x : max_x;
+                    min_y = cell.y < min_y ? cell.y : min_y;
+                    max_y = cell.y > max_y ? cell.y : max_y;
+                    score += cell.r * cell.r / 100;
+                    size += cell.r;
+                }
+                size = size || 1;
+                factor = Math.pow(this.counters[id].size + 50, 0.1);
+                controller.viewportX = x / size;
+                controller.viewportY = y / size;
+                size = (factor + 1) * Math.sqrt(score * 100);
+                size_x = size_y = Math.max(size, 4000);
+                size_x = Math.max(size_x, (controller.viewportX - min_x) * 1.75);
+                size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
+                size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
+                size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
+                controller.viewportHW = size_x * this.options.PLAYER_VIEW_SCALE;
+                controller.viewportHH = size_y * this.options.PLAYER_VIEW_SCALE;
+    
+                controller.score = score;
+                controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
+                if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
+                    if (this.options.WORLD_KILL_OVERSIZE) {
+                        // TODO: kill the player and the cells
+                        for (const cell_id of this.counters[id])
+                            this.cells[cell_id].remove();
+    
+                        this.counters[id].clear();
+                    } else {
+                        this.shouldRestart = true;
+                    }
                 }
             }
 
+            // Spawn
             if (controller.spawn && (__now <= this.options.PLAYER_SPAWN_DELAY || 
                     __now >= controller.lastSpawnTick + this.options.PLAYER_SPAWN_DELAY)) {
                 controller.spawn = false;
@@ -310,21 +324,23 @@ module.exports = class Engine {
 
                 for (const controller2 of this.game.controls) {
                     if (!controller2.handle) continue;
-                    controller.handle.onSpawn(controller2);
-                    if (controller != controller2) controller2.handle.onSpawn(controller);
+                    if (controller2.updated) controller.handle.onSpawn(controller2);
+                    if (controller != controller2 && controller.updated)
+                        controller2.handle.onSpawn(controller);
                 }
                 
                 this.game.emit("spawn", controller);
 
-                console.log(`Spawned controller#${controller.id} at x: ${point[0]}, y: ${point[1]}`);
+                console.log(`Spawned ${controller.name}(#${controller.id}) at x: ${~~point[0]}, y: ${~~point[1]}`);
             } else controller.spawn = false;
 
+            controller.alive = !!this.counters[id].size;
             controller.handle.onUpdate();
-            controller.alive = !this.counters[id].size;
         }
 
-        // Boost cells, reset flags, increment age
-        this.wasm.update(0, this.treePtr, dt);
+        // Reset update
+        for (const c of this.game.controls) 
+            if (c.alive) c.updated = false;
 
         const initial = Math.round(25 * this.options.PLAYER_MERGE_TIME);
         // Move cells based on controller
@@ -359,11 +375,19 @@ module.exports = class Engine {
             }
         }
 
+        // Boost cells, reset flags, increment age
+        this.wasm.update(0, this.treePtr, dt);
+
         // Decay player cells
         this.wasm.decay_and_auto(0, this.treePtr, dt,
             this.options.PLAYER_AUTOSPLIT_SIZE,
             this.options.PLAYER_DECAY_SPEED,
             this.options.PLAYER_DECAY_MIN_SIZE);
+            
+        // Bound & bounce cells
+        this.wasm.edge_check(0, this.treePtr,
+            -this.options.MAP_HW, this.options.MAP_HW,
+            -this.options.MAP_HH, this.options.MAP_HH);
         
         // Autosplit
         for (const cell of this.cells) {
@@ -380,11 +404,6 @@ module.exports = class Engine {
                 cell.updated = true;
             }
         }
-
-        // Bound & bounce cells
-        this.wasm.edge_check(0, this.treePtr,
-            -this.options.MAP_HW, this.options.MAP_HW,
-            -this.options.MAP_HH, this.options.MAP_HH);
 
         // Update quadtree
         for (const cell of this.cells) {
@@ -434,12 +453,6 @@ module.exports = class Engine {
                 }
             } else if (cell.updated) this.tree.update(cell);
         }
-
-        // No need to reserve space for indices now since we are only going to query it
-        this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
-        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
-        // Serialize again so client can select/query viewport
-        this.serialize();
 
         this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }

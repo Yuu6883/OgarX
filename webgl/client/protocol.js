@@ -89,12 +89,21 @@ module.exports = class Protocol extends EventEmitter {
                 case 4:
                     this.parseCellData(e.data);
                     break;
+                // Chat
+                case 10:
+                    const pid = reader.readUInt16();
+                    const message = reader.readUTF16String();
+                    const player = this.renderer.playerData.get(pid);
+                    if (!player) return console.warn(`Received unknown pid: ${pid}, message: ${message}`);
+                    self.postMessage({ event: "chat", pid, player, message });
             }
         }
         this.ws.onerror = e => console.error(e);
         this.ws.onclose = e => {
             this.emit("close");
-            console.error(e.code, e.reason);
+            this.renderer.clearCells();
+            this.renderer.clearData();
+            console.error(`Socket closed: { code: ${e.code}, reason: ${e.reason} }`);
         }
     }
 
@@ -138,5 +147,20 @@ module.exports = class Protocol extends EventEmitter {
         writer.writeUTF16String(name);
         writer.writeUTF16String(skin);
         this.send(writer.finalize());
+    }
+
+    get player() {
+        return this.renderer.playerData.get(this.pid);
+    }
+
+    sendChat(message) {
+        const writer = new Writer();
+        writer.writeUInt8(10);
+        writer.writeUTF16String(message);
+        this.send(writer.finalize());
+
+        if (this.pid) {
+            self.postMessage({ event: "chat", pid: this.pid, player: this.player, message });
+        }
     }
 }

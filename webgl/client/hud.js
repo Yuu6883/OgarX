@@ -28,7 +28,9 @@ module.exports = class HUD {
     
             this.worker.postMessage(initObject, [offscreen]);
             this.worker.onmessage = e => {
-                if (e.data === "ready") this.ready = true;
+                const { data } = e;
+                if (data.event === "ready") this.ready = true;
+                if (data.event === "chat") this.onChat(data.pid, data.player, data.message);
             }
 
             this.registerEvents();
@@ -55,20 +57,20 @@ module.exports = class HUD {
         }
     }
 
-    show() {
-        this.showing = true;
-        this.hudElem.style.opacity = 1;
-        this.hudElem.style.zIndex = 1;
+    show(elem = this.hudElem) {
+        elem.focus();
+        elem.style.opacity = 1;
+        elem.style.zIndex = 1;
     }
 
-    hide() {
-        this.showing = false;
-        this.hudElem.style.opacity = 0;
-        setTimeout(() => this.hudElem.style.zIndex = 0, 250);
+    hide(elem = this.hudElem) {
+        elem.blur();
+        elem.style.opacity = 0;
+        setTimeout(() => elem.style.zIndex = 0, 250);
     }
 
-    toggle() {
-        this.showing ? this.hide() : this.show();
+    toggle(elem = this.hudElem) {
+        elem.style.opacity == 1 ? this.hide(elem) : this.show(elem);
     }
 
     resize() {
@@ -88,6 +90,7 @@ module.exports = class HUD {
         window.addEventListener("keydown", e => {
             if (e.key == "Tab") e.preventDefault();
             if (e.key == "Escape") this.toggle();
+            if (e.key == "Enter") this.toggle(this.chatInput);
             if (this.pressing.has(e.key)) return;
             if (e.key == "w") state.macro = 1;
             if (e.key == " ") state.splits = 1; // Atomic add, instead of store
@@ -118,15 +121,17 @@ module.exports = class HUD {
         this.serverInput = document.getElementById("server-input");
         this.nameInput = document.getElementById("name-input");
 
-        this.skinInput.addEventListener("blur", () => {
+        const updateSkin = (ignoreError = false) => {
             const img = new Image();
             img.onload = () => {
                 this.skinInput.classList.remove("danger");
                 this.skinElem.src = this.skin;
             }
-            img.onerror = () => this.skinInput.classList.add("danger");
+            ignoreError || (img.onerror = () => this.skinInput.classList.add("danger"));
             img.src = this.skin;
-        });
+        }
+
+        this.skinInput.addEventListener("blur", updateSkin);
 
         this.connectButton = document.getElementById("connect");
         this.connectButton.addEventListener("click", () => {
@@ -134,6 +139,50 @@ module.exports = class HUD {
             this.hide();
             this.connectButton.blur();
         });
+
+        this.chatElem = document.getElementById("chat");
+        this.chatInput = document.getElementById("chat-input");
+        this.chatInput.addEventListener("keydown", e => {
+            e.stopPropagation();
+            if (e.key == "Enter") {
+                const message = this.chatInput.value.trim();
+                if (message) {
+                    this.sendChat(message);
+                    this.chatInput.value = "";
+                } else {
+                    this.hide(this.chatInput);
+                    this.canvas.focus();
+                }
+            }
+        });
+        this.chatElem.addEventListener("focus", () => {
+            this.chatElem.blur();
+            this.canvas.focus();
+        });
+        this.chatElem.addEventListener("wheel", e => e.stopPropagation());
+
+        this.serverInput.value = localStorage.getItem("ogarx_server") || "local";
+        this.nameInput.value = localStorage.getItem("ogarx_name") || "";
+        this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
+        updateSkin(true);
+    }
+
+    sendChat(chat) {
+        if (this.worker) {
+            this.worker.postMessage({ chat });
+        }
+    }
+
+    /**
+     * @param {number} pid 
+     * @param {{ name: string, skin: string }} player 
+     * @param {string} message 
+     */
+    onChat(pid, player, message) {
+        const elem = document.createElement("p");
+        elem.textContent = `${player.name || "Unnamed"}: ${message}`;
+        this.chatElem.appendChild(elem);
+        this.chatElem.scrollTo(0, this.chatElem.scrollHeight);
     }
 
     get skin() { return this.skinInput.value; }
@@ -141,13 +190,21 @@ module.exports = class HUD {
     get server() { return this.serverInput.value; }
 
     spawn() {
-        this.server == "local" ? this.connectToLocal() : this.connectToURL(this.server);
+        const server = this.server;
+        const name = this.name;
+        const skin = this.skin;
         
+        server == "local" ? this.connectToLocal() : this.connectToURL(server);
+        
+        localStorage.setItem("ogarx_server", server);
+        localStorage.setItem("ogarx_name", name);
+        localStorage.setItem("ogarx_skin", skin);
+
         if (this.worker) {
-            this.worker.postMessage({ spawn: true, name: this.name, skin: this.skin });
+            this.worker.postMessage({ spawn: true, name, skin });
         } else {
             const p = this.renderer.protocol;
-            p.once("open", () => p.spawn(this.name, this.skin));
+            p.once("open", () => p.spawn(name, skin));
         }
     }
 

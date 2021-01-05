@@ -42,7 +42,7 @@ typedef struct {
 #define MERGE_BIT 0x40
 #define POP_BIT 0x80
 
-#define CLEAR_BITS 0x9
+#define CLEAR_BITS 0x49
 
 extern void console_log(unsigned short id);
 
