@@ -941,9 +941,8 @@ class Renderer {
         if (textures.skin) gl.deleteTexture(textures.skin);
         if (textures.name) gl.deleteTexture(textures.name);
 
-        textures.skin = gl.createTexture();
-        textures.name = gl.createTexture();
-
+        if (skin_bitmap) textures.skin = gl.createTexture();
+        if (name_bitmap) textures.name = gl.createTexture();
         if (name_bitmap) textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
 
         this.uploadTexture(textures.skin, skin_bitmap);
