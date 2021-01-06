@@ -19,10 +19,16 @@ module.exports = class Bot extends Handle {
     };
 
     onUpdate() {
-        if (!this.controller.alive) this.controller.spawn = true;
-        else {
+        const s = this.game.engine.options.PLAYER_SPAWN_SIZE;
+        // Less than 20% of or spawn mass
+        if (!this.controller.alive || this.controller.score < s * s / 500) {
+            this.controller.spawn = true;
+        } else {
             this.controller.mouseX = this.controller.viewportX;
             this.controller.mouseY = this.controller.viewportY;
+            this.controller.ejectMarco = true;
+            this.controller.splitAttempts = 8;
+            this.controller.ejectAttempts = 1;
         }
     };
 

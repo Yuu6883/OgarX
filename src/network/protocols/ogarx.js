@@ -94,12 +94,6 @@ module.exports = class OgarXProtocol extends Protocol {
             .filter(id => cells[id].type != EJECTED_TYPE || cells[id].age > 1);
         this.currVisible = new Set(visibleList);
 
-        // console.log(this.handler.controller.viewportX.toFixed(2), 
-        //             this.handler.controller.viewportY.toFixed(2),
-        //             this.handler.controller.viewportHW.toFixed(2),
-        //             this.handler.controller.viewportHH.toFixed(2),
-        //             visibleList.length + " visible cells");        
-
         const writer = new Writer();
         writer.writeUInt8(4);
 
@@ -116,21 +110,20 @@ module.exports = class OgarXProtocol extends Protocol {
             } else addList.push(cell_id);
         }
 
-        // addList.length && console.log("Add Cells");
         for (const cell_id of addList) {
             const cell = cells[cell_id];
             writer.writeUInt16(cell_id);
-            writer.writeUInt16(cell.isDead ? DEAD_CELL_TYPE : cell.type);
+            writer.writeUInt16(cell.type);
             writer.writeInt16(~~cell.x);
             writer.writeInt16(~~cell.y);
             writer.writeUInt16(~~cell.r);
-            // console.log(cell.toString());
         }
 
         writer.writeUInt16(0);
 
         for (const cell_id of updateList) {
             const cell = cells[cell_id];
+            if (cell.type == PELLET_TYPE) continue; // Ignore pellet (static)
             writer.writeUInt16(cell_id);
             writer.writeInt16(~~cell.x);
             writer.writeInt16(~~cell.y);
@@ -150,8 +143,6 @@ module.exports = class OgarXProtocol extends Protocol {
         for (const cell_id of eat) {
             writer.writeUInt16(cell_id);
             writer.writeUInt16(cells[cell_id].eatenBy);
-
-            // console.log(`${cells[cell_id].toString()} eat ${cells[cells[cell_id].eatenBy].toString()}`);
         }
 
         writer.writeUInt16(0);
@@ -192,7 +183,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
         const writer = new Writer();
         writer.writeUInt8(10);
-        writer.writeUInt16(controller.id);
+        writer.writeUInt16(controller ? controller.id : 0); // 0 is server
         writer.writeUTF16String(message);
 
         this.handler.ws.send(writer.finalize(), true);

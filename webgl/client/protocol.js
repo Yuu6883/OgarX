@@ -14,6 +14,8 @@ module.exports = class Protocol extends EventEmitter {
         
         this.pingInterval = self.setInterval(() => {
 
+            if (!this.pid) return;
+            
             const PING = new ArrayBuffer(1);
             new Uint8Array(PING)[0] = 69;
             this.send(PING);

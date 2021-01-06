@@ -44,90 +44,79 @@ typedef struct {
 
 #define CLEAR_BITS 0x49
 
-extern void console_log(unsigned short id);
+// extern console_log(unsigned short i);
 
-void update(Cell* cell, Cell* end, float dt_multi) {
-    while (cell != end) {
-        if (cell->flags & EXIST_BIT) {
-            if (cell->flags & REMOVE_BIT) {
-                cell->x = 0;
-                cell->y = 0;
-                cell->r = 0;
-                cell->type = 0;
-                cell->flags = 0;
-                cell->eatenBy = 0;
-                cell->age = 0;
-                cell->boostX = 0.f;
-                cell->boostY = 0.f;
-                cell->boost = 0.f;
-            } else {
-                cell->age++;
-                cell->flags &= CLEAR_BITS;
-                if (cell->boost > 1) {
-                    float d = cell->boost / 9.0f * dt_multi;
-                    cell->x += cell->boostX * d;
-                    cell->y += cell->boostY * d;
-                    cell->flags |= UPDATE_BIT;
-                    cell->boost -= d;
-                }
-            }
-        }
-        cell++;
+void update(Cell cells[], unsigned short* ptr, float dt_multi,
+    float auto_size, float decay_multi, float decay_min,
+    float l, float r, float b, float t) {
+
+    Cell* cell = &cells[*ptr];
+
+    // Clear cell data 
+    while (cell->flags & REMOVE_BIT) {
+        cell->x = 0;
+        cell->y = 0;
+        cell->r = 0;
+        cell->type = 0;
+        cell->flags = 0;
+        cell->eatenBy = 0;
+        cell->age = 0;
+        cell->boostX = 0.f;
+        cell->boostY = 0.f;
+        cell->boost = 0.f;
+
+        cell = &cells[*++ptr]; // increment to next index
     }
-}
 
-void decay_and_auto(Cell* cell, Cell* end, float dt_multi, float auto_size, float multi, float min) {
-    if (auto_size) {
-        while (cell != end) {
-            if (cell->flags & EXIST_BIT && 
-                IS_PLAYER(cell->type) && cell->r > min) {
+    if (!*ptr) return;
 
-                cell->r -= cell->r * multi * dt_multi / 50.0f;
-                cell->flags |= UPDATE_BIT;
-                if (cell->r > auto_size) cell->flags |= AUTOSPLIT_BIT;
-            }
-            cell++;
+    // Player cells
+    while (*ptr) {
+        // Increment age, clear bits
+        cell->age++;
+        cell->flags &= CLEAR_BITS;
+
+        // Boost cell
+        if (cell->boost > 1) {
+            float d = cell->boost / 9.0f * dt_multi;
+            cell->x += cell->boostX * d;
+            cell->y += cell->boostY * d;
+            cell->flags |= UPDATE_BIT;
+            cell->boost -= d;
         }
-    } else {
-        while (cell != end) {
-            if (cell->flags & EXIST_BIT && 
-                IS_PLAYER(cell->type) && cell->r > min) {
 
-                cell->r -= cell->r * multi * dt_multi / 50.0f;
-                cell->flags |= UPDATE_BIT;
-            }
-            cell++;
+        // Decay and set the autosplit bit for player cells
+        if (cell->r > decay_min) {
+            cell->r -= cell->r * decay_multi * dt_multi / 50.0f;
+            cell->flags |= UPDATE_BIT;
         }
-    }    
-}
+        if (auto_size && cell->r > auto_size) cell->flags |= AUTOSPLIT_BIT;
 
-void edge_check(Cell* cell, Cell* end, float l, float r, float b, float t) {
-    while (cell != end) {
-        if (cell->flags & EXIST_BIT && NOT_PELLET(cell->type)) {
-            unsigned char bounce = cell->boost > 1;
-            float hr = cell->r / 2;
-            if (cell->x < l + hr) {
-                cell->x = l + hr;
-                cell->flags |= UPDATE_BIT;
-                if (bounce) cell->boostX = -cell->boostX;
-            } 
-            if (cell->x > r - hr) {
-                cell->x = r - hr;
-                cell->flags |= UPDATE_BIT;
-                if (bounce) cell->boostX = -cell->boostX;
-            }
-            if (cell->y > t - hr) {
-                cell->y = t - hr;
-                cell->flags |= UPDATE_BIT;
-                if (bounce) cell->boostY = -cell->boostY;
-            }
-            if (cell->y < b + hr) {
-                cell->y = b + hr;
-                cell->flags |= UPDATE_BIT;
-                if (bounce) cell->boostY = -cell->boostY;
-            }
+        // Bounce and clamp the cells in the box
+        unsigned char bounce = cell->boost > 1;
+        float hr = cell->r / 2;
+        if (cell->x < l + hr) {
+            cell->x = l + hr;
+            cell->flags |= UPDATE_BIT;
+            if (bounce) cell->boostX = -cell->boostX;
+        } 
+        if (cell->x > r - hr) {
+            cell->x = r - hr;
+            cell->flags |= UPDATE_BIT;
+            if (bounce) cell->boostX = -cell->boostX;
         }
-        cell++;
+        if (cell->y > t - hr) {
+            cell->y = t - hr;
+            cell->flags |= UPDATE_BIT;
+            if (bounce) cell->boostY = -cell->boostY;
+        }
+        if (cell->y < b + hr) {
+            cell->y = b + hr;
+            cell->flags |= UPDATE_BIT;
+            if (bounce) cell->boostY = -cell->boostY;
+        }
+        
+        cell = &cells[*++ptr]; // increment to next index
     }
 }
 
@@ -176,23 +165,22 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
-void resolve(Cell* cells, 
-    unsigned short* id_start, unsigned short* id_end, 
+#define SKIP_RESOLVE_BITS 0xa4
+
+void resolve(Cell cells[],
+    unsigned short* ptr,
     QuadNode* root, void** node_stack_pointer, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
     float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
 
-    while (id_start != id_end) {
+    while (*ptr) {
 
-        Cell* cell = &cells[*id_start++];
+        Cell* cell = &cells[*ptr++];
 
         unsigned char flags = cell->flags;
 
         // Cell not exist, to be removed, popped, or inside another cell
-        if (!(flags & EXIST_BIT) || 
-            (flags & POP_BIT) || 
-            (flags & INSIDE_BIT) || 
-            (flags & REMOVE_BIT)) {
+        if (flags & SKIP_RESOLVE_BITS) {
             cell++;
             continue;
         }
@@ -266,7 +254,6 @@ void resolve(Cell* cells,
                     action = PHYSICS_EAT;
                 }
 
-                // console_log(*id_start);
                 if (action == PHYSICS_NON) continue;
 
                 float dx = other->x - cell->x;
@@ -339,16 +326,20 @@ void resolve(Cell* cells,
     }
 }
 
-unsigned int select(Cell* cells, Cell* end, QuadNode* root, 
+unsigned int select(Cell cells[], QuadNode* root, 
     void** node_stack_pointer, unsigned short* list_pointer, 
     float l, float r, float b, float t) {
     
     unsigned int list_counter = 0;
-    unsigned int stack_counter = 1;
-    node_stack_pointer[0] = root;
-    QuadNode* curr = root;
+    unsigned int stack_counter = 0;
+
+    // Push root to stack
+    node_stack_pointer[stack_counter++] = root;
 
     while (stack_counter > 0) {
+        // Pop from the stack
+        QuadNode* curr = (QuadNode*) node_stack_pointer[--stack_counter];
+
         // Has leaves, push leaves, if they intersect, to stack
         if (curr->tl) {
             if (b < curr->y) {
@@ -375,9 +366,6 @@ unsigned int select(Cell* cells, Cell* end, QuadNode* root,
                 list_pointer[list_counter++] = id;
             }
         }
-
-        // Pop from the stack
-        curr = (QuadNode*) node_stack_pointer[--stack_counter];
     }
 
     return list_counter;

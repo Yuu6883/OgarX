@@ -95,24 +95,19 @@ module.exports = class Engine {
         this.__next_cell_id = 1;
     }
 
-    /** @param {ArrayBuffer|Buffer} core_buffer */
-    async init(core_buffer) {
+    /** @param {ArrayBuffer|Buffer} wasm_buffer */
+    async init(wasm_buffer) {
         if (this.wasm) return;
 
         this.__start = performance.now();
         this.__ltick = performance.now();
 
-        // 60mb ram
+        // 60mb ram (way more than enough)
         this.memory = new WebAssembly.Memory({ initial: 1000 });
 
         // Load wasm module
         const module = await WebAssembly.instantiate(
-            core_buffer, { env: { 
-                memory: this.memory,
-                console_log: cell_id => {
-                    if (this.cells[cell_id].type > 250) return;
-                }
-            }});
+            wasm_buffer, { env: { memory: this.memory }});
 
         this.wasm = module.instance.exports;
         this.bindBuffers();
@@ -139,6 +134,9 @@ module.exports = class Engine {
         // Not defined here since it's dynamically changed (after indices)
         this.treePtr = 0;
         this.treeBuffer = null;
+
+        /** @type {number} */
+        this.removedCells = [];
     }
 
     start() {
@@ -147,9 +145,6 @@ module.exports = class Engine {
 
         /** @type {Bot[]} */
         this.bots = [];
-
-        for (let i = 0; i < this.options.BOTS; i++)
-            this.bots.push(new Bot(this.game));
 
         const delay = 1000 / this.options.TPS;
         this.updateInterval = setInterval(() => {
@@ -173,10 +168,13 @@ module.exports = class Engine {
 
     tick(dt = 1) {
 
+        if (this.bots.length < this.options.BOTS)
+            this.bots.push(new Bot(this.game));
+
         // No need to reserve space for indices now since we are only going to query it
         this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
-        // Serialize again so client can select/query viewport
+        // Serialize again so client can query viewport
         this.serialize();
 
         // Loop through clients
@@ -293,8 +291,8 @@ module.exports = class Engine {
                 size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
                 size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
                 size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
-                controller.viewportHW = size_x * this.options.PLAYER_VIEW_SCALE;
-                controller.viewportHH = size_y * this.options.PLAYER_VIEW_SCALE;
+                controller.viewportHW = controller.viewportScale * size_x * this.options.PLAYER_VIEW_SCALE;
+                controller.viewportHH = controller.viewportScale * size_y * this.options.PLAYER_VIEW_SCALE;
     
                 controller.score = score;
                 controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
@@ -331,11 +329,12 @@ module.exports = class Engine {
                 
                 this.game.emit("spawn", controller);
 
-                console.log(`Spawned ${controller.name}(#${controller.id}) at x: ${~~point[0]}, y: ${~~point[1]}`);
+                if (!(controller.handle instanceof Bot)) {
+                    console.log(`Spawned ${controller.name}(#${controller.id}) at x: ${~~point[0]}, y: ${~~point[1]}`);
+                }
             } else controller.spawn = false;
 
             controller.alive = !!this.counters[id].size;
-            controller.handle.onUpdate();
         }
 
         // Reset update
@@ -375,70 +374,77 @@ module.exports = class Engine {
             }
         }
 
-        this.sortIndices(false);
+        this.updateIndices();
 
-        // Boost cells, reset flags, increment age
-        this.wasm.update(0, this.indicesPtr, dt);
-
-        // Decay player cells
-        this.wasm.decay_and_auto(0, this.indicesPtr, dt,
+        this.wasm.update(0, this.indicesPtr, dt,
             this.options.PLAYER_AUTOSPLIT_SIZE,
             this.options.PLAYER_DECAY_SPEED,
-            this.options.PLAYER_DECAY_MIN_SIZE);
-            
-        // Bound & bounce cells
-        this.wasm.edge_check(0, this.indicesPtr,
+            this.options.PLAYER_DECAY_MIN_SIZE,
             -this.options.MAP_HW, this.options.MAP_HW,
             -this.options.MAP_HH, this.options.MAP_HH);
         
-        // Autosplit
-        for (const cell of this.cells) {
-            if (cell.shouldAuto) {
-                const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
-                if (cellsLeft <= 0) continue;
-                const splitTimes = Math.min(Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE), cellsLeft);
-                const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
-                for (let i = 1; i < splitTimes; i++) {
-                    const angle = Math.random() * 2 * Math.PI;
-                    this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+        // Autosplit and update quadtree
+        if (this.options.PLAYER_AUTOSPLIT_SIZE) {
+            // starting after removed cells
+            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
+                const index = this.resolveIndices.getUint16(i * 2, true);
+                const cell = this.cells[index];
+    
+                if (cell.shouldAuto) {
+                    const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
+                    if (cellsLeft <= 0) continue;
+                    const splitTimes = Math.min(Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE), cellsLeft);
+                    const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
+                    for (let i = 1; i < splitTimes; i++) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                    }
+                    cell.r = splitSizes;
+                    cell.updated = true;
                 }
-                cell.r = splitSizes;
-                cell.updated = true;
+    
+                // Update quadtree
+                if (cell.type > 250 && !cell.isUpdated) continue;
+                this.tree.update(cell);
+            }
+        } else {
+            // Only update quadtree (starting after removed cells)
+            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
+                const index = this.resolveIndices.getUint16(i * 2, true);
+                const cell = this.cells[index];
+                // Update quadtree
+                if (cell.type > 250 && !cell.isUpdated) continue;
+                this.tree.update(cell);
             }
         }
 
-        // Update quadtree
-        for (const cell of this.cells) {
-            if (!cell.exists || (cell.type > 250 && !cell.isUpdated)) continue; 
-            this.tree.update(cell);
-        }
-
-        // Sort indices
+        // Sort indices (because we added new cells and we need to sort by size)
         this.sortIndices();
         // Serialize quadtree, preparing for collision/eat resolution
         this.serialize();
 
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
             this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
-
-        // console.log("resolving");
+        
         // Magic goes here
-        this.wasm.resolve(0, 
-            this.indicesPtr, this.treePtr, 
+        this.wasm.resolve(0,
+            this.indicesPtr,
             this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
             this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.TPS * this.options.PLAYER_DEAD_DELAY);
-        // console.log("resolved");
 
-        // Handle pop, update quadtree, remove item
-        for (const cell of this.cells) {
-            if (!cell.exists) continue;
+        this.removedCells = [];
+        // Handle pop, update quadtree, remove item from quadtree
+        for (let i = 0; i < this.indices; i++) {
+            const index = this.resolveIndices.getUint16(i * 2, true);
+            const cell = this.cells[index];
             if (cell.shouldRemove) {
                 this.tree.remove(cell);
                 this.counters[cell.type].delete(cell.id);
+                this.removedCells.push(index);
                 this.cellCount--;
             } else if (cell.popped) {
-                // TODO: pop the cell OR split virus
+                // pop the cell OR split virus
                 if (cell.type == VIRUS_TYPE) {
                     cell.r = this.options.VIRUS_SIZE;
                     this.tree.update(cell);
@@ -459,6 +465,7 @@ module.exports = class Engine {
         this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }
 
+    /** @param {number} id */
     kill(id) {
         for(const cell_id of this.counters[id]) {
             const cell = this.cells[cell_id];
@@ -529,6 +536,7 @@ module.exports = class Engine {
      * @return {Cell}
      */
     newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0, insert = true) {
+        
         if (this.cellCount >= this.options.CELL_LIMIT - 1) {
             this.stop();
             return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
@@ -580,18 +588,38 @@ module.exports = class Engine {
     sortIndices(sort = true) {
         let offset = 0;
         for (let type = 0; type < this.counters.length; type++) {
-            // No need to resolve pellet since they don't collide with or eat other cells
             if (type == PELLET_TYPE) continue;
-            // No need to sort none player cells
-
             const iter = (type > 250 || !sort) ? this.counters[type] : 
-            [...this.counters[type]].sort((a, b) => this.cells[b].r - this.cells[a].r);
+                [...this.counters[type]].sort((a, b) => this.cells[b].r - this.cells[a].r);
             
             for (const cell_id of iter) {
                 this.resolveIndices.setUint16(offset, cell_id, true);
                 offset += 2;
             }
         }
+        
+        this.resolveIndices.setUint16(offset, 0, true);
+        offset += 2;
+
+        this.indices = offset >> 1;
+        this.treePtr = this.indicesPtr + offset;
+        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
+    }
+
+    updateIndices() {
+        let offset = 0;
+        for (let type = 0; type < this.counters.length; type++) {
+            const iter = type ? this.counters[type] : this.removedCells;
+            for (const cell_id of iter) {
+                this.resolveIndices.setUint16(offset, cell_id, true);
+                offset += 2;
+            }
+        }
+        
+        this.resolveIndices.setUint16(offset, 0, true);
+        offset += 2;
+
+        this.indices = offset >> 1;
         this.treePtr = this.indicesPtr + offset;
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
     }
@@ -602,11 +630,11 @@ module.exports = class Engine {
 
     /** @param {Controller} controller */
     query(controller) {
-        // idk why 1, can be anything reasonable
-        let listPtr = this.stackPtr + 4 * this.options.QUADTREE_MAX_LEVEL + 20;
+        // 4 = pointer size, second 4 is because 4 nodes per level so we need to reserve enough space for the stack
+        let listPtr = this.stackPtr + 4 * 4 * this.options.QUADTREE_MAX_LEVEL;
         listPtr % 2 && listPtr++; // Multiple of 2
 
-        const length = this.wasm.select(0, this.treePtr, this.treePtr, 
+        const length = this.wasm.select(0, this.treePtr, 
             this.stackPtr, listPtr,
             controller.viewportX - controller.viewportHW, controller.viewportX + controller.viewportHW,
             controller.viewportY - controller.viewportHH, controller.viewportY + controller.viewportHH);

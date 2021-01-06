@@ -12,12 +12,13 @@ engine.setOptions({
     PLAYER_MERGE_TIME: 5,
     VIRUS_MONOTONE_POP: true,
     EJECT_SIZE: 38,
-    EJECT_LOSS: 39,
+    EJECT_LOSS: 38.2,
     EJECT_DELAY: 25,
+    BOTS: 40,
     PELLET_COUNT: 1000,
     PLAYER_SPAWN_SIZE: 1500,
-    MAP_HW: 32767 >> 2, // MAX signed short
-    MAP_HH: 32767 >> 2, // MAX signed short,
+    MAP_HW: 32767,
+    MAP_HH: 32767
 });
 
 server.open();

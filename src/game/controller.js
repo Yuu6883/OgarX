@@ -21,6 +21,9 @@ module.exports = class Controller {
         this.viewportHH = 0;
         this.maxScore = 0;
         this.score = 0;
+
+        this.viewportScale = 100;
+
         /** @type {import("./handle")} */
         this.handle = null;
     }
@@ -46,7 +49,7 @@ module.exports = class Controller {
         this.__name = "";
         this.__skin = "";
         this.updated = false;
-        
+
         this.handle = null;
         this.alive = false;
         this.spectate = null;

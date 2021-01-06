@@ -140,6 +140,16 @@ class QuadNode {
         }
     }
 
+    search(id = 0) {
+        if (this.items.has(id)) return true;
+        if (this.branches) {
+            return this.branches[0].search(id) ||
+                this.branches[1].search(id) ||
+                this.branches[2].search(id) ||
+                this.branches[3].search(id);
+        }
+    }
+
     print() {
         console.log(`QuadNode at ${this.__ptr} has ${this.items.size} items: ${[...this.items].join(", ")}`)
         if (this.branches) {
@@ -189,7 +199,7 @@ class QuadTree {
 
     /** @param {import("./cell")} cell */
     remove(cell) {
-        if (!cell.__root) console.log("REMOVING CELL NOT IN QUADTREE");
+        if (!cell.__root) return console.log("REMOVING CELL NOT IN QUADTREE");
         if (!cell.__root.items.delete(cell.id)) console.log("ITEM NOT IN QUAD??", cell.__root.items);
         cell.__root.merge();
         cell.__root = null;
@@ -197,7 +207,10 @@ class QuadTree {
 
     /** @param {import("./cell")} cell */
     update(cell) {
-        if (!cell.__root) console.log("UPDATING CELL NOT IN QUADTREE");
+        if (!cell.__root) {
+            console.log(cell.toString());
+            throw new Error("UPDATING CELL NOT IN QUADTREE");
+        }
         const oldNode = cell.__root;
         let newNode = cell.__root;
         while (true) {
@@ -240,6 +253,10 @@ class QuadTree {
         const end = this.__offset;
         this.__offset = 0;
         return end;
+    }
+
+    search(id = 0) {
+        return this.root.search(id);
     }
 
     print() {
