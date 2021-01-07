@@ -1,6 +1,7 @@
 const Mouse = require("./mouse");
 const State = require("./state");
 const Viewport = require("./viewport");
+const Keyboard = require("./keyboard");
 
 module.exports = class HUD {
 
@@ -83,6 +84,7 @@ module.exports = class HUD {
     registerEvents() {
         window.onresize = this.resize.bind(this);
 
+        this.keys = new Keyboard(this);
         /** @type {Set<string>} */
         this.pressing = new Set();
         const state = this.state;
@@ -92,17 +94,12 @@ module.exports = class HUD {
             if (e.key == "Escape") this.toggle();
             if (e.key == "Enter") this.toggle(this.chatInput);
             if (this.pressing.has(e.key)) return;
-            if (e.key == "w") state.macro = 1;
-            if (e.key == " ") state.splits = 1; // Atomic add, instead of store
-            if (e.key == "g") state.splits = 2;
-            if (e.key == "z") state.splits = 3;
-            if (e.key == "q") state.splits = 4;
-            if (e.key == "n") state.respawn = 1;
+            this.keys.keyDown(e.key);
             this.pressing.add(e.key);
         });
 
         window.addEventListener("keyup", e => {
-            if (e.key == "w") state.macro = 0;
+            this.keys.keyUp(e.key);
             this.pressing.delete(e.key);
         });
 

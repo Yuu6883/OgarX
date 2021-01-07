@@ -52,6 +52,7 @@ const DefaultSettings = {
     EJECT_LOSS: 43,
     EJECT_BOOST: 780,
     EJECT_DELAY: 80, // ms
+    EJECT_MAX_AGE: 250,
     WORLD_RESTART_MULT: 0.75,
     WORLD_KILL_OVERSIZE: false,
     EAT_OVERLAP: 3,
@@ -83,6 +84,7 @@ module.exports = class Engine {
     constructor(game) {
         this.game = game;
         this.options = Object.assign({}, DefaultSettings);
+        this.collisions = 0;
     }
     
     /** @param {typeof DefaultSettings} options */
@@ -107,7 +109,12 @@ module.exports = class Engine {
 
         // Load wasm module
         const module = await WebAssembly.instantiate(
-            wasm_buffer, { env: { memory: this.memory }});
+            wasm_buffer, { env: { 
+                memory: this.memory,
+                powf: Math.pow,
+                roundf: Math.round,
+            }
+        });
 
         this.wasm = module.instance.exports;
         this.bindBuffers();
@@ -186,6 +193,106 @@ module.exports = class Engine {
             controller.handle.onUpdate();
         }
 
+        this.spawnCells();
+        this.handleInputs();        
+
+        // Reset update
+        for (const c of this.game.controls) if (c.alive) c.updated = false;
+
+        this.updateIndices();
+        this.updatePlayerCells(dt);
+
+        this.wasm.update(0, this.indicesPtr, dt,
+            this.options.EJECT_MAX_AGE,
+            this.options.PLAYER_AUTOSPLIT_SIZE,
+            this.options.PLAYER_DECAY_SPEED,
+            this.options.PLAYER_DECAY_MIN_SIZE,
+            -this.options.MAP_HW, this.options.MAP_HW,
+            -this.options.MAP_HH, this.options.MAP_HH);
+        
+        // Autosplit and update quadtree
+        if (this.options.PLAYER_AUTOSPLIT_SIZE) {
+            // starting after removed cells
+            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
+                const index = this.resolveIndices.getUint16(i * 2, true);
+                const cell = this.cells[index];
+    
+                if (cell.shouldAuto) {
+                    const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
+                    if (cellsLeft <= 0) continue;
+                    const splitTimes = Math.min(Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE), cellsLeft);
+                    const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
+                    for (let i = 1; i < splitTimes; i++) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                    }
+                    cell.r = splitSizes;
+                    cell.updated = true;
+                }
+    
+                // Update quadtree
+                if (cell.type > 250 && !cell.isUpdated) continue;
+                this.tree.update(cell);
+            }
+        } else {
+            // Only update quadtree (starting after removed cells)
+            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
+                const index = this.resolveIndices.getUint16(i * 2, true);
+                const cell = this.cells[index];
+                // Update quadtree
+                if (cell.type > 250 && !cell.isUpdated) continue;
+                this.tree.update(cell);
+            }
+        }
+
+        // Sort indices (because we added new cells and we need to sort by size)
+        this.sortIndices();
+        // Serialize quadtree, preparing for collision/eat resolution
+        this.serialize();
+
+        const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
+            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
+        
+        // Magic goes here
+        this.collisions = this.wasm.resolve(0,
+            this.indicesPtr,
+            this.treePtr, this.stackPtr,
+            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.TPS * this.options.PLAYER_DEAD_DELAY);
+
+        this.removedCells = [];
+        // Handle pop, update quadtree, remove item from quadtree
+        for (let i = 0; i < this.indices; i++) {
+            const index = this.resolveIndices.getUint16(i * 2, true);
+            const cell = this.cells[index];
+            if (cell.shouldRemove) {
+                this.tree.remove(cell);
+                this.counters[cell.type].delete(cell.id);
+                this.removedCells.push(index);
+                this.cellCount--;
+            } else if (cell.popped) {
+                // pop the cell OR split virus
+                if (cell.type == VIRUS_TYPE) {
+                    cell.r = this.options.VIRUS_SIZE;
+                    this.tree.update(cell);
+                    const angle = Math.atan2(cell.boostX, cell.boostY);
+                    this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
+                        Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
+                } else {
+                    const splits = this.distributeCellMass(cell);
+                    for (const mass of splits) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        this.splitFromCell(cell, Math.sqrt(mass * 100),
+                            Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                    }
+                }
+            } else if (cell.updated) this.tree.update(cell);
+        }
+
+        this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
+    }
+
+    spawnCells() {
         // Spawn "some" new cells
         for (let i = 0; i < this.options.MAX_CELL_PER_TICK; i++) {
             if (this.counters[PELLET_TYPE].size < this.options.PELLET_COUNT) {
@@ -207,9 +314,10 @@ module.exports = class Engine {
                 this.newCell(point[0], point[1], this.options.MOTHER_CELL_SIZE, MOTHER_CELL_TYPE);
             } else break;
         }
+    }
 
+    handleInputs() {
         const __now = this.__tick;
-        // Handle inputs
         for (const id in this.game.controls) {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
@@ -338,133 +446,40 @@ module.exports = class Engine {
 
             controller.alive = !!this.counters[id].size;
         }
+    }
 
-        // Reset update
-        for (const c of this.game.controls) 
-            if (c.alive) c.updated = false;
+    updateIndices() {
+        let offset = 0;
+        for (let type = 0; type < this.counters.length; type++) {
+            const iter = type ? this.counters[type] : this.removedCells;
+            for (const cell_id of iter) {
+                this.resolveIndices.setUint16(offset, cell_id, true);
+                offset += 2;
+            }
+        }
+        
+        this.resolveIndices.setUint16(offset, 0, true);
+        offset += 2;
 
+        this.indices = offset >> 1;
+        this.treePtr = this.indicesPtr + offset;
+        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
+    }
+
+    updatePlayerCells(dt) {
         const initial = Math.round(25 * this.options.PLAYER_MERGE_TIME);
-        // Move cells based on controller
+        
+        let ptr = this.indicesPtr + (this.removedCells.length << 1);
         for (const id in this.game.controls) {
-            const controller = this.game.controls[id];
-            if (!controller.handle) continue;
-
-            // Loop through all player cells (not dead)
-            for (const cell_id of this.counters[id]) {
-                const cell = this.cells[cell_id];
-
-                // Calculate can merge
-                if (this.options.PLAYER_MERGE_TIME > 0) {
-                    const increase = Math.round(25 * cell.r * this.options.PLAYER_MERGE_INCREASE);
-                    const time = Math.max(this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER ? 
-                        Math.max(initial, increase) : initial + increase);
-                    cell.merge = cell.age >= time;                 
-                } else cell.merge = cell.age >= this.options.PLAYER_NO_MERGE_DELAY;
-
-                // Move cells
-                let dx = controller.mouseX - cell.x;
-                let dy = controller.mouseY - cell.y;
-                const d = Math.sqrt(dx * dx + dy * dy);
-                if (d < 1) continue; dx /= d; dy /= d;
-                // let modifier = 1;
-                // if (cell.r > this.options.PLAYER_MIN_SPLIT_SIZE * 5 &&
-                //     cell.age <= this.options.PLAYER_NO_COLLI_DELAY) modifier = 2;
-                const speed = 88 * Math.pow(cell.r, -0.4396754) * this.options.PLAYER_SPEED;
-                const m = Math.min(speed, d) * dt;
-                cell.x += dx * m;
-                cell.y += dy * m;
-            }
+            const c = this.game.controls[~~id];
+            if (!c.handle) continue;
+            const s = this.counters[~~id].size;
+            this.wasm.update_player_cells(0, ptr, s,
+                c.mouseX, c.mouseY, dt,
+                initial, this.options.PLAYER_MERGE_INCREASE, this.options.PLAYER_SPEED,
+                this.options.PLAYER_MERGE_TIME, this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER);
+            ptr += s << 1;
         }
-
-        this.updateIndices();
-
-        this.wasm.update(0, this.indicesPtr, dt,
-            this.options.PLAYER_AUTOSPLIT_SIZE,
-            this.options.PLAYER_DECAY_SPEED,
-            this.options.PLAYER_DECAY_MIN_SIZE,
-            -this.options.MAP_HW, this.options.MAP_HW,
-            -this.options.MAP_HH, this.options.MAP_HH);
-        
-        // Autosplit and update quadtree
-        if (this.options.PLAYER_AUTOSPLIT_SIZE) {
-            // starting after removed cells
-            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
-                const index = this.resolveIndices.getUint16(i * 2, true);
-                const cell = this.cells[index];
-    
-                if (cell.shouldAuto) {
-                    const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
-                    if (cellsLeft <= 0) continue;
-                    const splitTimes = Math.min(Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE), cellsLeft);
-                    const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
-                    for (let i = 1; i < splitTimes; i++) {
-                        const angle = Math.random() * 2 * Math.PI;
-                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
-                    }
-                    cell.r = splitSizes;
-                    cell.updated = true;
-                }
-    
-                // Update quadtree
-                if (cell.type > 250 && !cell.isUpdated) continue;
-                this.tree.update(cell);
-            }
-        } else {
-            // Only update quadtree (starting after removed cells)
-            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
-                const index = this.resolveIndices.getUint16(i * 2, true);
-                const cell = this.cells[index];
-                // Update quadtree
-                if (cell.type > 250 && !cell.isUpdated) continue;
-                this.tree.update(cell);
-            }
-        }
-
-        // Sort indices (because we added new cells and we need to sort by size)
-        this.sortIndices();
-        // Serialize quadtree, preparing for collision/eat resolution
-        this.serialize();
-
-        const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
-            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
-        
-        // Magic goes here
-        this.wasm.resolve(0,
-            this.indicesPtr,
-            this.treePtr, this.stackPtr,
-            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.TPS * this.options.PLAYER_DEAD_DELAY);
-
-        this.removedCells = [];
-        // Handle pop, update quadtree, remove item from quadtree
-        for (let i = 0; i < this.indices; i++) {
-            const index = this.resolveIndices.getUint16(i * 2, true);
-            const cell = this.cells[index];
-            if (cell.shouldRemove) {
-                this.tree.remove(cell);
-                this.counters[cell.type].delete(cell.id);
-                this.removedCells.push(index);
-                this.cellCount--;
-            } else if (cell.popped) {
-                // pop the cell OR split virus
-                if (cell.type == VIRUS_TYPE) {
-                    cell.r = this.options.VIRUS_SIZE;
-                    this.tree.update(cell);
-                    const angle = Math.atan2(cell.boostX, cell.boostY);
-                    this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
-                        Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
-                } else {
-                    const splits = this.distributeCellMass(cell);
-                    for (const mass of splits) {
-                        const angle = Math.random() * 2 * Math.PI;
-                        this.splitFromCell(cell, Math.sqrt(mass * 100),
-                            Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
-                    }
-                }
-            } else if (cell.updated) this.tree.update(cell);
-        }
-
-        this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }
 
     /** @param {number} id */
@@ -588,12 +603,13 @@ module.exports = class Engine {
 
     // Sort all the cell indices according to their size (to make solotrick work)
     sortIndices(sort = true) {
+
         let offset = 0;
+        let sorting = 0;
         for (let type = 0; type < this.counters.length; type++) {
+            if (type <= 250) sorting += this.counters[type].size;
             if (type == PELLET_TYPE) continue;
-            const iter = (type > 250 || !sort) ? this.counters[type] : 
-                [...this.counters[type]].sort((a, b) => this.cells[b].r - this.cells[a].r);
-            
+            const iter = this.counters[type];
             for (const cell_id of iter) {
                 this.resolveIndices.setUint16(offset, cell_id, true);
                 offset += 2;
@@ -604,24 +620,14 @@ module.exports = class Engine {
         offset += 2;
 
         this.indices = offset >> 1;
-        this.treePtr = this.indicesPtr + offset;
-        this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
-    }
 
-    updateIndices() {
-        let offset = 0;
-        for (let type = 0; type < this.counters.length; type++) {
-            const iter = type ? this.counters[type] : this.removedCells;
-            for (const cell_id of iter) {
-                this.resolveIndices.setUint16(offset, cell_id, true);
-                offset += 2;
-            }
+        let ptr = this.indicesPtr;
+        for (let type = 0; type <= 250; type++) {
+            const s = this.counters[type].size;
+            this.wasm.sort_indices(0, ptr, s);
+            ptr += s << 1;
         }
-        
-        this.resolveIndices.setUint16(offset, 0, true);
-        offset += 2;
 
-        this.indices = offset >> 1;
         this.treePtr = this.indicesPtr + offset;
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
     }

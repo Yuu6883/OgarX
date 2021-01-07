@@ -1,3 +1,5 @@
+#include "memory.h"
+
 #define EATEN_TYPE 251
 
 typedef struct {
@@ -95,12 +97,16 @@ void deserialize(CellData data[], unsigned short* packet) {
 
     while (eat_data->id) {
         
-        data[eat_data->id].netX = data[eat_data->by].netX;
-        data[eat_data->id].netY = data[eat_data->by].netY;
+        if (data[eat_data->by].type) {
+            data[eat_data->id].netX = data[eat_data->by].netX;
+            data[eat_data->id].netY = data[eat_data->by].netY;
 
-        data[eat_data->id].oldX = 0.0f;
-        data[eat_data->id].oldY = 0.0f;
-        data[eat_data->id].netSize = 0.0f;
+            data[eat_data->id].oldX = 0.0f;
+            data[eat_data->id].oldY = 0.0f;
+            data[eat_data->id].netSize = 0.0f;
+        } else {
+            memset(&data[eat_data->id], 0, sizeof(CellData));
+        }
 
         eat_data++;
     }
@@ -111,20 +117,7 @@ void deserialize(CellData data[], unsigned short* packet) {
     DeletePacket* delete_data = (DeletePacket*) packet;
 
     while (delete_data->id) {
-        data[delete_data->id].type = 0;
-
-        data[delete_data->id].oldX = 0;
-        data[delete_data->id].oldY = 0;
-        data[delete_data->id].oldSize = 0;
-
-        data[delete_data->id].currX = 0;
-        data[delete_data->id].currY = 0;
-        data[delete_data->id].currSize = 0;
-
-        data[delete_data->id].netX = 0;
-        data[delete_data->id].netY = 0;
-        data[delete_data->id].netSize = 0;
-
+        memset(&data[delete_data->id], 0, sizeof(CellData));
         delete_data++;
     }
 }

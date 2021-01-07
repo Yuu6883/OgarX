@@ -52,6 +52,7 @@ unsigned char  get_cell_type(Cell ptr[], unsigned short id) { return ptr[id].typ
 unsigned short get_cell_eatenby(Cell ptr[], unsigned short id) { return ptr[id].eatenBy; };
 
 void update(Cell cells[], unsigned short* ptr, float dt_multi,
+    unsigned int eject_max_age,
     float auto_size, float decay_multi, float decay_min,
     float l, float r, float b, float t) {
 
@@ -72,13 +73,16 @@ void update(Cell cells[], unsigned short* ptr, float dt_multi,
         cell->age++;
         cell->flags &= CLEAR_BITS;
 
+        if (IS_EJECTED(cell->type) && cell->age > eject_max_age)
+            cell->flags |= REMOVE_BIT;
+
         // Boost cell
         if (cell->boost > 1) {
-            float d = cell->boost / 9.0f * dt_multi;
-            cell->x += cell->boostX * d;
-            cell->y += cell->boostY * d;
+            float db = cell->boost / 9.0f * dt_multi;
+            cell->x += cell->boostX * db;
+            cell->y += cell->boostY * db;
             cell->flags |= UPDATE_BIT;
-            cell->boost -= d;
+            cell->boost -= db;
         }
 
         // Decay and set the autosplit bit for player cells
@@ -158,17 +162,118 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
     return counter;
 }
 
+void sort_indices(Cell cells[], unsigned short indices[], int n) {
+    if (!n) return;
+    
+    int t = 0;
+
+    // Build Max Heap
+    for (int i = 1; i < n; i++) { 
+        // if child is bigger than parent 
+        if (cells[indices[i]].r < cells[indices[(i - 1) / 2]].r) {
+            int j = i;
+            // swap child and parent until 
+            // parent is smaller 
+            while (cells[indices[j]].r < cells[indices[(j - 1) / 2]].r) { 
+                t = indices[j];
+                indices[j] = indices[(j - 1) / 2];
+                indices[(j - 1) / 2] = t;
+                j = (j - 1) / 2; 
+            }
+        }
+    }
+
+    for (int i = n - 1; i > 0; i--) {
+        // swap value of first indexed  
+        // with last indexed  
+        t = indices[0];
+        indices[0] = indices[i];
+        indices[i] = t;
+        // maintaining heap property 
+        // after each swapping 
+        int j = 0, index; 
+        do { 
+            index = (2 * j + 1); 
+              
+            // if left child is smaller than  
+            // right child point index variable  
+            // to right child 
+            if (cells[indices[index]].r > cells[indices[index + 1]].r && 
+                index < (i - 1)) index++; 
+          
+            // if parent is smaller than child  
+            // then swapping parent with child  
+            // having higher value 
+            if (cells[indices[j]].r > cells[indices[index]].r && index < i) {
+                t = indices[j];
+                indices[j] = indices[index];
+                indices[index] = t;
+            }
+            j = index; 
+        } while (index < i); 
+    }
+}
+
+void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
+    float mouse_x, float mouse_y, float dt,
+    float merge_initial, float merge_increase, float player_speed,
+    unsigned int merge_time, unsigned int no_merge_delay, unsigned char merge_version_new) {
+    
+    if (!n) return;
+
+    if (merge_time > 0.0f) {
+        if (merge_version_new) {
+            for (unsigned int i = 0; i < n; i++) {
+                Cell* cell = &cells[indices[i]];
+                float increase = roundf(25.f * cell->r * merge_increase);
+                float time = increase > no_merge_delay ? increase : no_merge_delay;
+                time = merge_initial > time ? merge_initial : time;
+                if (cell->age > time) cell->flags |= MERGE_BIT;
+            }
+        } else {
+            for (unsigned int i = 0; i < n; i++) {
+                Cell* cell = &cells[indices[i]];
+                float increase = roundf(25.f * cell->r * merge_increase);
+                float time = merge_initial + merge_increase;
+                time = no_merge_delay > time ? no_merge_delay : time;
+                if (cell->age > time) cell->flags |= MERGE_BIT;
+            }
+        }
+    } else {
+        for (unsigned int i = 0; i < n; i++) {
+            Cell* cell = &cells[indices[i]];
+            if (cell->age > no_merge_delay) cell->flags |= MERGE_BIT;
+        }
+    }
+
+    // Move player cells
+    for (unsigned int i = 0; i < n; i++) {
+        Cell* cell = &cells[indices[i]];
+
+        float dx = mouse_x - cell->x;
+        float dy = mouse_y - cell->y;
+        float d = sqrtf(dx * dx + dy * dy);
+        if (d < 1) continue; dx /= d; dy /= d;
+        float speed = 88.f * powf(cell->r, -0.4396754) * player_speed;
+        float m = (speed < d ? speed : d) * dt;
+        cell->x += dx * m;
+        cell->y += dy * m;
+    }
+}
+
 #define PHYSICS_NON 0
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
 #define SKIP_RESOLVE_BITS 0xa4
 
-void resolve(Cell cells[],
+unsigned int resolve(Cell cells[],
     unsigned short* ptr,
     QuadNode* root, void** node_stack_pointer, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
     float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
+
+    unsigned int collisions = 0;
 
     while (*ptr) {
 
@@ -176,7 +281,7 @@ void resolve(Cell cells[],
 
         unsigned char flags = cell->flags;
 
-        // Cell not exist, to be removed, popped, or inside another cell
+        // Cell is to be removed, popped, or inside another cell
         if (flags & SKIP_RESOLVE_BITS) {
             cell++;
             continue;
@@ -221,8 +326,7 @@ void resolve(Cell cells[],
                 unsigned char other_flags = other->flags;
 
                 // Other cell doesn't exist?! or removed
-                if (!(other_flags & EXIST_BIT) || 
-                    (other_flags & REMOVE_BIT)) continue;
+                if (other_flags & SKIP_RESOLVE_BITS) continue;
                 unsigned char action = PHYSICS_NON;
 
                 // Check player x player
@@ -258,6 +362,8 @@ void resolve(Cell cells[],
                 float d = sqrtf(dx * dx + dy * dy);
                 float r1 = cell->r;
                 float r2 = other->r;
+
+                collisions++;
 
                 if (action == PHYSICS_COL) {
                     float m = r1 + r2 - d;
@@ -321,6 +427,8 @@ void resolve(Cell cells[],
             curr = (QuadNode*) node_stack_pointer[--stack_counter];
         }
     }
+    
+    return collisions;
 }
 
 unsigned int select(Cell cells[], QuadNode* root, 
@@ -360,8 +468,7 @@ unsigned int select(Cell cells[], QuadNode* root,
                 cell->x + cell->r >= l &&
                 cell->y - cell->r <= t &&
                 cell->y + cell->r >= b &&
-                !(cell->flags & INSIDE_BIT) &&
-                NOT_PELLET(cell->type) || cell->age > 1) {
+                (NOT_PELLET(cell->type) || cell->age > 1)) {
                 list_pointer[list_counter++] = id;
             }
         }

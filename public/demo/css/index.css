@@ -8,6 +8,44 @@ body {
     margin: 0px;
     overflow: hidden;
 }
+#keyboard {
+    position: absolute;
+    top:  15px;
+    left: 15px;
+    z-index: 1;
+    width: 30px;
+    height: 30px;
+    fill: rgba(238, 238, 238, 0.5);
+    cursor: pointer;
+    transition: fill 0.25s linear;
+}
+#keyboard:hover {
+    fill: rgba(238, 238, 238, 0.9);
+}
+#keys {
+    color: #eee;
+}
+#key-menu {
+    position: absolute;
+    top:  0px;
+    left: -200px;
+    width: 200px;
+    height: 100vh;
+    z-index: 1;
+    transition: left 0.5s linear, opacity 0.25s linear;
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+}
+.hot-key {
+    color: rgba(238, 238, 238, 0.8);
+    transition: color 0.25s linear;
+    cursor: pointer;
+}
+.hot-key:hover {
+    color: rgba(238, 238, 238, 1);
+}
 #canvas {
     position: absolute;
     top:  0px;

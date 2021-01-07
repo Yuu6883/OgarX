@@ -20,7 +20,7 @@ engine.setOptions({
     EJECT_SIZE: 38,
     EJECT_LOSS: 38.2,
     EJECT_DELAY: 25,
-    BOTS: 50,
+    BOTS: 100,
     PELLET_COUNT: 1000,
     PLAYER_SPAWN_SIZE: 1500,
     MAP_HW: 30000,
@@ -38,4 +38,8 @@ process.on("SIGINT", async () => {
     await OgarXProtocol.init(fs.readFileSync(OGARX_PATH));
     await server.open();
     engine.start();
+
+    setInterval(() => {
+        console.log(`Engine load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
+    }, 3000);
 })();
