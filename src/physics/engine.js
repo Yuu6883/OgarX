@@ -139,6 +139,8 @@ module.exports = class Engine {
         this.removedCells = [];
     }
 
+    get running() { return !!this.updateInterval; }
+
     start() {
         if (this.updateInterval) return;
         this.__ltick = performance.now();

@@ -19,13 +19,34 @@ module.exports = class OgarXProtocol extends Protocol {
             reader.readInt16() == 420;
     }
 
+    /** @param {BufferSource} buffer */
+    static async init(buffer) {
+        this.Module = await WebAssembly.compile(buffer);
+    }
+
     /** @param {import("../socket")} handler */
     constructor(handler) {
         super(handler);
-        /** @type {Set<number>} */
-        this.lastVisible = new Set();
-        /** @type {Set<number>} */
-        this.currVisible = new Set();
+        this.init();
+
+        this.last_vlist_ptr = 131072; // 2 * 64k or 2 ^ 17
+        this.last_vlist_len = 0;
+        this.curr_vlist_ptr = 131072; // 2 * 64k or 2 ^ 17
+        this.curr_vlist_len = 0;
+    }
+
+    async init() {
+        const { get_cell_x, get_cell_y, get_cell_r, 
+            get_cell_type, get_cell_eatenby } = this.handler.game.engine.wasm;
+
+        const memory = this.memory = new WebAssembly.Memory({ initial: 16, maximum: 32 }); // 1mb, 2mb
+        this.wasm = await WebAssembly.instantiate(OgarXProtocol.Module, {
+            env: { 
+                memory,
+                get_cell_x, get_cell_y, get_cell_r, 
+                get_cell_type, get_cell_eatenby 
+            }
+        });
 
         this.handler.join();
         this.sendInitPacket();
@@ -87,74 +108,65 @@ module.exports = class OgarXProtocol extends Protocol {
 
     onUpdate() {
         const engine = this.handler.game.engine;
-        const cells = engine.cells;
 
-        // Don't count ejected cell under 2 tick as visible to optimize
-        const visibleList = engine.query(this.handler.controller)
-            .filter(id => cells[id].type != EJECTED_TYPE || cells[id].age > 1);
-        this.currVisible = new Set(visibleList);
+        // Query visible cells from the controller
+        const vlist = engine.query(this.handler.controller);
 
-        const writer = new Writer();
-        writer.writeUInt8(4);
-
-        writer.writeFloat32(this.handler.controller.viewportX);
-        writer.writeFloat32(this.handler.controller.viewportY);
-
-        const addList = [];
-        const updateList = [];
-
-        for (const cell_id of visibleList) {
-            if (this.lastVisible.has(cell_id)) {
-                if (cells[cell_id].type != PELLET_TYPE)
-                    updateList.push(cell_id);
-            } else addList.push(cell_id);
-        }
-
-        for (const cell_id of addList) {
-            const cell = cells[cell_id];
-            writer.writeUInt16(cell_id);
-            writer.writeUInt16(cell.type);
-            writer.writeInt16(~~cell.x);
-            writer.writeInt16(~~cell.y);
-            writer.writeUInt16(~~cell.r);
-        }
-
-        writer.writeUInt16(0);
-
-        for (const cell_id of updateList) {
-            const cell = cells[cell_id];
-            if (cell.type == PELLET_TYPE) continue; // Ignore pellet (static)
-            writer.writeUInt16(cell_id);
-            writer.writeInt16(~~cell.x);
-            writer.writeInt16(~~cell.y);
-            writer.writeUInt16(~~cell.r);
-        }
-
-        writer.writeUInt16(0);
-
-        const eat = [], del = [];
-        for (const cell_id of this.lastVisible) {
-            if (this.currVisible.has(cell_id)) continue;
-            const cell = cells[cell_id];
-            if (cell.shouldRemove && cell.eatenBy) eat.push(cell_id);
-            else del.push(cell_id);
-        }
-
-        for (const cell_id of eat) {
-            writer.writeUInt16(cell_id);
-            writer.writeUInt16(cells[cell_id].eatenBy);
-        }
-
-        writer.writeUInt16(0);
+        // Step 1
+        this.wasm.exports.move_hashtable();
+        // Step 2
+        this.wasm.exports.copy(this.last_vlist_ptr, this.curr_vlist_ptr, this.curr_vlist_len * 2);
+        // Update ptr and len
+        this.last_vlist_len = this.curr_vlist_len;
+        this.curr_vlist_ptr = this.last_vlist_ptr + this.last_vlist_len * 2; // 2 bytes per index
+        this.curr_vlist_len = vlist.length;
+        new Uint16Array(this.memory.buffer, this.curr_vlist_ptr, this.curr_vlist_len)
+            .set(vlist);
         
-        for (const cell_id of del)
-            writer.writeInt16(cell_id);
+        const AUED_table_ptr = this.curr_vlist_ptr + this.curr_vlist_len * 2;
+        
+        // Step 3
+        const AUED_end_ptr = this.wasm.exports.write_AUED(
+            0, 65536,
+            this.last_vlist_ptr, this.last_vlist_len,
+            this.curr_vlist_ptr, this.curr_vlist_len,
+            AUED_table_ptr, AUED_table_ptr + 16 // 4 * 4 bytes after the table
+        );
 
-        writer.writeUInt16(0);
+        const view = new DataView(this.memory.buffer);
+        const A_count = view.getUint32(AUED_table_ptr + 0,  true);
+        const U_count = view.getUint32(AUED_table_ptr + 4,  true);
+        const E_count = view.getUint32(AUED_table_ptr + 8,  true);
+        const D_count = view.getUint32(AUED_table_ptr + 12, true);
 
-        this.handler.ws.send(writer.finalize(), true);
-        this.lastVisible = this.currVisible;
-    };
+        // console.log(`A: ${A_count}, U: ${U_count}, E: ${E_count}, D: ${D_count}`);
+        // console.log(`AUED_end_ptr: ${AUED_end_ptr}`);
+        
+        const vx = this.handler.controller.viewportX;
+        const vy = this.handler.controller.viewportY;
+
+        // 1 byte OP + 4 bytes vx + 4 bytes vy + 4 * 2 bytes 0 padding = 17 bytes
+        // We don't have to calculate this because serialize returns the write end
+        // But this is a good way to verify it wrote as expect
+        const buffer_length = 17 + 10 * A_count + 8 * U_count + 4 * E_count + 2 * D_count;
+        
+        const mem_check = AUED_end_ptr + buffer_length - this.memory.buffer.byteLength;
+        if (mem_check > 0) {
+            const extra_page = Math.ceil(mem_check / 65536);
+            this.memory.grow(extra_page);
+            console.log(`Growing ${extra_page} page of memory in ogar69 protocol ` +
+                `memory for controller(${this.handler.controller.name})`);
+        }
+
+        // Step 4 serialize
+        const buffer_end = this.wasm.exports.serialize(vx, vy, 
+            AUED_table_ptr, AUED_table_ptr + 16, AUED_end_ptr);
+        
+        const diff = buffer_end - AUED_end_ptr;
+        console.assert(diff == buffer_length, "Buffer length must match");
+
+        this.handler.ws.send(this.memory.buffer.slice(AUED_end_ptr, buffer_end), true);
+    }
 
     /** @param {import("../../game/controller")} controller */
     onSpawn(controller) {
@@ -169,9 +181,9 @@ module.exports = class OgarXProtocol extends Protocol {
             const CLEAR_SCREEN = new ArrayBuffer(1);
             new Uint8Array(CLEAR_SCREEN)[0] = 2;
             this.handler.ws.send(CLEAR_SCREEN, true);
-            this.lastVisible.clear();
+            this.wasm.exports.clean(0, this.memory.buffer.byteLength);
         }
-    };
+    }
 
     /** 
      * @param {import("../../game/controller")} controller

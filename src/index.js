@@ -1,8 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const CORE_PATH = path.resolve(__dirname, "..", "public", "static", "wasm", "server.wasm");
+const OGARX_PATH = path.resolve(__dirname, "..", "public", "static", "wasm", "ogarx.wasm");
 
 const Server = require("./network/ws-server");
+const OgarXProtocol = require("./network/protocols/ogarx");
 
 const server = new Server();
 const engine = server.game.engine;
@@ -33,6 +35,7 @@ process.on("SIGINT", async () => {
 
 (async () => {
     await engine.init(fs.readFileSync(CORE_PATH));
+    await OgarXProtocol.init(fs.readFileSync(OGARX_PATH));
     await server.open();
     engine.start();
 })();

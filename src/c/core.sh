@@ -1,0 +1,1 @@
+emcc -O2 -s SIDE_MODULE=1 -mbulk-memory ./core.c -o ../../public/static/wasm/server.wasm

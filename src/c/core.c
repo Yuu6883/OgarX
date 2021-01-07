@@ -1,3 +1,4 @@
+#include "memory.h"
 #include <math.h>
 
 typedef struct {
@@ -44,7 +45,11 @@ typedef struct {
 
 #define CLEAR_BITS 0x49
 
-// extern console_log(unsigned short i);
+short get_cell_x(Cell ptr[], unsigned short id) { return ptr[id].x; };
+short get_cell_y(Cell ptr[], unsigned short id) { return ptr[id].y; };
+unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
+unsigned char  get_cell_type(Cell ptr[], unsigned short id) { return ptr[id].type; };
+unsigned short get_cell_eatenby(Cell ptr[], unsigned short id) { return ptr[id].eatenBy; };
 
 void update(Cell cells[], unsigned short* ptr, float dt_multi,
     float auto_size, float decay_multi, float decay_min,
@@ -54,16 +59,7 @@ void update(Cell cells[], unsigned short* ptr, float dt_multi,
 
     // Clear cell data 
     while (cell->flags & REMOVE_BIT) {
-        cell->x = 0;
-        cell->y = 0;
-        cell->r = 0;
-        cell->type = 0;
-        cell->flags = 0;
-        cell->eatenBy = 0;
-        cell->age = 0;
-        cell->boostX = 0.f;
-        cell->boostY = 0.f;
-        cell->boost = 0.f;
+        memset(cell, 0, sizeof(Cell));
 
         cell = &cells[*++ptr]; // increment to next index
     }
@@ -145,6 +141,7 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
                     node_stack_pointer[stack_counter++] = curr->tl;
             }
         }
+        // TODO: optimize if the quadnode is inside box, we don't need to check item at all
 
         for (unsigned int i = 0; i < curr->count; i++) {
             Cell* cell = &cells[*(&curr->indices + i)];
@@ -362,7 +359,9 @@ unsigned int select(Cell cells[], QuadNode* root,
             if (cell->x - cell->r <= r &&
                 cell->x + cell->r >= l &&
                 cell->y - cell->r <= t &&
-                cell->y + cell->r >= b) {
+                cell->y + cell->r >= b &&
+                !(cell->flags & INSIDE_BIT) &&
+                NOT_PELLET(cell->type) || cell->age > 1) {
                 list_pointer[list_counter++] = id;
             }
         }

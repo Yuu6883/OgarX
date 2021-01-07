@@ -15,7 +15,6 @@ module.exports = class FakeSocket {
         }
 
         port.start();
-        port.postMessage({ event: "open" });
 
         this.subscribe = this.onmessage = this.onclose = () => {};
         /** @type {import("./socket")<FakeSocket>} */

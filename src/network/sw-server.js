@@ -41,6 +41,16 @@ module.exports = class SharedWorkerServer {
                 this.ports.delete(port);
                 ws.sock.onDisconnect(code, reason);
             }
+
+            // Wait for server to start running (load wasm modules)
+            const onopen = () => {
+                if (!this.game.engine.running) {
+                    setTimeout(() => onopen(), 1000);
+                } else {
+                    port.postMessage({ event: "open" });
+                }
+            }
+            onopen();
         }
 
         // Mimic uWS idleTimeout behavior
