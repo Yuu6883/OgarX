@@ -157,7 +157,7 @@ module.exports = class HUD {
         });
         this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
-        this.serverInput.value = localStorage.getItem("ogarx_server") || "local";
+        this.serverInput.value = localStorage.getItem("ogarx_server") || window.origin.replace("http", "ws") + ":3000";
         this.nameInput.value = localStorage.getItem("ogarx_name") || "";
         this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
         updateSkin(true);

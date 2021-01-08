@@ -20,11 +20,11 @@ engine.setOptions({
     EJECT_SIZE: 38,
     EJECT_LOSS: 38.2,
     EJECT_DELAY: 25,
-    BOTS: 100,
+    BOTS: 25,
     PELLET_COUNT: 1000,
     PLAYER_SPAWN_SIZE: 1500,
-    MAP_HW: 30000,
-    MAP_HH: 30000
+    MAP_HW: 16384,
+    MAP_HH: 16384
 });
 
 process.on("SIGINT", async () => {
@@ -39,7 +39,7 @@ process.on("SIGINT", async () => {
     await server.open();
     engine.start();
 
-    setInterval(() => {
-        console.log(`Engine load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
-    }, 3000);
+    // setInterval(() => {
+    //     console.log(`Engine load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
+    // }, 3000);
 })();

@@ -30,13 +30,14 @@ module.exports = class Bot extends Handle {
                 this.controller.ejectMarco = false;
                 this.controller.mouseX = this.controller.viewportX;
                 this.controller.mouseY = this.controller.viewportY;
-            }
-            // Solotrick to random direction
-            if (Math.random() < 0.005) {
-                this.controller.splitAttempts = 7;
-                const a = Math.random() * Math.PI * 2;
-                this.controller.mouseX = this.controller.viewportX + 1000 * Math.sin(a);
-                this.controller.mouseY = this.controller.viewportY + 1000 * Math.cos(a);
+                
+                // Solotrick to random direction
+                if (Math.random() < 0.005) {
+                    this.controller.splitAttempts = 7;
+                    const a = Math.random() * Math.PI * 2;
+                    this.controller.mouseX = this.controller.viewportX + 1000 * Math.sin(a);
+                    this.controller.mouseY = this.controller.viewportY + 1000 * Math.cos(a);
+                }
             }
         }
     };
