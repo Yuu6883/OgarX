@@ -109,6 +109,9 @@ input:focus {
     background-color: #22222277;
     border-bottom: solid 3px #93a7e1;
 }
+.player-0 {
+    color:  #93a7e1;
+}
 button {
     outline: none;
     padding: 8px;

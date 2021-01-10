@@ -178,7 +178,8 @@ module.exports = class HUD {
      */
     onChat(pid, player, message) {
         const elem = document.createElement("p");
-        elem.textContent = `${player.name || "Unnamed"}: ${message}`;
+        elem.textContent = pid ? `${player.name || "Unnamed"}: ${message}` : message;
+        elem.classList.add(`player-${pid}`);
         this.chatElem.appendChild(elem);
         this.chatElem.scrollTo(0, this.chatElem.scrollHeight);
     }
@@ -209,17 +210,17 @@ module.exports = class HUD {
     connectToLocal() {
         const sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
         if (this.worker) {
-            this.worker.postMessage({ connect: sw.port }, [sw.port]);
+            this.worker.postMessage({ connect: sw.port, name: this.name, skin: this.skin }, [sw.port]);
         } else {
-            this.renderer.protocol.connect(sw.port);
+            this.renderer.protocol.connect(sw.port, this.name, this.skin);
         }
     }
 
     connectToURL(url) {
         if (this.worker) {
-            this.worker.postMessage({ connect: url });
+            this.worker.postMessage({ connect: url, name: this.name, skin: this.skin });
         } else {
-            this.renderer.protocol.connect(url);
+            this.renderer.protocol.connect(url, this.name, this.skin);
         }
     }
 }

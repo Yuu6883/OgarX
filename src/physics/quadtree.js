@@ -140,14 +140,13 @@ class QuadNode {
         }
     }
 
-    search(id = 0) {
-        if (this.items.has(id)) return true;
+    countItems() {
         if (this.branches) {
-            return this.branches[0].search(id) ||
-                this.branches[1].search(id) ||
-                this.branches[2].search(id) ||
-                this.branches[3].search(id);
-        }
+            return this.items.size + this.branches[0].countItems() +
+                this.branches[1].countItems() +
+                this.branches[2].countItems() +
+                this.branches[3].countItems();
+        } else return this.items.size;
     }
 
     print() {
@@ -255,8 +254,8 @@ class QuadTree {
         return end;
     }
 
-    search(id = 0) {
-        return this.root.search(id);
+    countItems() {
+        return this.root.countItems();
     }
 
     print() {

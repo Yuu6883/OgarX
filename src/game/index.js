@@ -2,7 +2,6 @@ const { EventEmitter } = require("events");
 
 const Controller = require("./controller");
 const Engine = require("../physics/engine");
-const Chat = require("./chat");
 
 const MAX_PLAYER = 250;
 
@@ -10,9 +9,9 @@ module.exports = class Game extends EventEmitter {
 
     constructor() {
         super();
-        this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(i));
-        this.chat = new Chat(this);
+        this.setMaxListeners(MAX_PLAYER);
         this.engine = new Engine(this);
+        this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(this.engine, i));
         this.handles = 0;
     }
 
@@ -32,7 +31,7 @@ module.exports = class Game extends EventEmitter {
     removeHandler(handle) {
         if (!handle.controller) return;
         const c = handle.controller;
-        this.engine.kill(c.id);
+        this.engine.delayKill(c.id, true);
         c.reset();
         handle.controller = null;
         this.handles--;

@@ -8,7 +8,7 @@ module.exports = class FakeSocket {
         port.onmessage = e => {
             const { data } = e;
             if (data.event === "message") {
-                this.onmessage(new DataView(data.message));
+                this.onmessage(data.message);
             } else if (data.event === "close") {
                 this.onclose({ code: data.code, reason: data.message });
             }
@@ -17,8 +17,8 @@ module.exports = class FakeSocket {
         port.start();
 
         this.subscribe = this.onmessage = this.onclose = () => {};
-        /** @type {import("./socket")<FakeSocket>} */
-        this.sock = null;
+        /** @type {import("./protocol")} */
+        this.p = null;
     }
 
     /** @param {BufferSource} buffer */

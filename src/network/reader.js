@@ -47,9 +47,9 @@ module.exports = class Reader {
         this.offset += 8;
         return a;
     }
-    /** @param {number} count */
-    skip(count) {
-        this.offset += count;
+    /** @param {number} bytes */
+    skip(bytes) {
+        this.offset += bytes;
     }
     readUTF8String() {
         const chars = [];

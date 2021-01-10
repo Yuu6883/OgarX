@@ -13,13 +13,19 @@ module.exports = class Bot extends Handle {
         this.controller.name = pick(BOTS.names);
         this.controller.skin = pick(BOTS.skins);
     };
+    
+    onTick() {
 
-    onSpawn() {
-
-    };
-
-    onUpdate() {
         const s = this.game.engine.options.PLAYER_SPAWN_SIZE;
+        
+        // if (!this.controller.alive || this.controller.score < s * s / 500) 
+        //     this.controller.spawn = true;
+        
+        // this.controller.ejectMarco = true;
+        // this.controller.splitAttempts = 7;
+        // this.controller.mouseX = this.controller.viewportX;
+        // this.controller.mouseY = this.controller.viewportY;
+
         // Less than 20% of or spawn mass
         if (!this.controller.alive || this.controller.score < s * s / 500) {
             this.controller.spawn = true;

@@ -48,7 +48,7 @@ module.exports = class Protocol extends EventEmitter {
         }, 1000 / 30); // TODO?
     }
 
-    connect(urlOrPort) {
+    connect(urlOrPort, name = "", skin = "") {
         this.disconnect();
 
         this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
@@ -59,6 +59,8 @@ module.exports = class Protocol extends EventEmitter {
             const writer = new Writer();
             writer.writeUInt8(69);
             writer.writeInt16(420);
+            writer.writeUTF16String(name);
+            writer.writeUTF16String(skin);
             this.ws.send(writer.finalize());
             this.emit("open");
         }
@@ -85,7 +87,6 @@ module.exports = class Protocol extends EventEmitter {
                     const id = reader.readUInt16();
                     const name = reader.readUTF16String();
                     const skin = reader.readUTF16String();
-                    console.log(`Received player data`, { id, name, skin });
                     this.renderer.loadPlayerData({ id, name, skin });
                     break;
                 case 4:
@@ -123,7 +124,7 @@ module.exports = class Protocol extends EventEmitter {
         
         this.renderer.target.position[0] = viewport.getFloat32(0, true);
         this.renderer.target.position[1] = viewport.getFloat32(4, true);
-        // console.log(`Received packet: ${buffer.byteLength} bytes, viewport: { x: ${view_x}, y: ${view_y} }`);
+        
         core.HEAPU8.set(new Uint8Array(buffer, 9), this.renderer.cellTypesTableOffset);                 
         core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
     }

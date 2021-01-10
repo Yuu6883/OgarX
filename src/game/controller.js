@@ -1,12 +1,13 @@
 
 module.exports = class Controller {
-    constructor(id = 0) {
+    /** @param {import("../physics/engine")} engine */
+    constructor(engine, id = 0) {
+        this.engine = engine;
         this.id = id;
         this.__name = "";
         this.__skin = "";
         this.spawn = false;
         this.updated = false;
-        this.alive = false;
         this.spectate = null;
         this.mouseX = 0;
         this.mouseY = 0;
@@ -28,6 +29,7 @@ module.exports = class Controller {
         this.handle = null;
     }
 
+    get alive() { return !!this.engine.counters[this.id].size; }
     get name() { return this.__name; }
     get skin() { return this.__skin; }
 
@@ -51,7 +53,6 @@ module.exports = class Controller {
         this.updated = false;
 
         this.handle = null;
-        this.alive = false;
         this.spectate = null;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;

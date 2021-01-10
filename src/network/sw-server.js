@@ -1,11 +1,10 @@
-const FakeSocketHandler = require("./socket");
 const FakeSocket = require("./fake-socket");
-const WebConsoleProtocol = require("./protocols/web-console");
+
+const Protocols = require("./protocols");
+// Register console protocol
+Protocols.push(require("./protocols/web-console"));
 
 const Game = require("../game");
-
-// Register console protocol
-FakeSocketHandler.protocols.push(WebConsoleProtocol);
 
 module.exports = class SharedWorkerServer {
 
@@ -21,13 +20,18 @@ module.exports = class SharedWorkerServer {
             /** @type {MessagePort} */
             const port = e.source;  
             const ws = new FakeSocket(port);
-            ws.sock = new FakeSocketHandler(this.game, ws);
             
             this.ports.add(port);
 
-            ws.onmessage = view => {
-                port.lastMessage = Date.now();
-                ws.sock.onMessage(view);
+            ws.onmessage = message => {
+                if (!ws.p) {
+                    const Protocol = Protocols.find(p => p.handshake(new DataView(message)));
+                    if (!Protocol) ws.end(1003, "Ambiguous protocol");
+                    else ws.p = new Protocol(this.game, ws, message);
+                } else {
+                    port.lastMessage = Date.now();
+                    ws.p.onMessage(new DataView(message));
+                }
             }
 
             ws.onclose = (code, reason) => {
@@ -39,7 +43,7 @@ module.exports = class SharedWorkerServer {
                 }
 
                 this.ports.delete(port);
-                ws.sock.onDisconnect(code, reason);
+                ws.sock.off();
             }
 
             // Wait for server to start running (load wasm modules)

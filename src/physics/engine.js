@@ -9,7 +9,8 @@ const Controller = require("../game/controller");
 const Bot = require("../bot");
 
 const DefaultSettings = {
-    TPS: 25,
+    LEADERBOARD_TPS: 2,
+    PHYSICS_TPS: 20,
     MAX_CELL_PER_TICK: 50,
     CELL_LIMIT: 65536,
     QUADTREE_MAX_ITEMS: 16,
@@ -39,8 +40,8 @@ const DefaultSettings = {
     PLAYER_SPLIT_CAP: 255,
     PLAYER_MIN_SPLIT_SIZE: 60,
     PLAYER_MIN_EJECT_SIZE: 60,
-    PLAYER_NO_MERGE_DELAY: 15,
-    PLAYER_NO_COLLI_DELAY: 13,
+    PLAYER_NO_MERGE_DELAY: 13,
+    PLAYER_NO_COLLI_DELAY: 9,
     PLAYER_MERGE_TIME: 1,
     PLAYER_MERGE_INCREASE: 0.02,
     PLAYER_MERGE_NEW_VER: true,
@@ -113,6 +114,7 @@ module.exports = class Engine {
                 memory: this.memory,
                 powf: Math.pow,
                 roundf: Math.round,
+                get_score: id => this.game.controls[id].score
             }
         });
 
@@ -142,8 +144,12 @@ module.exports = class Engine {
         this.treePtr = 0;
         this.treeBuffer = null;
 
-        /** @type {number} */
+        /** @type {number[]} */
         this.removedCells = [];
+        /** @type {[number, boolean][]} */
+        this.killArray = [];
+        /** @type {number[]} */
+        this.spawnArray = [];
     }
 
     get running() { return !!this.updateInterval; }
@@ -155,20 +161,27 @@ module.exports = class Engine {
         /** @type {Bot[]} */
         this.bots = [];
 
-        const delay = 1000 / this.options.TPS;
+        const delay = 1000 / this.options.PHYSICS_TPS;
         this.updateInterval = setInterval(() => {
             const now = performance.now();
             this.tick((now - this.__ltick) / delay);
             this.__ltick = now;
             this.usage = (performance.now() - now) / delay;
-
-            this.game.emit("tick");
         }, delay);
+
+        const lbDelay = 1000 / this.options.LEADERBOARD_TPS;
+        this.leaderboardInterval = setInterval(() => {
+            this.game.emit("leaderboard");
+        }, lbDelay);
     }
 
     stop() {
-        if (this.updateInterval) clearInterval(this.updateInterval);
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            clearInterval(this.leaderboardInterval);
+        }
         this.updateInterval = null;
+        this.leaderboardInterval = null;
     }
 
     get stopped() { return !this.updateInterval; }
@@ -186,18 +199,11 @@ module.exports = class Engine {
         // Serialize again so client can query viewport
         this.serialize();
 
-        // Loop through clients
-        for (const id in this.game.controls) {
-            const controller = this.game.controls[id];
-            if (!controller.handle) continue;
-            controller.handle.onUpdate();
-        }
+        // Emit tick
+        this.game.emit("tick");
 
         this.spawnCells();
-        this.handleInputs();        
-
-        // Reset update
-        for (const c of this.game.controls) if (c.alive) c.updated = false;
+        this.handleInputs();
 
         this.updateIndices();
         this.updatePlayerCells(dt);
@@ -245,20 +251,25 @@ module.exports = class Engine {
             }
         }
 
+        // Delayed kill, so the flags will be read after resolve and update quadtree
+        for (const [id, replace] of this.killArray) 
+            this.kill(id, replace);
+        this.killArray = [];
+
         // Sort indices (because we added new cells and we need to sort by size)
         this.sortIndices();
         // Serialize quadtree, preparing for collision/eat resolution
         this.serialize();
 
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
-            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);            
-        
+            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);
+
         // Magic goes here
         this.collisions = this.wasm.resolve(0,
             this.indicesPtr,
             this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.TPS * this.options.PLAYER_DEAD_DELAY);
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PHYSICS_TPS * this.options.PLAYER_DEAD_DELAY);
 
         this.removedCells = [];
         // Handle pop, update quadtree, remove item from quadtree
@@ -314,6 +325,20 @@ module.exports = class Engine {
                 this.newCell(point[0], point[1], this.options.MOTHER_CELL_SIZE, MOTHER_CELL_TYPE);
             } else break;
         }
+
+        for (const id of this.spawnArray) {
+            const [x, y] = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
+            this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+            
+            const c = this.game.controls[id];
+            this.game.emit("spawn", c);
+            c.updated = false; // reset updated field after spawning
+
+            if (!(c.handle instanceof Bot)) {
+                console.log(`Spawned ${c.name}(#${c.id}) at x: ${x.toFixed(1)}, y: ${y.toFixed(1)}`);
+            }
+        }
+        this.spawnArray = [];
     }
 
     handleInputs() {
@@ -408,11 +433,7 @@ module.exports = class Engine {
                 controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
                 if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
                     if (this.options.WORLD_KILL_OVERSIZE) {
-                        // TODO: kill the player and the cells
-                        for (const cell_id of this.counters[id])
-                            this.cells[cell_id].remove();
-    
-                        this.counters[id].clear();
+                        this.delayKill(id);
                     } else {
                         this.shouldRestart = true;
                     }
@@ -425,27 +446,26 @@ module.exports = class Engine {
                 controller.spawn = false;
                 controller.lastSpawnTick = __now;
 
-                this.kill(controller.id);
+                this.delayKill(controller.id, true);
+                this.delaySpawn(controller.id);
 
-                const point = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
-                this.newCell(point[0], point[1], this.options.PLAYER_SPAWN_SIZE, ~~id);
-
-                for (const controller2 of this.game.controls) {
-                    if (!controller2.handle) continue;
-                    if (controller2.updated) controller.handle.onSpawn(controller2);
-                    if (controller != controller2 && controller.updated)
-                        controller2.handle.onSpawn(controller);
-                }
-                
-                this.game.emit("spawn", controller);
-
-                if (!(controller.handle instanceof Bot)) {
-                    console.log(`Spawned ${controller.name}(#${controller.id}) at x: ${~~point[0]}, y: ${~~point[1]}`);
-                }
             } else controller.spawn = false;
-
-            controller.alive = !!this.counters[id].size;
         }
+    }
+
+    delaySpawn(id) {
+        this.spawnArray.push(id);
+    }
+
+    delayKill(id = 0, replace = false) {
+        if (!this.game.controls[id].alive) return; // not alive, nothing to kill
+        this.killArray.push([id, replace]);
+    }
+
+    countExist() {
+        let existing = 0;
+        for (const c of this.cells) if (c.existsStrict) existing++;
+        return existing;
     }
 
     updateIndices() {
@@ -474,7 +494,7 @@ module.exports = class Engine {
             const c = this.game.controls[~~id];
             if (!c.handle) continue;
             const s = this.counters[~~id].size;
-            this.wasm.update_player_cells(0, ptr, s,
+            s && this.wasm.update_player_cells(0, ptr, s,
                 c.mouseX, c.mouseY, dt,
                 initial, this.options.PLAYER_MERGE_INCREASE, this.options.PLAYER_SPEED,
                 this.options.PLAYER_MERGE_TIME, this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER);
@@ -482,14 +502,22 @@ module.exports = class Engine {
         }
     }
 
-    /** @param {number} id */
-    kill(id) {
-        for(const cell_id of this.counters[id]) {
-            const cell = this.cells[cell_id];
-            const deadCell = this.newCell(cell.x, cell.y, cell.r, DEAD_CELL_TYPE, 
-                cell.boostX, cell.boostY, cell.boost, false); // Don't insert it yet
-            this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
-            cell.remove();
+    /**
+     * Only set the bit for remove
+     * @param {number} id
+     * @param {boolean} replace
+     */
+    kill(id, replace) {
+        if (replace) {
+            for (const cell_id of this.counters[id]) {
+                const cell = this.cells[cell_id];
+                const deadCell = this.newCell(cell.x, cell.y, cell.r, DEAD_CELL_TYPE, 
+                    cell.boostX, cell.boostY, cell.boost, false); // Don't insert it because we just swap it
+                this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
+                this.wasm.clear_cell(0, cell_id); // 0 out memory of this cell because it's not needed anymore
+            }
+        } else {
+            for (const cell_id of this.counters[id]) this.cells[cell_id].remove();
         }
         this.counters[id].clear();
     }
@@ -559,8 +587,15 @@ module.exports = class Engine {
             return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
         }
 
-        while (this.cells[this.__next_cell_id].exists)
+        let tries = 0;
+        while (this.cells[this.__next_cell_id].exists) {
             this.__next_cell_id = ((this.__next_cell_id + 1) % this.options.CELL_LIMIT) || 1;
+            tries++;
+            if (tries >= 65536) {
+                console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
+                process.exit(1);
+            }
+        }
 
         const cell = this.cells[this.__next_cell_id];
         cell.x = x;
@@ -572,10 +607,12 @@ module.exports = class Engine {
         cell.boost = boost;
         cell.resetFlag();
         
-        if (insert) this.tree.insert(cell);
+        if (insert) {
+            this.tree.insert(cell);
+            this.cellCount++;
+        }
 
         this.counters[cell.type].add(cell.id);
-        this.cellCount++;
         return cell;
     }
 
@@ -602,12 +639,10 @@ module.exports = class Engine {
     }
 
     // Sort all the cell indices according to their size (to make solotrick work)
-    sortIndices(sort = true) {
+    sortIndices() {
 
         let offset = 0;
-        let sorting = 0;
         for (let type = 0; type < this.counters.length; type++) {
-            if (type <= 250) sorting += this.counters[type].size;
             if (type == PELLET_TYPE) continue;
             const iter = this.counters[type];
             for (const cell_id of iter) {

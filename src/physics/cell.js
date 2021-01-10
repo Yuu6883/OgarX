@@ -70,6 +70,11 @@ module.exports = class Cell {
         return this.view.getUint8(13) & CELL_EXISTS;
     }
 
+    get existsStrict() {
+        const flags = this.flags;
+        return (flags & CELL_EXISTS) && !(flags & CELL_REMOVE);
+    }
+
     get isUpdated() {
         return this.view.getUint8(13) & CELL_UPDATE;
     }

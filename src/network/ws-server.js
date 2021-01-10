@@ -1,6 +1,6 @@
 const uWS = require("uWebSockets.js");
 
-const WebSocketHandler = require("./socket");
+const Protocols = require("./protocols");
 const Game = require("../game");
 
 /** @param {ArrayBuffer} buffer */
@@ -36,12 +36,18 @@ module.exports = class SocketServer {
                         req.getHeader('sec-websocket-extensions'),
                         context);
                 },
-                open: ws => ws.sock = new WebSocketHandler(this.game, ws),
+                open: ws => () => {}, // Do nothing in open event
                 message: (ws, message, isBinary) => {
                     if (!isBinary) ws.end(1003);
-                    ws.sock.onMessage(new DataView(message));
+                    if (!ws.p) {
+                        const Protocol = Protocols.find(p => p.handshake(new DataView(message)));
+                        if (!Protocol) ws.end(1003, "Ambiguous protocol");
+                        else ws.p = new Protocol(this.game, ws, message);
+                    } else {
+                        ws.p.onMessage(new DataView(message));
+                    }
                 },
-                close: (ws, code, message) => ws.sock.onDisconnect(code, bufferToString(message))
+                close: (ws, code, message) => ws.p.off()
             }).listen("0.0.0.0", 3000, sock => {
                 this.listening = false;
                 this.sock = sock;

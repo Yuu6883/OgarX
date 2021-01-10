@@ -281,18 +281,20 @@ class Renderer {
     }
 
     clearData() {
-        this.playerData.clear(); // eh no need to worry about none-player cells
-        for (const [id, v] of this.playerTextures.entries()) {
-            if (id > 250) break;
+        this.playerData = new Map([[0, { name: "Server", skin: "" }]]);
+        // eh no need to worry about none-player cell textures
+        const keys = [...this.playerTextures.keys()].filter(k => k <= 250);
+        for (const k of keys) {
+            const v = this.playerTextures.get(k);
             if (v.name) this.gl.deleteTexture(v.name);
             if (v.skin) this.gl.deleteTexture(v.skin);
-            this.playerTextures.delete(id);
+            this.playerTextures.delete(k);
         }
     }
 
     randomPlayer() {
         return {
-            skin: "", // pick(this.bots.skins),
+            skin: pick(this.bots.skins),
             name: pick(this.bots.names)
         }
     }
@@ -696,9 +698,7 @@ class Renderer {
 
             const textures = this.playerTextures.get(i) || {};
             
-            if (this.options.DRAW_SKIN) {
-                gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);    
-            }
+            if (this.options.DRAW_SKIN) gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
@@ -965,7 +965,7 @@ class Renderer {
 
         this.uploadTexture(textures.skin, skin_bitmap);
         this.uploadTexture(textures.name, name_bitmap);
-        this.playerTextures.set(id, textures);
+        this.playerTextures.set(~~id, textures);
     }
 
     /**  @param {WebGLProgram[]} progs @param {(() => void)[]} funcs */
@@ -1038,7 +1038,7 @@ if (!self.window) {
     
         self.addEventListener("message", e => {
             const p = renderer.protocol;
-            if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000")
+            if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000", e.data.name, e.data.skin)
             if (e.data.spawn) p.once("open", 
                 () => p.spawn(e.data.name, e.data.skin));
             if (e.data.chat) p.sendChat(e.data.chat);
