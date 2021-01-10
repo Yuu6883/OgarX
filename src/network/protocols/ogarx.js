@@ -108,6 +108,20 @@ module.exports = class OgarXProtocol extends Protocol {
         }
     };
 
+    /** @param {import("../../game/controller")[]} controllers */
+    onLeaderboard(controllers) {
+        const LB_COUNT = 10;
+        const count = Math.min(LB_COUNT, controllers.length);
+
+        const writer = new Writer();
+        writer.writeUInt8(5);
+        writer.writeInt16(controllers.indexOf(this.controller));
+        writer.writeUInt8(count);
+        for (let i = 0; i < count; i++)
+            writer.writeUInt8(controllers[i].id);
+        this.ws.send(writer.finalize(), true);
+    }
+
     onTick() {
         const engine = this.game.engine;
 

@@ -43,7 +43,7 @@ typedef struct {
 #define MERGE_BIT 0x40
 #define POP_BIT 0x80
 
-#define CLEAR_BITS 0x49
+#define CLEAR_BITS 0x59
 
 extern float get_score(unsigned char id);
 
@@ -59,9 +59,10 @@ void clear_cell(Cell cells[], unsigned short id) {
 
 void update(Cell cells[], unsigned short* ptr, float dt_multi,
     unsigned int eject_max_age,
-    float auto_size, float decay_multi, float decay_min,
+    float auto_size, float decay_min, float static_decay, float dynamic_decay,
     float l, float r, float b, float t) {
 
+    static_decay *= 0.01f;
     Cell* cell = &cells[*ptr];
 
     // Clear cell data 
@@ -99,16 +100,19 @@ void update(Cell cells[], unsigned short* ptr, float dt_multi,
             if (curr_type != cell->type) {
                 curr_type = cell->type;
                 float score = get_score(curr_type);
-                curr_multi = (score - 0.01f * decay_min * decay_min) * 0.00005f;
-                curr_multi = curr_multi < 1.f ? 1.f : curr_multi;
+                curr_multi = (score - 0.01f * decay_min * decay_min) * 0.00005f * dynamic_decay;
+                if (curr_multi < 1.f) curr_multi = 1.f;
             }
 
             // Decay and set the autosplit bit for player cells
             if (cell->r > decay_min) {
-                cell->r -= curr_multi * cell->r * decay_multi * dt_multi / 50.0f;
+                cell->r -= curr_multi * cell->r * static_decay * dt_multi / 50.0f;
                 cell->flags |= UPDATE_BIT;
             }
-            if (auto_size && cell->r > auto_size) cell->flags |= AUTOSPLIT_BIT;
+            if (auto_size && cell->r > auto_size && !(cell->flags & AUTOSPLIT_BIT)) {
+                cell->flags |= AUTOSPLIT_BIT;
+                cell->age = 0;
+            }
         }
 
 
@@ -286,7 +290,7 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
 #define SKIP_RESOLVE_BITS 0xa4
 
 unsigned int resolve(Cell cells[],
-    unsigned short* ptr,
+    unsigned short* ptr, unsigned short pellet_count,
     QuadNode* root, void** node_stack_pointer, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
     float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
@@ -300,8 +304,10 @@ unsigned int resolve(Cell cells[],
         unsigned char flags = cell->flags;
 
         // Cell is to be removed, popped, or inside another cell
-        if (flags & SKIP_RESOLVE_BITS) {
-            cell++;
+        if (flags & SKIP_RESOLVE_BITS) continue;
+
+        if (IS_PELLET(cell->type)) {
+            ptr += pellet_count;
             continue;
         }
 
@@ -310,7 +316,6 @@ unsigned int resolve(Cell cells[],
                 cell->flags |= REMOVE_BIT;
                 cell->eatenBy = 0;
             }
-            continue;
         }
 
         unsigned int stack_counter = 1;

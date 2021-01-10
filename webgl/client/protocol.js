@@ -92,6 +92,15 @@ module.exports = class Protocol extends EventEmitter {
                 case 4:
                     this.parseCellData(e.data);
                     break;
+                // Leaderboard
+                case 5:
+                    const rank = reader.readInt16();
+                    const count = reader.readUInt8();
+                    const lb = { rank, me: this.me, players: [] }
+                    for (let i = 0; i < count; i++) lb.players.push(
+                        this.renderer.playerData.get(reader.readUInt8()));
+                    self.postMessage({ event: "leaderboard", lb });
+                    break;
                 // Chat
                 case 10:
                     const pid = reader.readUInt16();
@@ -109,6 +118,8 @@ module.exports = class Protocol extends EventEmitter {
             console.error(`Socket closed: { code: ${e.code}, reason: ${e.reason} }`);
         }
     }
+
+    get me() { return this.renderer.playerData.get(this.pid) || {}; }
 
     send(data) {
         if (this.ws && this.ws.readyState == WebSocket.OPEN)

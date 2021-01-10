@@ -28,11 +28,10 @@ const DefaultSettings = {
     VIRUS_MONOTONE_POP: false,
     MOTHER_CELL_COUNT: 0,
     MOTHER_CELL_SIZE: 149,
-    PLAYER_SPEED: 1,
+    PLAYER_SPEED: 1.5,
     PLAYER_SPAWN_DELAY: 3000,
-    PLAYER_DECAY_SPEED: 0.01,
-    PLAYER_DECAY_MIN_SIZE: 1000,
     PLAYER_AUTOSPLIT_SIZE: 1500,
+    PLAYER_AUTOSPLIT_DELAY: 2,
     PLAYER_MAX_CELLS: 16,
     PLAYER_SPAWN_SIZE: 32,
     PLAYER_SPLIT_BOOST: 780,
@@ -41,18 +40,21 @@ const DefaultSettings = {
     PLAYER_MIN_SPLIT_SIZE: 60,
     PLAYER_MIN_EJECT_SIZE: 60,
     PLAYER_NO_MERGE_DELAY: 13,
-    PLAYER_NO_COLLI_DELAY: 9,
+    PLAYER_NO_COLLI_DELAY: 8,
     PLAYER_MERGE_TIME: 1,
     PLAYER_MERGE_INCREASE: 0.02,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_VIEW_SCALE: 1,
     PLAYER_DEAD_DELAY: 5,
+    STATIC_DECAY: 1,
+    DYNAMIC_DECAY: 1,
+    DECAY_MIN: 1000,
     BOTS: 1,
     EJECT_DISPERSION: 0.3,
     EJECT_SIZE: 38,
     EJECT_LOSS: 43,
     EJECT_BOOST: 780,
-    EJECT_DELAY: 80, // ms
+    EJECT_DELAY: 100, // ms
     EJECT_MAX_AGE: 250,
     WORLD_RESTART_MULT: 0.75,
     WORLD_KILL_OVERSIZE: false,
@@ -161,17 +163,17 @@ module.exports = class Engine {
         /** @type {Bot[]} */
         this.bots = [];
 
-        const delay = 1000 / this.options.PHYSICS_TPS;
+        this.tickDelay = 1000 / this.options.PHYSICS_TPS;
         this.updateInterval = setInterval(() => {
             const now = performance.now();
-            this.tick((now - this.__ltick) / delay);
+            this.tick((now - this.__ltick) / this.tickDelay);
             this.__ltick = now;
-            this.usage = (performance.now() - now) / delay;
-        }, delay);
+            this.usage = (performance.now() - now) / this.tickDelay;
+        }, this.tickDelay);
 
         const lbDelay = 1000 / this.options.LEADERBOARD_TPS;
         this.leaderboardInterval = setInterval(() => {
-            this.game.emit("leaderboard");
+            this.game.emit("leaderboard", this.leaderboard);
         }, lbDelay);
     }
 
@@ -211,8 +213,9 @@ module.exports = class Engine {
         this.wasm.update(0, this.indicesPtr, dt,
             this.options.EJECT_MAX_AGE,
             this.options.PLAYER_AUTOSPLIT_SIZE,
-            this.options.PLAYER_DECAY_SPEED,
-            this.options.PLAYER_DECAY_MIN_SIZE,
+            this.options.DECAY_MIN,
+            this.options.STATIC_DECAY,
+            this.options.DYNAMIC_DECAY,
             -this.options.MAP_HW, this.options.MAP_HW,
             -this.options.MAP_HH, this.options.MAP_HH);
         
@@ -223,10 +226,10 @@ module.exports = class Engine {
                 const index = this.resolveIndices.getUint16(i * 2, true);
                 const cell = this.cells[index];
     
-                if (cell.shouldAuto) {
-                    const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
-                    if (cellsLeft <= 0) continue;
-                    const splitTimes = Math.min(Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE), cellsLeft);
+                if (cell.shouldAuto && cell.age > this.options.PLAYER_AUTOSPLIT_DELAY) {
+                    // const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
+                    // if (cellsLeft <= 0) continue;
+                    const splitTimes = Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE);
                     const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
                     for (let i = 1; i < splitTimes; i++) {
                         const angle = Math.random() * 2 * Math.PI;
@@ -266,7 +269,7 @@ module.exports = class Engine {
 
         // Magic goes here
         this.collisions = this.wasm.resolve(0,
-            this.indicesPtr,
+            this.indicesPtr, this.counters[PELLET_TYPE].size,
             this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
             this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PHYSICS_TPS * this.options.PLAYER_DEAD_DELAY);
@@ -364,9 +367,14 @@ module.exports = class Engine {
                 controller.splitAttempts--;
             }
 
+            let ejected = 0;
+            let maxEjectPerTick = this.tickDelay / this.options.EJECT_DELAY;
             // Eject
-            if (__now >= controller.lastEjectTick + this.options.EJECT_DELAY && (controller.ejectAttempts > 0 || controller.ejectMarco)) {
-                controller.ejectAttempts--;
+            while (controller.lastEjectTick <= __now + this.tickDelay && 
+                (controller.ejectAttempts > 0 || controller.ejectMarco) && 
+                maxEjectPerTick--) {
+                controller.ejectAttempts = Math.max(controller.ejectAttempts - 1, 0);
+                ejected++;
 
                 const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
                 for (const cell_id of [...this.counters[id]]) {
@@ -387,7 +395,8 @@ module.exports = class Engine {
                     cell.r = Math.sqrt(cell.r * cell.r - LOSS);
                     cell.updated = true;
                 }
-                controller.lastEjectTick = __now;
+
+                controller.lastEjectTick = __now + ejected * this.options.EJECT_DELAY;
             }
 
             // Idle spectate
@@ -643,7 +652,6 @@ module.exports = class Engine {
 
         let offset = 0;
         for (let type = 0; type < this.counters.length; type++) {
-            if (type == PELLET_TYPE) continue;
             const iter = this.counters[type];
             for (const cell_id of iter) {
                 this.resolveIndices.setUint16(offset, cell_id, true);
@@ -659,7 +667,7 @@ module.exports = class Engine {
         let ptr = this.indicesPtr;
         for (let type = 0; type <= 250; type++) {
             const s = this.counters[type].size;
-            this.wasm.sort_indices(0, ptr, s);
+            s && this.wasm.sort_indices(0, ptr, s);
             ptr += s << 1;
         }
 

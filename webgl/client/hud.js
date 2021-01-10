@@ -32,6 +32,7 @@ module.exports = class HUD {
                 const { data } = e;
                 if (data.event === "ready") this.ready = true;
                 if (data.event === "chat") this.onChat(data.pid, data.player, data.message);
+                if (data.event === "leaderboard") this.onLeaderboard(data.lb);
             }
 
             this.registerEvents();
@@ -163,6 +164,8 @@ module.exports = class HUD {
         updateSkin(true);
 
         this.chatInput.addEventListener("blur", () => this.hide(this.chatInput));
+
+        this.lbElem = document.getElementById("leaderboard-data");
     }
 
     sendChat(chat) {
@@ -182,6 +185,31 @@ module.exports = class HUD {
         elem.classList.add(`player-${pid}`);
         this.chatElem.appendChild(elem);
         this.chatElem.scrollTo(0, this.chatElem.scrollHeight);
+    }
+
+    /**
+     * @param {Object} lb 
+     * @param {number} lb.rank
+     * @param {{ name: string, skin: string }} lb.me
+     * @param {{ name: string, skin: string }[]} lb.players
+     */
+    onLeaderboard(lb) {
+        const { players, rank, me } = lb;
+        this.lbElem.innerHTML = "";
+
+        for (const i in players) {
+            const e = document.createElement("p");
+            e.textContent = `${~~i + 1}. ${players[i].name}`;
+            if (i == rank) e.classList.add("me");
+            this.lbElem.appendChild(e);
+        }
+
+        if (!players[rank]) {
+            const e = document.createElement("p");
+            e.textContent = `${rank + 1}. ${me.name || ""}`;
+            e.classList.add("me");
+            this.lbElem.appendChild(e);
+        }
     }
 
     get skin() { return this.skinInput.value; }

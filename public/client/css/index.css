@@ -60,11 +60,30 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: transparent;
     text-align: center;
     transition: opacity 0.25s linear;
     z-index: 1;
-    background-color: #000000dd;
+    background-color: #00000033;
+}
+#leaderboard {
+    padding: 10px;
+    width: 160px;
+    height: auto;
+    margin: 0;
+    position: absolute;
+    top: 0;
+    right: 0;
+    transition: opacity 0.25s linear;
+    z-index: 1;
+    color: #eee;
+    background-color: #00000033;
+}
+#leaderboard p {
+    margin: 5px;
+}
+#server-name {
+    margin: 10px;
+    text-align: center;
 }
 #chat {
     overflow-y: scroll;
@@ -109,7 +128,7 @@ input:focus {
     background-color: #22222277;
     border-bottom: solid 3px #93a7e1;
 }
-.player-0 {
+.player-0, .me {
     color:  #93a7e1;
 }
 button {

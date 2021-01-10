@@ -45,5 +45,5 @@ module.exports = class Handle {
     onLeave(controller) {};
     onSpawn(controller) {};
     onError(err) {};
-    onLeaderboard(leaderboard) {};
+    onLeaderboard(controllers) {};
 }
