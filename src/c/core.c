@@ -369,7 +369,7 @@ unsigned int resolve(Cell cells[],
 
                 // Other cell can be skipped
                 if (other_flags & SKIP_RESOLVE_BITS) continue;
-                
+
                 unsigned char action = PHYSICS_NON;
 
                 // Check player x player
@@ -422,7 +422,7 @@ unsigned int resolve(Cell cells[],
                     }
                     
                     // Other cell is inside this cell, mark it
-                    if (d + r2 < r1) other->flags |= INSIDE_BIT;
+                    other->flags |= (d + r2 < r1) << 2;
 
                     float b = r2 * r2;
                     float sum = a + b;
