@@ -21,8 +21,8 @@ module.exports = class Bot extends Handle {
         if (!this.controller.alive || this.controller.score < s * s / 500) 
             this.controller.spawn = true;
         
-        // this.controller.ejectMarco = true;
-        // this.controller.splitAttempts = 7;
+        this.controller.ejectMarco = true;
+        this.controller.splitAttempts = 7;
         this.controller.mouseX = this.controller.viewportX;
         this.controller.mouseY = this.controller.viewportY;
 
@@ -30,7 +30,7 @@ module.exports = class Bot extends Handle {
         // if (!this.controller.alive || this.controller.score < s * s / 500) {
         //     this.controller.spawn = true;
         // } else {
-        //     if (this.game.engine.counters[this.controller.id].size > 5) {
+        //     if (this.game.engine.counters[this.controller.id].length > 5) {
         //         this.controller.ejectMarco = true;
         //     } else {
         //         this.controller.ejectMarco = false;

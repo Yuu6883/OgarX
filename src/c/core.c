@@ -68,7 +68,6 @@ void update(Cell cells[], unsigned short* ptr, float dt_multi,
     // Clear cell data 
     while (cell->flags & REMOVE_BIT) {
         memset(cell, 0, sizeof(Cell));
-
         cell = &cells[*++ptr]; // increment to next index
     }
 
