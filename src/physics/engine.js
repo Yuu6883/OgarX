@@ -13,7 +13,7 @@ const DefaultSettings = {
     PHYSICS_TPS: 20,
     MAX_CELL_PER_TICK: 50,
     CELL_LIMIT: 65536,
-    QUADTREE_MAX_ITEMS: 16,
+    QUADTREE_MAX_ITEMS: 24,
     QUADTREE_MAX_LEVEL: 16,
     MAP_HW: 32767, // MAX signed short
     MAP_HH: 32767, // MAX signed short,

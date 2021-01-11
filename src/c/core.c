@@ -290,7 +290,7 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
 
 unsigned int resolve(Cell cells[],
     unsigned short* ptr, unsigned short pellet_count,
-    QuadNode* root, void** node_stack_pointer, 
+    QuadNode* root, QuadNode** sp, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
     float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
 
@@ -301,96 +301,118 @@ unsigned int resolve(Cell cells[],
         Cell* cell = &cells[*ptr++];
 
         unsigned char flags = cell->flags;
+        unsigned char type = cell->type;
 
         // Cell is to be removed, popped, or inside another cell
         if (flags & SKIP_RESOLVE_BITS) continue;
 
-        if (IS_PELLET(cell->type)) {
+        if (IS_PELLET(type)) {
             ptr += pellet_count;
             continue;
         }
 
-        if (IS_DEAD(cell->type)) {
+        if (IS_DEAD(type)) {
             if (cell->age > removeTick) {
                 cell->flags |= REMOVE_BIT;
                 cell->eatenBy = 0;
             }
         }
 
-        unsigned int stack_counter = 1;
-        node_stack_pointer[0] = root;
-        QuadNode* curr = root;
+        QuadNode** node_stack_pointer = sp;
+        *node_stack_pointer++ = root;
 
-        while (stack_counter > 0) {
+        QuadNode* curr;
+
+        unsigned char colli = cell->age > noColliDelay;
+        float x = cell->x;
+        float y = cell->y;
+        float r1 = cell->r;
+        float a = r1 * r1;
+
+        float cell_l = cell->x - r1;
+        float cell_r = cell->x + r1;
+        float cell_t = cell->y + r1;
+        float cell_b = cell->y - r1;
+
+        while (node_stack_pointer > sp) {
+            // Pop from the stack
+            curr = (QuadNode*) *--node_stack_pointer;
+
             // Has leaves, push leaves, if they intersect, to stack
             if (curr->tl) {
-                if (cell->y - cell->r < curr->y) {
-                    if (cell->x + cell->r > curr->x)
-                        node_stack_pointer[stack_counter++] = curr->br;
-                    if (cell->x - cell->r < curr->x)
-                        node_stack_pointer[stack_counter++] = curr->bl;
+                if (cell_b < curr->y) {
+                    if (cell_r > curr->x)
+                        *node_stack_pointer++ = curr->br;
+                    if (cell_l < curr->x)
+                        *node_stack_pointer++ = curr->bl;
                 }
-                if (cell->y + cell->r > curr->y) {
-                    if (cell->x + cell->r > curr->x)
-                        node_stack_pointer[stack_counter++] = curr->tr;
-                    if (cell->x - cell->r < curr->x)
-                        node_stack_pointer[stack_counter++] = curr->tl;
+                if (cell_t > curr->y) {
+                    if (cell_r > curr->x)
+                        *node_stack_pointer++ = curr->tr;
+                    if (cell_l < curr->x)
+                        *node_stack_pointer++ = curr->tl;
                 }
             }
 
-            for (unsigned int i = 0; i < curr->count; i++) {
-                unsigned short other_index = *(&curr->indices + i);
+            unsigned short* iter = &curr->indices;
+            unsigned short* end = iter + curr->count;
+
+            while(iter < end) {
+                unsigned short other_index = *iter++;
                 Cell* other = &cells[other_index];
+                
                 if (cell == other) continue; // Same cell
-                if (cell->r < other->r) continue; // Skip double check
-                else if (cell->r == other->r && cell > other) continue;
+                if (r1 < other->r) continue; // Skip double check
+                else if (r1 == other->r && cell > other) continue;
 
                 unsigned char other_flags = other->flags;
 
                 // Other cell can be skipped
                 if (other_flags & SKIP_RESOLVE_BITS) continue;
+                
                 unsigned char action = PHYSICS_NON;
 
                 // Check player x player
-                if (IS_PLAYER(cell->type)) {
-                    if (cell->type == other->type) { // same player
+                if (IS_PLAYER(type)) {
+                    if (type == other->type) { // same player
                         if (flags & other_flags & MERGE_BIT) // Both merge bits are set
                             action = PHYSICS_EAT; // player merge
-                        else if (cell->age > noColliDelay && 
-                                 other->age > noColliDelay) action = PHYSICS_COL; // player collide
+                        else if (colli && other->age > noColliDelay) action = PHYSICS_COL; // player collide
                     } else action = PHYSICS_EAT; // player eats everything else
-                } else if (IS_VIRUS(cell->type) && IS_EJECTED(other->type)) {
+                } else if (IS_VIRUS(type) && IS_EJECTED(other->type)) {
                     // Virus can only eat ejected cell
                     action = PHYSICS_EAT;
-                } else if (IS_EJECTED(cell->type) && IS_EJECTED(other->type)) {
+                } else if (IS_EJECTED(type) && IS_EJECTED(other->type)) {
                     // Ejected only collide with ejected cell
                     action = PHYSICS_COL;
-                } else if (IS_DEAD(cell->type)) {
+                } else if (IS_DEAD(type)) {
                     // Dead cell can only collide with others
                     if (IS_DEAD(other->type)) action = PHYSICS_COL;
-                } else if (IS_MOTHER_CELL(cell->type)) {
+                } else if (IS_MOTHER_CELL(type)) {
                     // Mother cell eats everything?
                     action = PHYSICS_EAT;
                 }
 
                 if (action == PHYSICS_NON) continue;
 
-                float dx = other->x - cell->x;
-                float dy = other->y - cell->y;
-                float r1 = cell->r;
+                float dx = other->x - x;
+                float dy = other->y - y;
                 float r2 = other->r;
 
-                // Avoid 60% unneccesary checks
-                if (dx > r1 + r2 || dy > r1 + r2) continue;
+                float r_sum = r1 + r2;
+                float d_sqr = dx * dx + dy * dy;
                 
-                float d = sqrtf(dx * dx + dy * dy);
+                // Does not overlap
+                if (d_sqr >= r_sum * r_sum) continue;
+                
+                float d = sqrtf(d_sqr);
 
                 collisions++;
 
                 if (action == PHYSICS_COL) {
-                    float m = r1 + r2 - d;
-                    if (m <= 0) continue;
-                    if (!d) {
+                    float m = r_sum - d;
+
+                    if (d <= 0.f) {
                         d = 1.f;
                         dx = 1.f;
                         dy = 0.f;
@@ -402,31 +424,40 @@ unsigned int resolve(Cell cells[],
                     // Other cell is inside this cell, mark it
                     if (d + r2 < r1) other->flags |= INSIDE_BIT;
 
-                    float a = r1 * r1;
                     float b = r2 * r2;
-                    float aM = b / (a + b);
-                    float bM = a / (a + b);
-                    cell->x -= dx * (m < r1 ? m : r1) * aM; // * 0.8f;
-                    cell->y -= dy * (m < r1 ? m : r1) * aM; // * 0.8f;
-                    other->x += dx * (m < r2 ? m : r2) * bM; // * 0.8f;
-                    other->y += dy * (m < r2 ? m : r2) * bM; // * 0.8f;
+                    float sum = a + b;
+
+                    float aM = b / sum;
+                    float bM = a / sum;
+
+                    float m1 = (m < r1 ? m : r1) * aM;
+                    x -= dx * m1; // * 0.8f;
+                    y -= dy * m1; // * 0.8f;
+
+                    float m2 = (m < r2 ? m : r2) * bM;
+                    other->x += dx * m2; // * 0.8f;
+                    other->y += dy * m2; // * 0.8f;
+
                     // Mark the cell as updated
                     cell->flags |= UPDATE_BIT;
                     other->flags |= UPDATE_BIT;
 
                 } else if (action == PHYSICS_EAT) {
-                    if ((cell->type == other->type || 
-                         cell->r > other->r * eatMulti) && 
-                            d < cell->r - other->r / eatOverlap) {
-                        cell->r = sqrtf(r1 * r1 + r2 * r2);
+                    if ((type == other->type || 
+                        r1 > other->r * eatMulti) && 
+                        d < r1 - other->r / eatOverlap) {
+
+                        a = r1 * r1 + r2 * r2;
+                        r1 = sqrtf(a);
+
                         if (IS_VIRUS(other->type) || IS_MOTHER_CELL(other->type)) {
                             other->eatenBy = 0;
                         } else {
                             other->eatenBy = ((unsigned int) cell) >> 5;
                         }
                         other->flags |= REMOVE_BIT;
-                        if (IS_PLAYER(cell->type) && IS_EJECTED(other->type)) {
-                            float ratio = other->r / (cell->r + 100.f);
+                        if (IS_PLAYER(type) && IS_EJECTED(other->type)) {
+                            float ratio = other->r / (r1 + 100.f);
                             cell->boost += ratio * 0.02f * other->boost;
                             float bx = cell->boostX + ratio * 0.02f * other->boostX;
                             float by = cell->boostY + ratio * 0.02f * other->boostY;
@@ -436,7 +467,7 @@ unsigned int resolve(Cell cells[],
                         }
                         if (IS_VIRUS(other->type) || IS_MOTHER_CELL(other->type))
                             cell->flags |= 0x80; // Mark this cell as popped
-                        if (IS_VIRUS(cell->type) && IS_EJECTED(other->type) && cell->r >= virusMaxSize) {
+                        if (IS_VIRUS(type) && IS_EJECTED(other->type) && r1 >= virusMaxSize) {
                             cell->flags |= 0x80; // Mark this as virus to be split
                             cell->boostX = other->boostX;
                             cell->boostY = other->boostY;
@@ -444,10 +475,11 @@ unsigned int resolve(Cell cells[],
                     }
                 }
             }
-
-            // Pop from the stack
-            curr = (QuadNode*) node_stack_pointer[--stack_counter];
         }
+        
+        cell->r = r1;
+        cell->x = x;
+        cell->y = y;
     }
     
     return collisions;
