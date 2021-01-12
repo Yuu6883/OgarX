@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="js/main.min.js"></script>
     <title>OgarX Demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.6.10/dist/css/uikit.min.css" />
     <link rel="stylesheet" href="css/index.css">
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.6.10/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.6.10/dist/js/uikit-icons.min.js"></script>
+    <script src="js/main.min.js"></script>
 </head>
 <body>
     <div id="chat"></div>
@@ -17,15 +20,25 @@
     </div>
     <div id="leaderboard">
         <h3 id="server-name">Ogar69</h3>
-        <div id="leaderboard-data"></div>
+        <div id="leaderboard-data" class="uk-inline"></div>
     </div>
     <div id="hud">
         <div style="width: 100%;"><img id="skin" src="/static/img/skin.png" /></div>
         <div>
-            <p><input id="skin-input" type="text" placeholder="Skin" /></p>
-            <p><input id="name-input" type="text" placeholder="Name" /></p>
-            <p><input id="server-input" type="text" value="local" /></p>
-            <p><button id="connect">Connect</button></p>
+            <div class="uk-inline">
+                <p><input id="skin-input" type="text" placeholder="Skin" /></p>
+                <p><input id="name-input" type="text" placeholder="Name" /></p>
+                <p><input id="server-input" disabled type="text" placeholder="Select Server"></input></p>
+                <div uk-dropdown="pos: right-center;">
+                    <ul class="uk-nav uk-dropdown-nav">
+                        <button class="uk-inline servers" server="local">Local</button><br>
+                        <button class="uk-inline servers" server="na.ogar69.yuu.dev">NA</button><br>
+                        <button class="uk-inline servers" server="eu.ogar69.yuu.dev">EU</button>
+                    </ul>
+                </div>
+            </div>
+            <br>
+            <p class="uk-inline"><button disabled id="play">Play</button></p>
         </div>
     </div>
     <canvas id="canvas"></canvas>
