@@ -160,7 +160,7 @@ module.exports = class HUD {
         });
         this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
-        this.serverInput.value = localStorage.getItem("ogarx_server") || window.origin.replace("http", "ws") + ":3000";
+        this.serverInput.value = localStorage.getItem("ogarx_server") || "local";
         this.nameInput.value = localStorage.getItem("ogarx_name") || "";
         this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
         updateSkin(true);
@@ -229,7 +229,7 @@ module.exports = class HUD {
     connect() {
         const server = this.server.trim();
         server == "local" ? this.connectToLocal() : this.connectToURL(
-            `${window.location.protocol.replace("http", "ws")}s://${server}:3000`);
+            `${window.location.protocol.replace("http", "ws")}//${server}:3000`);
         localStorage.setItem("ogarx_server", server);
     }
 
