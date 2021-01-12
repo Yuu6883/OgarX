@@ -19,11 +19,12 @@ module.exports = class SocketServer {
         this.game = new Game();
     }
 
-    open() {
+    /** @param {uWS.AppOptions} uWSOption */
+    open(uWSOption) {
         if (this.listening || this.sock) return;
         this.listening = true;
         return new Promise(resolve => {
-            uWS.App().ws("/", {
+            (uWSOption ? uWS.SSLApp(uWSOption) : uWS.App()).ws("/", {
                 idleTimeout: 10,
                 maxBackpressure: 1024,
                 maxPayloadLength: 512,
@@ -50,8 +51,12 @@ module.exports = class SocketServer {
                 close: (ws, code, message) => ws.p.off()
             }).listen("0.0.0.0", 3000, sock => {
                 this.listening = false;
-                this.sock = sock;
-                console.log(`Server opened on port ${3000}`);
+                if (sock) {
+                    this.sock = sock;
+                    console.log(`WS-Server opened on port ${3000}`);
+                } else {
+                    console.error(`WS-Server failed to open`);
+                }
                 resolve(true);
             });
         });

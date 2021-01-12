@@ -1,6 +1,20 @@
 const IMG_DIM = 512;
+let loaded = false;
+
+(async() => {
+    let font = new FontFace("Bree Serif", "url(/static/font/BreeSerif-Regular.ttf)");
+    self.fonts && fonts.add(font);
+    await font.load();
+    font = new FontFace("Lato", "url(/static/font/Lato-Bold.ttf)");
+    self.fonts && fonts.add(font);
+    await font.load();
+    loaded = true;
+})();
 
 onmessage = async evt => {
+
+    if (!loaded) return setTimeout(() => onmessage(evt), 3000);
+
     /** @type {{ data: { id: number, skin: string, name: string }}} */
     const { data } = evt;
     if (!data) return;
