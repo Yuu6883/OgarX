@@ -704,7 +704,8 @@ class Renderer {
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, (end - begin) * 2);
+            const count = (end - begin) * 2;
+            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
         }
     }
 
@@ -737,11 +738,15 @@ class Renderer {
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, (end - begin) * 2);
+            const count = (end - begin) * 2;
+            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
         }
     }
 
     drawMass(firstPass) {
+        const count = (this.renderMassBuffer.length >> 2);
+        if (count % 3 || !count) return;
+        
         const gl = this.gl;
         gl.bindVertexArray(this.massVAO);
 
