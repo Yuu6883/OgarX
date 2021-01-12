@@ -199,7 +199,7 @@ module.exports = class HUD {
 
         for (const i in players) {
             const e = document.createElement("p");
-            e.textContent = `${~~i + 1}. ${players[i].name}`;
+            e.textContent = `${~~i + 1}. ${players[i] ? players[i].name : ""}`;
             if (i == rank) e.classList.add("me");
             this.lbElem.appendChild(e);
         }
