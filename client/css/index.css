@@ -1,4 +1,9 @@
+@font-face {
+    font-family: "Lato";
+    src: url("/static/font/Lato-Bold.ttf") format("truetype");
+}
 body {
+    font-family: "Lato";
     background-color: black;
     position: absolute;
     top: 0px;
@@ -67,7 +72,7 @@ body {
 }
 #leaderboard {
     padding: 10px;
-    width: 160px;
+    width: 15%;
     height: auto;
     margin: 0;
     position: absolute;
