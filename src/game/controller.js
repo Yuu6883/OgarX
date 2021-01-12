@@ -29,7 +29,7 @@ module.exports = class Controller {
         this.handle = null;
     }
 
-    get alive() { return !!this.engine.counters[this.id].length; }
+    get alive() { return !!this.engine.counters[this.id].size; }
     get name() { return this.__name; }
     get skin() { return this.__skin; }
 

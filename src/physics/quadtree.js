@@ -57,97 +57,47 @@ class QuadNode {
         this.r = x + hw;
         /** @type {[QuadNode, QuadNode, QuadNode, QuadNode]} */
         this.branches = null;
-        /** @type {number[]} */
-        this.items = [];
+        /** @type {Set<number>} */
+        this.items = new Set();
     }
 
-    update() {
-        // Using filter as a linear algorithm
-        this.items = this.items.filter(cell_id => {
+    split() {
+        if (this.branches || 
+            this.items.size < this.tree.maxItems ||
+            this.level > this.tree.maxLevel) return;
+        const qw = this.hw / 2;
+        const qh = this.hh / 2;
+        this.branches = [
+            new QuadNode(this.tree, this.x - qw, this.y + qh, qw, qh, this),
+            new QuadNode(this.tree, this.x + qw, this.y + qh, qw, qh, this),
+            new QuadNode(this.tree, this.x - qw, this.y - qh, qw, qh, this),
+            new QuadNode(this.tree, this.x + qw, this.y - qh, qw, qh, this),
+        ];
+        for (const cell_id of this.items) {
             const cell = this.tree.cells[cell_id];
-
-            if (cell.shouldRemove) {
-                cell.__root = null;
-                this.tree.removed.push(cell.id);
-                return false; // Remove cell from items
-            }
-
-            if (!cell.isUpdated) return true; // Keep the cell in items
-
-            let newNode = this;
-            // Traverse up the tree
-            while (true) {
-                if (!newNode.root) break;
-                newNode = newNode.root;
-                if (insideQuad(cell, newNode)) break;
-            }
-            // Traverse down the tree
-            while (true) {
-                if (!newNode.branches) break;
-                const quadrant = getQuadrant(cell, newNode);
-                if (quadrant < 0) break;
-                newNode = newNode.branches[quadrant];
-            }
-            if (newNode === this) return true; // Keep the cell in items
-            cell.updated = false; // Avoid duplicate check in whichever node this cell moved to
-            newNode.items.push(cell.id);
-            cell.__root = newNode;
-            // Not returning anything means we remove the cell from this node in O(n) time
-        });
-
-        // Recursively update sub-nodes
-        if (this.branches) {
-            this.branches[0].update();
-            this.branches[1].update();
-            this.branches[2].update();
-            this.branches[3].update();
+            const quadrant = getQuadrant(cell, this);
+            if (quadrant < 0) continue;
+            this.branches[quadrant].items.add(cell_id);
+            cell.__root = this.branches[quadrant];
+            this.items.delete(cell_id);
         }
     }
 
-    restructure() {
-        // Try to merge the sub-nodes
-        if (this.branches) {
-            this.branches[0].restructure();
-            this.branches[1].restructure();
-            this.branches[2].restructure();
-            this.branches[3].restructure();
-    
-            if (this.branches[0].branches || this.branches[0].items.length ||
-                this.branches[1].branches || this.branches[1].items.length ||
-                this.branches[2].branches || this.branches[2].items.length ||
-                this.branches[3].branches || this.branches[3].items.length) return;
-            this.branches = null;
-        // Try to split the nodes into sub-nodes
-        } else if (this.items.length > this.tree.maxItems &&
-                   this.level < this.tree.maxLevel) {    
-            const qw = this.hw / 2;
-            const qh = this.hh / 2;
-            this.branches = [
-                new QuadNode(this.tree, this.x - qw, this.y + qh, qw, qh, this),
-                new QuadNode(this.tree, this.x + qw, this.y + qh, qw, qh, this),
-                new QuadNode(this.tree, this.x - qw, this.y - qh, qw, qh, this),
-                new QuadNode(this.tree, this.x + qw, this.y - qh, qw, qh, this),
-            ];
-            
-            // Keep the items that can not be inserted to sub-node
-            this.items = this.items.filter(cell_id => {
-                const cell = this.tree.cells[cell_id];
-                const quadrant = getQuadrant(cell, this);
-                if (quadrant < 0) return true;
-                this.branches[quadrant].items.push(cell_id);
-                cell.__root = this.branches[quadrant];
-            });
-
-            this.branches[0].restructure();
-            this.branches[1].restructure();
-            this.branches[2].restructure();
-            this.branches[3].restructure();
+    merge() {
+        let node = this;
+        while (node != null) {
+            if (!node.branches) { node = node.root; continue; }
+            if (node.branches[0].branches || node.branches[0].items.size ||
+                node.branches[1].branches || node.branches[1].items.size ||
+                node.branches[2].branches || node.branches[2].items.size ||
+                node.branches[3].branches || node.branches[3].items.size) return;
+            node.branches = null;
         }
     }
 
     __init_ptr() {
         this.__ptr = this.tree.__offset;
-        this.tree.__offset += 26 + 2 * this.items.length;
+        this.tree.__offset += 26 + 2 * this.items.size;
         if (this.branches) {
             this.branches[0].__init_ptr();
             this.branches[1].__init_ptr();
@@ -170,8 +120,8 @@ class QuadNode {
             view.setUint32(this.__ptr + 8, 0, true);
         }
 
-        this.tree.__serialized += this.items.length;
-        view.setUint16(this.__ptr + 24, this.items.length, true);
+        this.tree.__serialized += this.items.size;
+        view.setUint16(this.__ptr + 24, this.items.size, true);
         let ptr = this.__ptr + 26;
 
         for (const cell_id of this.items) {
@@ -180,7 +130,7 @@ class QuadNode {
         }
 
         // console.log(view.buffer.slice(view.byteOffset + this.__ptr, 
-        //     view.byteOffset + this.__ptr + 26 + this.items.length * 2));
+        //     view.byteOffset + this.__ptr + 26 + this.items.size * 2));
 
         if (this.branches) {
             this.branches[0].__write(view);
@@ -192,21 +142,20 @@ class QuadNode {
 
     countItems() {
         if (this.branches) {
-            return this.items.length + this.branches[0].countItems() +
+            return this.items.size + this.branches[0].countItems() +
                 this.branches[1].countItems() +
                 this.branches[2].countItems() +
                 this.branches[3].countItems();
-        } else return this.items.length;
+        } else return this.items.size;
     }
 
-    print(level) {
-        if (this.level > level) return;
-        console.log(`QuadNode[${this.level}] ${this.items.length} items`);
+    print() {
+        console.log(`QuadNode at ${this.__ptr} has ${this.items.size} items: ${[...this.items].join(", ")}`)
         if (this.branches) {
-            this.branches[0].print(level);
-            this.branches[1].print(level);
-            this.branches[2].print(level);
-            this.branches[3].print(level);
+            this.branches[0].print();
+            this.branches[1].print();
+            this.branches[2].print();
+            this.branches[3].print();
         }
     }
 }
@@ -229,8 +178,6 @@ class QuadTree {
         this.maxLevel = maxLevel;
         this.maxItems = maxItems;
 
-        /** @type {number[]} */
-        this.removed = [];
         this.__serialized = 0;
     }
 
@@ -245,11 +192,43 @@ class QuadTree {
             node = node.branches[quadrant];
         }
         cell.__root = node;
-        node.items.push(cell.id);
+        node.items.add(cell.id);
+        node.split();
     }
-    
-    update() {
-        this.root.update();
+
+    /** @param {import("./cell")} cell */
+    remove(cell) {
+        if (!cell.__root) return console.log("REMOVING CELL NOT IN QUADTREE");
+        if (!cell.__root.items.delete(cell.id)) console.log("ITEM NOT IN QUAD??", cell.__root.items);
+        cell.__root.merge();
+        cell.__root = null;
+    }
+
+    /** @param {import("./cell")} cell */
+    update(cell) {
+        if (!cell.__root) {
+            console.log(cell.toString());
+            throw new Error("UPDATING CELL NOT IN QUADTREE");
+        }
+        const oldNode = cell.__root;
+        let newNode = cell.__root;
+        while (true) {
+            if (!newNode.root) break;
+            newNode = newNode.root;
+            if (insideQuad(cell, newNode)) break;
+        }
+        while (true) {
+            if (!newNode.branches) break;
+            const quadrant = getQuadrant(cell, newNode);
+            if (quadrant < 0) break;
+            newNode = newNode.branches[quadrant];
+        }
+        if (oldNode === newNode) return;
+        oldNode.items.delete(cell.id);
+        newNode.items.add(cell.id);
+        cell.__root = newNode;
+        oldNode.merge();
+        newNode.split();
     }
 
     /**
@@ -259,9 +238,8 @@ class QuadTree {
      */
     swap(cell1, cell2) {
         cell2.__root = cell1.__root;
-        const items = cell1.__root.items;
-        // O(n) ?
-        items[items.indexOf(cell1.id)] = cell2.id;
+        cell2.__root.items.delete(cell1.id);
+        cell2.__root.items.add(cell2.id);
         cell1.__root = null;
     }
 
@@ -276,16 +254,12 @@ class QuadTree {
         return end;
     }
 
-    restructure() {
-        this.root.restructure();
-    }
-
     countItems() {
         return this.root.countItems();
     }
 
-    print(level = 3) {
-        this.root.print(level);
+    print() {
+        this.root.print();
     }
 }
 
