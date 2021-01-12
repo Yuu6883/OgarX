@@ -1043,9 +1043,14 @@ if (!self.window) {
     
         self.addEventListener("message", e => {
             const p = renderer.protocol;
-            if (e.data.connect) p.connect(e.data.connect || "ws://localhost:3000", e.data.name, e.data.skin)
-            if (e.data.spawn) p.once("open", 
-                () => p.spawn(e.data.name, e.data.skin));
+            if (e.data.connect && !p.connecting) {
+                p.connect(e.data.connect, e.data.name, e.data.skin);
+            }
+            if (e.data.spawn) {
+                if (p.connecting) {
+                    p.once("protocol", () => p.spawn(e.data.name, e.data.skin));
+                } else p.spawn(e.data.name, e.data.skin);
+            }
             if (e.data.chat) p.sendChat(e.data.chat);
         });
     

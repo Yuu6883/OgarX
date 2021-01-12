@@ -2,7 +2,7 @@ module.exports = class FakeSocket {
     /** @param {MessagePort} port */
     constructor(port) {
         this.port = port;
-        this.readyState = WebSocket.OPEN;
+        this.readyState = WebSocket.CONNECTING;
 
         port.onmessage = e => {
             const { data } = e;
@@ -13,6 +13,7 @@ module.exports = class FakeSocket {
             } else if (data.event === "close") {
                 this.onclose({ code: data.code, reason: data.reason });
             } else if (data.event === "open") {
+                this.readyState = WebSocket.OPEN;
                 this.onopen();
             }
         }

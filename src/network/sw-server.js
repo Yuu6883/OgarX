@@ -26,7 +26,10 @@ module.exports = class SharedWorkerServer {
             ws.onmessage = message => {
                 if (!ws.p) {
                     const Protocol = Protocols.find(p => p.handshake(new DataView(message)));
-                    if (!Protocol) ws.end(1003, "Ambiguous protocol");
+                    if (!Protocol) {
+                        console.log(message);
+                        ws.end(1003, "Ambiguous protocol");
+                    }
                     else ws.p = new Protocol(this.game, ws, message);
                 } else {
                     port.lastMessage = Date.now();
@@ -36,14 +39,14 @@ module.exports = class SharedWorkerServer {
 
             ws.onclose = (code, reason) => {
 
-                if (ws.sock.controller) {
-                    console.log(`Disconnected: (handle#${ws.sock.controller.id}) code: ${code}, message: ${reason}`);
+                if (ws.p && ws.p.controller) {
+                    console.log(`Disconnected: (handle#${ws.p.controller.id}) code: ${code}, message: ${reason}`);
                 } else {
                     console.log(`Disconnected: code: ${code}, message: ${reason}`);
                 }
 
                 this.ports.delete(port);
-                ws.sock.off();
+                ws.p && ws.p.off();
             }
 
             // Wait for server to start running (load wasm modules)

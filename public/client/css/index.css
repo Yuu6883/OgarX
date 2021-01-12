@@ -27,7 +27,7 @@ body {
 #keyboard:hover {
     fill: rgba(238, 238, 238, 0.9);
 }
-#keys {
+#keys, h1, h2, h3, h4, h5, h6 {
     color: #eee;
 }
 #key-menu {
@@ -42,6 +42,7 @@ body {
     align-items: center;
     display: flex;
     flex-direction: column;
+    background-color: rgb(0,0,0,0.75);
 }
 .hot-key {
     color: rgba(238, 238, 238, 0.8);
@@ -68,7 +69,7 @@ body {
     text-align: center;
     transition: opacity 0.25s linear;
     z-index: 1;
-    background-color: #00000033;
+    background-color: #000000ee;
 }
 #leaderboard {
     padding: 10px;
@@ -108,6 +109,10 @@ body {
     width: 200px;
     height: 200px;
 }
+.uk-dropdown {
+    background-color: #000000ee;
+    color: #eee;
+}
 #chat-input {
     position: absolute;
     bottom: 20px;
@@ -129,16 +134,19 @@ input {
     -moz-appearance: none;
     -webkit-appearance: none;
 }
-input:focus {
+input:focus #server-input:hover {
     background-color: #22222277;
     border-bottom: solid 3px #93a7e1;
 }
 .player-0, .me {
     color:  #93a7e1;
 }
+#server-input:hover { cursor: pointer; }
 button {
+    min-width: 100px;
     outline: none;
     padding: 8px;
+    margin-bottom: 16px;
     font-size: 20px;
     background-color: transparent;
     color: #eee;
@@ -150,6 +158,10 @@ button {
 }
 button:hover {
     border: solid 3px #93a7e1;
+}
+button:disabled {
+    cursor: not-allowed;
+    border: solid 3px #444;
 }
 .danger {
     border: solid 3px #e19393!important;
@@ -165,4 +177,11 @@ button:hover {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(238, 238, 238, 0.8); 
+}
+select {
+    margin: 0;
+    padding: 5px 35px 5px 5px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
