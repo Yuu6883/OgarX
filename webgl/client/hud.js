@@ -33,6 +33,8 @@ module.exports = class HUD {
                 if (data.event === "ready") this.ready = true;
                 if (data.event === "chat") this.onChat(data.pid, data.player, data.message);
                 if (data.event === "leaderboard") this.onLeaderboard(data.lb);
+                if (data.event === "connect") this.onConnect();
+                if (data.event === "disconnect") this.onDisconnect();
             }
 
             this.registerEvents();
@@ -131,11 +133,11 @@ module.exports = class HUD {
 
         this.skinInput.addEventListener("blur", updateSkin);
 
-        this.connectButton = document.getElementById("connect");
-        this.connectButton.addEventListener("click", () => {
+        this.playButton = document.getElementById("play");
+        this.playButton.addEventListener("click", () => {
             this.spawn();
             this.hide();
-            this.connectButton.blur();
+            this.playButton.blur();
         });
 
         this.chatElem = document.getElementById("chat");
@@ -158,7 +160,7 @@ module.exports = class HUD {
         });
         this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
-        this.serverInput.value = localStorage.getItem("ogarx_server") || window.origin.replace("http", "ws") + ":3000";
+        this.serverInput.value = localStorage.getItem("ogarx_server") || "local";
         this.nameInput.value = localStorage.getItem("ogarx_name") || "";
         this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
         updateSkin(true);
@@ -166,6 +168,14 @@ module.exports = class HUD {
         this.chatInput.addEventListener("blur", () => this.hide(this.chatInput));
 
         this.lbElem = document.getElementById("leaderboard-data");
+
+        document.querySelectorAll(".servers").forEach(e => {
+            e.addEventListener("click", () => {
+                const server = e.attributes.getNamedItem("server").value;
+                this.serverInput.value = server;
+                this.connect();
+            });
+        });
     }
 
     sendChat(chat) {
@@ -199,12 +209,12 @@ module.exports = class HUD {
 
         for (const i in players) {
             const e = document.createElement("p");
-            e.textContent = `${~~i + 1}. ${players[i].name}`;
+            e.textContent = `${~~i + 1}. ${players[i] ? players[i].name : ""}`;
             if (i == rank) e.classList.add("me");
             this.lbElem.appendChild(e);
         }
 
-        if (!players[rank]) {
+        if (!players[rank] && rank != 65535) {
             const e = document.createElement("p");
             e.textContent = `${rank + 1}. ${me.name || ""}`;
             e.classList.add("me");
@@ -216,14 +226,26 @@ module.exports = class HUD {
     get name() { return this.nameInput.value; }
     get server() { return this.serverInput.value; }
 
+    connect() {
+        const server = this.server.trim();
+        server == "local" ? this.connectToLocal() : this.connectToURL(
+            `${window.location.protocol.replace("http", "ws")}//${server}`);
+        localStorage.setItem("ogarx_server", server);
+    }
+
+    onConnect() {
+        this.playButton.disabled = false;
+    }
+
+    onDisconnect() {
+        this.show(this.hudElem);
+        this.playButton.disabled = true;
+    }
+
     spawn() {
-        const server = this.server;
         const name = this.name;
         const skin = this.skin;
         
-        server == "local" ? this.connectToLocal() : this.connectToURL(server);
-        
-        localStorage.setItem("ogarx_server", server);
         localStorage.setItem("ogarx_name", name);
         localStorage.setItem("ogarx_skin", skin);
 
@@ -236,15 +258,18 @@ module.exports = class HUD {
     }
 
     connectToLocal() {
+        console.log(`Connecting to local shared worker server`);
         const sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
         if (this.worker) {
             this.worker.postMessage({ connect: sw.port, name: this.name, skin: this.skin }, [sw.port]);
         } else {
-            this.renderer.protocol.connect(sw.port, this.name, this.skin);
+            const p = this.renderer.protocol;
+            p.connect(sw.port, this.name, this.skin);
         }
     }
 
     connectToURL(url) {
+        console.log(`Connecting to remote server`);
         if (this.worker) {
             this.worker.postMessage({ connect: url, name: this.name, skin: this.skin });
         } else {

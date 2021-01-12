@@ -78,6 +78,8 @@ module.exports = class Protocol extends EventEmitter {
                         height: 2 * reader.readUInt16()
                     };
                     console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
+                    this.emit("protocol");
+                    self.postMessage({ event: "connect" });
                     break;
                 case 2:
                     console.log("Clear map");
@@ -116,14 +118,17 @@ module.exports = class Protocol extends EventEmitter {
             this.renderer.clearCells();
             this.renderer.clearData();
             console.error(`Socket closed: { code: ${e.code}, reason: ${e.reason} }`);
+            self.postMessage({ event: "disconnect" });
         }
     }
 
     get me() { return this.renderer.playerData.get(this.pid) || {}; }
 
+    get connecting() { return this.ws && this.ws.readyState == WebSocket.CONNECTING; }
+    get connected() { return this.ws && this.ws.readyState == WebSocket.OPEN; }
+
     send(data) {
-        if (this.ws && this.ws.readyState == WebSocket.OPEN)
-            this.ws.send(data);
+        this.connected && this.ws.send(data);
     }
 
     /** @param {ArrayBuffer} buffer */
