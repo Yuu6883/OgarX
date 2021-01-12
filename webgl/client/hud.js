@@ -229,7 +229,7 @@ module.exports = class HUD {
     connect() {
         const server = this.server.trim();
         server == "local" ? this.connectToLocal() : this.connectToURL(
-            `${window.location.protocol.replace("http", "ws")}//${server}:3000`);
+            `${window.location.protocol.replace("http", "ws")}//${server}`);
         localStorage.setItem("ogarx_server", server);
     }
 
