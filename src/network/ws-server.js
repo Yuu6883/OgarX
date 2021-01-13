@@ -20,7 +20,7 @@ module.exports = class SocketServer {
     }
 
     /** @param {uWS.AppOptions} uWSOption */
-    open(uWSOption) {
+    open(uWSOption, port = 3000) {
         if (this.listening || this.sock) return;
         this.listening = true;
         return new Promise(resolve => {
@@ -49,11 +49,11 @@ module.exports = class SocketServer {
                     }
                 },
                 close: (ws, code, message) => ws.p.off()
-            }).listen("0.0.0.0", 3000, sock => {
+            }).listen("0.0.0.0", port, sock => {
                 this.listening = false;
                 if (sock) {
                     this.sock = sock;
-                    console.log(`WS-Server opened on port ${3000}`);
+                    console.log(`WS-Server opened on port ${port}`);
                 } else {
                     console.error(`WS-Server failed to open`);
                 }

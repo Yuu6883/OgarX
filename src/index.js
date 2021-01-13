@@ -12,7 +12,7 @@ const server = new Server();
 const engine = server.game.engine;
 
 engine.setOptions({
-    // TIME_SCALE: 0.2,
+    TIME_SCALE: 1.2, // magic that make everything work like a certain ball game
     // PHYSICS_TPS: 4,
     VIRUS_COUNT: 250,
     PLAYER_MAX_CELLS: 128,
@@ -43,7 +43,7 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
 (async () => {
     await engine.init(fs.readFileSync(CORE_PATH));
     await OgarXProtocol.init(fs.readFileSync(OGARX_PATH));
-    await server.open(sslOptions);
+    await server.open(sslOptions, process.env.PORT);
     engine.start();
 
     // setInterval(() => {

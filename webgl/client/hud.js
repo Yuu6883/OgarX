@@ -108,8 +108,10 @@ module.exports = class HUD {
 
         window.addEventListener("blur", _ => {
             state.focused = 0;
+            for (const k of this.pressing) this.keys.keyUp(k);
             this.pressing.clear();
         });
+
         window.addEventListener("focus", _ => state.focused = 1);
         state.focused = 1;
 
