@@ -14,13 +14,14 @@ module.exports = class Protocol extends EventEmitter {
         
         this.pingInterval = self.setInterval(() => {
 
-            if (!this.pid) return;
+            if (!this.pid || this.ping) return;
             
             const PING = new ArrayBuffer(1);
             new Uint8Array(PING)[0] = 69;
             this.send(PING);
+            this.ping = Date.now();
 
-            // console.log(`Bandwidth: ${~~(this.bandwidth / 1024)}kb/s`);
+            this.renderer.stats.bandwidth = this.bandwidth;
             this.bandwidth = 0;
         }, 1000);
 
@@ -78,12 +79,10 @@ module.exports = class Protocol extends EventEmitter {
                         width: 2 * reader.readUInt16(), 
                         height: 2 * reader.readUInt16()
                     };
-                    console.log(`PID: ${this.pid}, MAP: [${map.width}, ${map.height}]`);
                     this.emit("protocol");
                     self.postMessage({ event: "connect" });
                     break;
                 case 2:
-                    console.log("Clear map");
                     this.renderer.clearCells();
                     break;
                 case 3:
@@ -111,6 +110,13 @@ module.exports = class Protocol extends EventEmitter {
                     const player = this.renderer.playerData.get(pid);
                     if (!player) return console.warn(`Received unknown pid: ${pid}, message: ${message}`);
                     self.postMessage({ event: "chat", pid, player, message });
+                    break;
+                // PONG
+                case 69:
+                    if (!this.ping) return;
+                    this.renderer.stats.ping = Date.now() - this.ping;
+                    delete this.ping;
+                    break;
             }
         }
         this.ws.onerror = e => console.error(e);

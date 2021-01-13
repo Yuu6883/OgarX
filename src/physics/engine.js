@@ -22,6 +22,7 @@ const DefaultSettings = {
     SAFE_SPAWN_RADIUS: 1.5,
     PELLET_COUNT: 1000,
     PELLET_SIZE: 10,
+    VIRUS_PUSH: false,
     VIRUS_COUNT: 30,
     VIRUS_SIZE: 100,
     VIRUS_FEED_TIMES: 7,

@@ -1,3 +1,4 @@
+const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
 const Viewport = require("./viewport");
@@ -12,6 +13,7 @@ module.exports = class HUD {
         this.canvas.height = window.innerHeight;
         
         this.showing = true;
+        this.stats = new Stats();
         this.mouse = new Mouse();
         this.state = new State();
         this.viewport = new Viewport();
@@ -22,6 +24,7 @@ module.exports = class HUD {
             const offscreen = this.canvas.transferControlToOffscreen();
             const initObject = { 
                 offscreen, 
+                stats: this.stats.sharedBuffer,
                 mouse: this.mouse.sharedBuffer, 
                 state: this.state.sharedBuffer,
                 viewport: this.viewport.sharedBuffer 
@@ -48,6 +51,7 @@ module.exports = class HUD {
 
                     /** @type {import("./renderer")} */
                     this.renderer = new Renderer(this.canvas);
+                    this.renderer.stats = this.stats;
                     this.renderer.mouse = this.mouse;
                     this.renderer.state = this.state;
                     this.renderer.viewport = this.viewport;
@@ -108,11 +112,14 @@ module.exports = class HUD {
 
         window.addEventListener("blur", _ => {
             state.focused = 0;
+        });
+
+        window.addEventListener("focus", _ => {
+            state.focused = 1;
             for (const k of this.pressing) this.keys.keyUp(k);
             this.pressing.clear();
         });
 
-        window.addEventListener("focus", _ => state.focused = 1);
         state.focused = 1;
 
         canvas.addEventListener("mousemove", e => (this.mouse.x = e.clientX, this.mouse.y = e.clientY));
@@ -181,6 +188,18 @@ module.exports = class HUD {
                 this.connect();
             });
         });
+
+        this.pingElem = document.getElementById("ping");
+        this.fpsElem = document.getElementById("fps");
+        this.cellsElem = document.getElementById("cells");
+        this.textElem = document.getElementById("text");
+        
+        this.updateInterval = setInterval(() => {
+            this.pingElem.innerText = this.stats.ping;
+            this.fpsElem.innerText = this.stats.fps;
+            this.cellsElem.innerText = this.stats.cells;
+            this.textElem.innerText = this.stats.text;
+        }, 1000);
     }
 
     sendChat(chat) {

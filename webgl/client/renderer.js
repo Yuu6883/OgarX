@@ -2,7 +2,8 @@ if (self.importScripts) {
     importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");    
 }
 
-const Cell = require("./cell");
+// const Cell = require("./cell");
+const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
 const Viewport = require("./viewport");
@@ -60,6 +61,7 @@ class Renderer {
         /** @type {Map<number, [ImageBitmap, ImageBitmap]>} */
         this.updates = new Map();
 
+        this.stats = new Stats();
         this.mouse = new Mouse();
         this.state = new State();
         this.viewport = new Viewport();
@@ -77,7 +79,13 @@ class Renderer {
             DRAW_NAME: true,
             DRAW_MASS: true,
             DRAW_SKIN: true,
-        }
+        };
+        this.fps = 0;
+
+        this.fpsInterval = setInterval(() => {
+            this.stats.fps = this.fps;
+            this.fps = 0;
+        }, 1000);
     }
 
     start() {
@@ -166,8 +174,8 @@ class Renderer {
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
 
-        this.cells = Array.from({ length: CELL_LIMIT }, (_, id) => 
-            new Cell(new DataView(this.core.buffer, id * this.BYTES_PER_CELL_DATA, this.BYTES_PER_CELL_DATA), id));
+        // this.cells = Array.from({ length: CELL_LIMIT }, (_, id) => 
+        //     new Cell(new DataView(this.core.buffer, id * this.BYTES_PER_CELL_DATA, this.BYTES_PER_CELL_DATA), id));
 
         this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
         console.log(`Table offset: ${this.cellTypesTableOffset}`);
@@ -863,7 +871,8 @@ class Renderer {
 
         if (!this.state.focused) {
             this.updateTextures();
-            return;
+            // Cap at 10 fps when window not focused
+            if (this.lastDraw - now < 100) return;
         }
 
         const gl = this.gl;
@@ -899,7 +908,8 @@ class Renderer {
 
         offsetBack = this.depthPeelRender(NUM_PASS, progs, funcs);
 
-        if (this.log) console.log(`Drawing ${text_count} text, ${cell_count} cells`);
+        this.stats.cells = cell_count;
+        this.stats.text  = text_count;
         
         // Final prog
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -923,6 +933,8 @@ class Renderer {
         // this.stop();
         
         this.updateTextures();
+        this.lastDraw = now;
+        this.fps++;
     }
 
     updateTextures() {
@@ -1036,6 +1048,7 @@ if (!self.window) {
     self.addEventListener("message", async function(e) {
         const { data } = e;
         const renderer = self.r = new Renderer(data.offscreen);
+        renderer.stats.setBuffer(data.stats);
         renderer.mouse.setBuffer(data.mouse);
         renderer.state.setBuffer(data.state);
         renderer.viewport.setBuffer(data.viewport);
