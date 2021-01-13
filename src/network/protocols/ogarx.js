@@ -90,9 +90,23 @@ module.exports = class OgarXProtocol extends Protocol {
                 const splits = reader.readUInt8();
                 const ejects = reader.readUInt8();
                 const macro = reader.readUInt8();
+                const lock = reader.readUInt8();
                 controller.splitAttempts += splits;
                 controller.ejectAttempts += ejects;
                 controller.ejectMarco = Boolean(macro);
+                if (lock) {
+                    if (!controller.lockDir) {
+                        if (controller.lock()) {
+                            this.onChat(null, "Line locked");
+                        } else {
+                            this.onChat(null, `Failed to line lock because you have ` + 
+                                `${this.game.engine.counters[controller.id].size} cells`);
+                        }
+                    } else {
+                        controller.unlock();
+                        this.onChat(null, "Line unlocked");
+                    }
+                }
                 break;
             case 10:
                 const message = reader.readUTF16String();

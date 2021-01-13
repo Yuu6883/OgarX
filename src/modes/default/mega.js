@@ -3,7 +3,6 @@ module.exports = {
     PLAYER_MAX_CELLS: 128,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_AUTOSPLIT_SIZE: 0,
-    PLAYER_SPLIT_CAP: 8,
     PLAYER_MERGE_TIME: 4,
     VIRUS_MONOTONE_POP: true,
     EJECT_SIZE: 38,

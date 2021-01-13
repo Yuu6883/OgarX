@@ -41,6 +41,7 @@ module.exports = class Protocol extends EventEmitter {
             writer.writeUInt8(currState.splits);
             writer.writeUInt8(currState.ejects);
             writer.writeUInt8(currState.macro);
+            writer.writeUInt8(currState.lineLock);
 
             this.send(writer.finalize());
 

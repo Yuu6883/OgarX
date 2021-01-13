@@ -5,8 +5,8 @@ module.exports = class State {
 
     setBuffer(buf) {
         if (!buf) {
-            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(6);
-            else buf = new ArrayBuffer(6);
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(7);
+            else buf = new ArrayBuffer(7);
         }
 
         this.sharedBuffer = buf;
@@ -31,13 +31,17 @@ module.exports = class State {
     get focused() { return Atomics.load(this.buffer, 5); }
     set focused(v) { Atomics.store(this.buffer, 5, v); }
 
+    get lineLock() { return Atomics.load(this.buffer, 6); }
+    set lineLock(v) { Atomics.store(this.buffer, 6, v); }
+
     exchange() {
         return {
             spectate: Atomics.exchange(this.buffer, 0, 0),
             splits: Atomics.exchange(this.buffer, 1, 0),
             ejects: Atomics.exchange(this.buffer, 2, 0),
             macro: this.macro,
-            respawn: Atomics.exchange(this.buffer, 4, 0)
+            respawn: Atomics.exchange(this.buffer, 4, 0),
+            lineLock: Atomics.exchange(this.buffer, 6, 0)
         }
     }
 }

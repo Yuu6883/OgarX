@@ -9,8 +9,10 @@ module.exports = class Controller {
         this.spawn = false;
         this.updated = false;
         this.spectate = null;
-        this.mouseX = 0;
-        this.mouseY = 0;
+        this.__mouseX = 0;
+        this.__mouseY = 0;
+        this.lockDir = false;
+        this.linearEquation = new Float32Array(3);
         this.ejectMarco = false;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;
@@ -23,7 +25,7 @@ module.exports = class Controller {
         this.maxScore = 0;
         this.score = 0;
 
-        this.viewportScale = 1;
+        this.viewportScale = 5;
 
         /** @type {import("./handle")} */
         this.handle = null;
@@ -32,6 +34,11 @@ module.exports = class Controller {
     get alive() { return !!this.engine.counters[this.id].size; }
     get name() { return this.__name; }
     get skin() { return this.__skin; }
+
+    get mouseX() { return this.__mouseX; }
+    get mouseY() { return this.__mouseY; }
+    set mouseX(v) { if (!this.lockDir) this.__mouseX = v; }
+    set mouseY(v) { if (!this.lockDir) this.__mouseY = v; }
 
     set name(v) {
         if (v != this.__name) {
@@ -47,6 +54,23 @@ module.exports = class Controller {
         }
     }
 
+    lock() {
+        if (this.engine.counters[this.id].size != 1) return false;
+        const x1 = this.mouseX, y1 = this.mouseY, x2 = this.viewportX, y2 = this.viewportY;
+        this.linearEquation[0] = y1 - y2;
+        this.linearEquation[1] = x2 - x1;
+        this.linearEquation[2] = x1 * y2 - x2 * y1;
+        console.log(this.linearEquation);
+        // INVALID LINEAR EQUATION
+        if (!this.linearEquation[0] && !this.linearEquation[1]) return false;
+        this.lockDir = true;
+        return true;
+    }
+
+    unlock() {
+        this.lockDir = false;
+    }
+
     reset() {
         this.__name = "";
         this.__skin = "";
@@ -54,6 +78,7 @@ module.exports = class Controller {
 
         this.handle = null;
         this.spectate = null;
+        this.lockDir = false;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;
         this.lastEjectTick = 0;

@@ -112,7 +112,7 @@ module.exports = class Cell {
     }
 
     get age() {
-        return this.view.getUint32(16, true);
+        return this.view.getFloat32(16, true);
     }
     
     get boostX() {
@@ -138,6 +138,8 @@ module.exports = class Cell {
     set boost(value) {
         this.view.setFloat32(28, value, true);
     }
+
+    get positionString() { return `Cell#${this.id}[x: ${this.x}, y: ${this.y}]` }
 
     toString() {
         // if (!this.exists) return `Cell[None]`;

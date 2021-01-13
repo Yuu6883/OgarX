@@ -10,6 +10,7 @@ const Bot = require("../bot");
 
 const DefaultSettings = {
     LEADERBOARD_TPS: 2,
+    TIME_SCALE: 1,
     PHYSICS_TPS: 20,
     MAX_CELL_PER_TICK: 50,
     CELL_LIMIT: 65536,
@@ -34,18 +35,19 @@ const DefaultSettings = {
     PLAYER_AUTOSPLIT_DELAY: 2,
     PLAYER_MAX_CELLS: 16,
     PLAYER_SPAWN_SIZE: 32,
-    PLAYER_SPLIT_BOOST: 780,
+    PLAYER_SPLIT_BOOST: 800,
     PLAYER_SPLIT_DIST: 40,
-    PLAYER_SPLIT_CAP: 255,
+    PLAYER_SPLIT_CAP: 4,
     PLAYER_MIN_SPLIT_SIZE: 60,
     PLAYER_MIN_EJECT_SIZE: 60,
-    PLAYER_NO_MERGE_DELAY: 13,
-    PLAYER_NO_COLLI_DELAY: 8,
+    PLAYER_NO_MERGE_DELAY: 650,
+    PLAYER_NO_COLLI_DELAY: 450,
+    PLAYER_NO_EJECT_DELAY: 200,
     PLAYER_MERGE_TIME: 1,
-    PLAYER_MERGE_INCREASE: 0.02,
+    PLAYER_MERGE_INCREASE: 1,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_VIEW_SCALE: 1,
-    PLAYER_DEAD_DELAY: 5,
+    PLAYER_DEAD_DELAY: 0, // 5000,
     STATIC_DECAY: 1,
     DYNAMIC_DECAY: 1,
     DECAY_MIN: 1000,
@@ -55,7 +57,7 @@ const DefaultSettings = {
     EJECT_LOSS: 43,
     EJECT_BOOST: 780,
     EJECT_DELAY: 100, // ms
-    EJECT_MAX_AGE: 250,
+    EJECT_MAX_AGE: 10000,
     WORLD_RESTART_MULT: 0.75,
     WORLD_KILL_OVERSIZE: false,
     EAT_OVERLAP: 3,
@@ -78,8 +80,6 @@ const EJECTED_TYPE = 255;
  * age 4 bytes
  * boost { 3 float } = 12 bytes
  */
-
-const BYTES_PER_CELL = 32;
 
 module.exports = class Engine {
 
@@ -116,11 +116,20 @@ module.exports = class Engine {
                 memory: this.memory,
                 powf: Math.pow,
                 roundf: Math.round,
-                get_score: id => this.game.controls[id].score
+                unlock_line: id => {
+                    this.game.controls[id].unlock();
+                    console.log("UNLOCKED");
+                },
+                get_score: id => this.game.controls[id].score,
+                get_line_a: id => this.game.controls[id].linearEquation[0],
+                get_line_b: id => this.game.controls[id].linearEquation[1],
+                get_line_c: id => this.game.controls[id].linearEquation[2],
             }
         });
 
         this.wasm = module.instance.exports;
+        /** @type {number} */
+        this.BYTES_PER_CELL = this.wasm.bytes_per_cell();
         this.bindBuffers();
     }
 
@@ -130,7 +139,7 @@ module.exports = class Engine {
 
         // Default CELL_LIMIT uses 2mb ram
         this.cells = Array.from({ length: this.options.CELL_LIMIT }, (_, i) =>
-            new Cell(new DataView(this.memory.buffer, i * BYTES_PER_CELL, BYTES_PER_CELL), i));
+            new Cell(new DataView(this.memory.buffer, i * this.BYTES_PER_CELL, this.BYTES_PER_CELL), i));
         this.cellCount = 0;
         
         this.tree = new QuadTree(this.cells, 0, 0, 
@@ -139,7 +148,7 @@ module.exports = class Engine {
             this.options.QUADTREE_MAX_ITEMS);
 
         this.indices = 0;
-        this.indicesPtr =  BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.indicesPtr = this.BYTES_PER_CELL * this.options.CELL_LIMIT;
         this.resolveIndices = new DataView(this.memory.buffer, this.indicesPtr);
 
         // Not defined here since it's dynamically changed (after indices)
@@ -166,7 +175,7 @@ module.exports = class Engine {
         this.tickDelay = 1000 / this.options.PHYSICS_TPS;
         this.updateInterval = setInterval(() => {
             const now = performance.now();
-            this.tick((now - this.__ltick) / this.tickDelay);
+            this.tick((now - this.__ltick) * this.options.TIME_SCALE);
             this.__ltick = now;
             this.usage = (performance.now() - now) / this.tickDelay;
         }, this.tickDelay);
@@ -190,13 +199,13 @@ module.exports = class Engine {
 
     get __tick() { return Date.now() - this.__start; }
 
-    tick(dt = 1) {
-
+    /** @param {number} dt */
+    tick(dt) {
         if (this.bots.length < this.options.BOTS)
             this.bots.push(new Bot(this.game));
 
         // No need to reserve space for indices now since we are only going to query it
-        this.treePtr = BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.treePtr = this.BYTES_PER_CELL * this.options.CELL_LIMIT;
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
         // Serialize again so client can query viewport
         this.serialize();
@@ -205,11 +214,10 @@ module.exports = class Engine {
         this.game.emit("tick");
 
         this.spawnCells();
-        this.handleInputs();
+        this.handleInputs(dt);
 
         this.updateIndices();
-        this.updatePlayerCells(dt);
-
+        
         this.wasm.update(0, this.indicesPtr, dt,
             this.options.EJECT_MAX_AGE,
             this.options.PLAYER_AUTOSPLIT_SIZE,
@@ -218,6 +226,8 @@ module.exports = class Engine {
             this.options.DYNAMIC_DECAY,
             -this.options.MAP_HW, this.options.MAP_HW,
             -this.options.MAP_HH, this.options.MAP_HH);
+
+        this.updatePlayerCells(dt);
         
         // Autosplit and update quadtree
         if (this.options.PLAYER_AUTOSPLIT_SIZE) {
@@ -272,7 +282,7 @@ module.exports = class Engine {
             this.indicesPtr, this.counters[PELLET_TYPE].size,
             this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PHYSICS_TPS * this.options.PLAYER_DEAD_DELAY);
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
 
         this.removedCells = [];
         // Handle pop, update quadtree, remove item from quadtree
@@ -293,6 +303,7 @@ module.exports = class Engine {
                     this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
                         Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
                 } else {
+                    this.game.controls[cell.type].lockDir = false;
                     const splits = this.distributeCellMass(cell);
                     for (const mass of splits) {
                         const angle = Math.random() * 2 * Math.PI;
@@ -336,6 +347,7 @@ module.exports = class Engine {
             const c = this.game.controls[id];
             this.game.emit("spawn", c);
             c.updated = false; // reset updated field after spawning
+            c.lockDir = false; // reset line lock
 
             if (!(c.handle instanceof Bot)) {
                 console.log(`Spawned ${c.name}(#${c.id}) at x: ${x.toFixed(1)}, y: ${y.toFixed(1)}`);
@@ -344,7 +356,7 @@ module.exports = class Engine {
         this.spawnArray = [];
     }
 
-    handleInputs() {
+    handleInputs(dt) {
         const __now = this.__tick;
         for (const id in this.game.controls) {
             const controller = this.game.controls[id];
@@ -368,9 +380,9 @@ module.exports = class Engine {
             }
 
             let ejected = 0;
-            let maxEjectPerTick = this.tickDelay / this.options.EJECT_DELAY;
+            let maxEjectPerTick = dt / this.options.EJECT_DELAY;
             // Eject
-            while (controller.lastEjectTick <= __now + this.tickDelay && 
+            while (controller.lastEjectTick <= __now + dt && 
                 (controller.ejectAttempts > 0 || controller.ejectMarco) && 
                 maxEjectPerTick--) {
                 controller.ejectAttempts = Math.max(controller.ejectAttempts - 1, 0);
@@ -380,7 +392,7 @@ module.exports = class Engine {
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
-                    if (cell.age < this.options.PLAYER_NO_COLLI_DELAY - 8) continue;
+                    if (cell.age < this.options.PLAYER_NO_EJECT_DELAY) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);
@@ -496,7 +508,7 @@ module.exports = class Engine {
     }
 
     updatePlayerCells(dt) {
-        const initial = Math.round(25 * this.options.PLAYER_MERGE_TIME);
+        const initial = Math.round(1000 * this.options.PLAYER_MERGE_TIME);
         
         let ptr = this.indicesPtr + (this.removedCells.length << 1);
         for (const id in this.game.controls) {
@@ -504,7 +516,9 @@ module.exports = class Engine {
             if (!c.handle) continue;
             const s = this.counters[~~id].size;
             s && this.wasm.update_player_cells(0, ptr, s,
-                c.mouseX, c.mouseY, dt,
+                c.mouseX, c.mouseY, 
+                c.lockDir, c.linearEquation[0], c.linearEquation[1], c.linearEquation[2],
+                dt,
                 initial, this.options.PLAYER_MERGE_INCREASE, this.options.PLAYER_SPEED,
                 this.options.PLAYER_MERGE_TIME, this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER);
             ptr += s << 1;

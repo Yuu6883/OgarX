@@ -1,4 +1,4 @@
-const events = ["Feed", "Split", "Double Split", "Triple Split", "Quad Split", "Respawn"];
+const events = ["Feed", "Split", "Double Split", "Triple Split", "Quad Split", "Line Lock", "Respawn"];
 
 const KeyNameMap = { " ": "SPACE" };
 
@@ -16,7 +16,7 @@ module.exports = class Keyboard {
             this.keys = keys;
         } catch (e) {
             console.error(e);
-            this.keys = ["w", " ", "g", "z", "q", "n"];
+            this.keys = ["w", " ", "g", "z", "q", "f", "n"];
         }
 
         this.menuElem = document.getElementById("key-menu");
@@ -83,12 +83,13 @@ module.exports = class Keyboard {
         const state = this.hud.state;
 
         switch (action) {
-            case "Feed":         state.macro   = 1; break;
-            case "Split":        state.splits  = 1; break;
-            case "Double Split": state.splits  = 2; break;
-            case "Triple Split": state.splits  = 3; break;
-            case "Quad Split":   state.splits  = 4; break;
-            case "Respawn":      state.respawn = 1; break;
+            case "Feed":         state.macro    = 1; break;
+            case "Split":        state.splits   = 1; break;
+            case "Double Split": state.splits   = 2; break;
+            case "Triple Split": state.splits   = 3; break;
+            case "Quad Split":   state.splits   = 4; break;
+            case "Line Lock":    state.lineLock = 1; break;
+            case "Respawn":      state.respawn  = 1; break;
         }
     }
 

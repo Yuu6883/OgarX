@@ -8,7 +8,7 @@ typedef struct {
     unsigned char type;
     unsigned char flags;
     unsigned short eatenBy;
-    unsigned int age;
+    float age;
     float boostX;
     float boostY;
     float boost;
@@ -37,16 +37,18 @@ typedef struct {
 #define EXIST_BIT 0x1
 #define UPDATE_BIT 0x2
 #define INSIDE_BIT 0x4
-// Removed dead bit to type 251
+#define LOCK_BIT 0x8
 #define AUTOSPLIT_BIT 0x10
 #define REMOVE_BIT 0x20
 #define MERGE_BIT 0x40
 #define POP_BIT 0x80
 
-#define CLEAR_BITS 0x59
+#define WALL_BITS 0xa
 
 extern float get_score(unsigned char id);
+extern void unlock_line(unsigned char id);
 
+size_t bytes_per_cell() { return sizeof(Cell); }
 short get_cell_x(Cell ptr[], unsigned short id) { return ptr[id].x; };
 short get_cell_y(Cell ptr[], unsigned short id) { return ptr[id].y; };
 unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
@@ -57,7 +59,7 @@ void clear_cell(Cell cells[], unsigned short id) {
     memset(&cells[id], 0, sizeof(Cell));
 }
 
-void update(Cell cells[], unsigned short* ptr, float dt_multi,
+void update(Cell cells[], unsigned short* ptr, float dt,
     unsigned int eject_max_age,
     float auto_size, float decay_min, float static_decay, float dynamic_decay,
     float l, float r, float b, float t) {
@@ -79,15 +81,15 @@ void update(Cell cells[], unsigned short* ptr, float dt_multi,
     // Player cells
     while (*ptr) {
         // Increment age, clear bits
-        cell->age++;
-        cell->flags &= CLEAR_BITS;
+        cell->age += dt;
+        cell->flags &= EXIST_BIT;
 
         if (IS_EJECTED(cell->type) && cell->age > eject_max_age)
             cell->flags |= REMOVE_BIT;
 
         // Boost cell
         if (cell->boost > 1) {
-            float db = cell->boost / 9.0f * dt_multi;
+            float db = cell->boost * 0.0025f * dt;
             cell->x += cell->boostX * db;
             cell->y += cell->boostY * db;
             cell->flags |= UPDATE_BIT;
@@ -105,41 +107,130 @@ void update(Cell cells[], unsigned short* ptr, float dt_multi,
 
             // Decay and set the autosplit bit for player cells
             if (cell->r > decay_min) {
-                cell->r -= curr_multi * cell->r * static_decay * dt_multi / 50.0f;
+                cell->r -= curr_multi * cell->r * static_decay * dt * 0.0001f;
                 cell->flags |= UPDATE_BIT;
             }
             if (auto_size && cell->r > auto_size && !(cell->flags & AUTOSPLIT_BIT)) {
                 cell->flags |= AUTOSPLIT_BIT;
-                cell->age = 0;
+                cell->age = 0.0f;
             }
         }
-
 
         // Bounce and clamp the cells in the box
         unsigned char bounce = cell->boost > 1;
         float hr = cell->r / 2;
         if (cell->x < l + hr) {
             cell->x = l + hr;
-            cell->flags |= UPDATE_BIT;
+            cell->flags |= WALL_BITS;
             if (bounce) cell->boostX = -cell->boostX;
-        } 
-        if (cell->x > r - hr) {
+        } else if (cell->x > r - hr) {
             cell->x = r - hr;
-            cell->flags |= UPDATE_BIT;
+            cell->flags |= WALL_BITS;
             if (bounce) cell->boostX = -cell->boostX;
         }
         if (cell->y > t - hr) {
             cell->y = t - hr;
-            cell->flags |= UPDATE_BIT;
+            cell->flags |= WALL_BITS;
             if (bounce) cell->boostY = -cell->boostY;
-        }
-        if (cell->y < b + hr) {
+        } else if (cell->y < b + hr) {
             cell->y = b + hr;
-            cell->flags |= UPDATE_BIT;
+            cell->flags |= WALL_BITS;
             if (bounce) cell->boostY = -cell->boostY;
         }
         
         cell = &cells[*++ptr]; // increment to next index
+    }
+}
+
+void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
+    float mouse_x, float mouse_y, 
+    unsigned char lock_dir, float a, float b, float c, 
+    float dt,
+    float merge_initial, float merge_increase, float player_speed,
+    unsigned int merge_time, unsigned int no_merge_delay, unsigned char merge_version_new) {
+    
+    if (!n) return;
+
+    if (merge_time > 0.0f) {
+        if (merge_version_new) {
+            for (unsigned int i = 0; i < n; i++) {
+                Cell* cell = &cells[indices[i]];
+                float increase = roundf(25.f * cell->r * merge_increase);
+                float time = increase > no_merge_delay ? increase : no_merge_delay;
+                if (cell->age > merge_initial && cell->age > time) cell->flags |= MERGE_BIT;
+            }
+        } else {
+            for (unsigned int i = 0; i < n; i++) {
+                Cell* cell = &cells[indices[i]];
+                float increase = roundf(25.f * cell->r * merge_increase);
+                float time = merge_initial + merge_increase;
+                if (cell->age > no_merge_delay && cell->age > time) cell->flags |= MERGE_BIT;
+            }
+        }
+    } else {
+        for (unsigned int i = 0; i < n; i++) {
+            Cell* cell = &cells[indices[i]];
+            if (cell->age > no_merge_delay) cell->flags |= MERGE_BIT;
+        }
+    }
+
+    // Move player cells
+    if (lock_dir) {
+        unsigned char all_flags = 0;
+        // ax + by = c
+        if (a) {
+            for (unsigned int i = 0; i < n; i++) {
+                Cell* cell = &cells[indices[i]];
+                all_flags |= cell->flags;
+                cell->flags |= LOCK_BIT;
+
+                float dx = mouse_x - cell->x;
+                float dy = mouse_y - cell->y;
+                float d = sqrtf(dx * dx + dy * dy);
+                if (d < 1) continue; dy /= d;
+
+                float speed = 1.76f * powf(cell->r, -0.4396754) * player_speed;
+                float m = (speed < d ? speed : d) * dt;
+                cell->y += dy * m;
+                // Project x
+                cell->x = (-c - b * cell->y) / a;
+            }
+        } else if (b) {
+            for (unsigned int i = 0; i < n; i++) {
+                Cell* cell = &cells[indices[i]];
+                all_flags |= cell->flags;
+                cell->flags |= LOCK_BIT;
+
+                float dx = mouse_x - cell->x;
+                float dy = mouse_y - cell->y;
+                float d = sqrtf(dx * dx + dy * dy);
+                if (d < 1) continue; dx /= d;
+
+                float speed = 1.76f * powf(cell->r, -0.4396754) * player_speed;
+                float m = (speed < d ? speed : d) * dt;
+                cell->x += dx * m;
+                cell->y = (-c - a * cell->x) / b;
+            }
+        } else {
+            // End of world.
+        }
+        if (all_flags & LOCK_BIT) {
+            // IF ANY CELL TOUCHES THE WALL
+            unlock_line(cells[indices[0]].type);
+        }
+    } else {
+        for (unsigned int i = 0; i < n; i++) {
+            Cell* cell = &cells[indices[i]];
+
+            float dx = mouse_x - cell->x;
+            float dy = mouse_y - cell->y;
+            float d = sqrtf(dx * dx + dy * dy);
+            if (d < 1) continue; dx /= d; dy /= d;
+            float speed = 1.76f * powf(cell->r, -0.4396754) * player_speed;
+            float m = (speed < d ? speed : d) * dt;
+            cell->x += dx * m;
+            cell->y += dy * m;
+        }
     }
 }
 
@@ -237,56 +328,15 @@ void sort_indices(Cell cells[], unsigned short indices[], int n) {
     }
 }
 
-void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
-    float mouse_x, float mouse_y, float dt,
-    float merge_initial, float merge_increase, float player_speed,
-    unsigned int merge_time, unsigned int no_merge_delay, unsigned char merge_version_new) {
-    
-    if (!n) return;
-
-    if (merge_time > 0.0f) {
-        if (merge_version_new) {
-            for (unsigned int i = 0; i < n; i++) {
-                Cell* cell = &cells[indices[i]];
-                float increase = roundf(25.f * cell->r * merge_increase);
-                float time = increase > no_merge_delay ? increase : no_merge_delay;
-                if (cell->age > merge_initial && cell->age > time) cell->flags |= MERGE_BIT;
-            }
-        } else {
-            for (unsigned int i = 0; i < n; i++) {
-                Cell* cell = &cells[indices[i]];
-                float increase = roundf(25.f * cell->r * merge_increase);
-                float time = merge_initial + merge_increase;
-                if (cell->age > no_merge_delay && cell->age > time) cell->flags |= MERGE_BIT;
-            }
-        }
-    } else {
-        for (unsigned int i = 0; i < n; i++) {
-            Cell* cell = &cells[indices[i]];
-            if (cell->age > no_merge_delay) cell->flags |= MERGE_BIT;
-        }
-    }
-
-    // Move player cells
-    for (unsigned int i = 0; i < n; i++) {
-        Cell* cell = &cells[indices[i]];
-
-        float dx = mouse_x - cell->x;
-        float dy = mouse_y - cell->y;
-        float d = sqrtf(dx * dx + dy * dy);
-        if (d < 1) continue; dx /= d; dy /= d;
-        float speed = 88.f * powf(cell->r, -0.4396754) * player_speed;
-        float m = (speed < d ? speed : d) * dt;
-        cell->x += dx * m;
-        cell->y += dy * m;
-    }
-}
-
 #define PHYSICS_NON 0
 #define PHYSICS_EAT 1
 #define PHYSICS_COL 2
 
 #define SKIP_RESOLVE_BITS 0xa4
+
+extern float get_line_a(unsigned char id);
+extern float get_line_b(unsigned char id);
+extern float get_line_c(unsigned char id);
 
 unsigned int resolve(Cell cells[],
     unsigned short* ptr, unsigned short pellet_count,
@@ -295,6 +345,7 @@ unsigned int resolve(Cell cells[],
     float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
 
     unsigned int collisions = 0;
+    unsigned short* ptr_copy = ptr;
 
     while (*ptr) {
 
@@ -315,6 +366,7 @@ unsigned int resolve(Cell cells[],
             if (cell->age > removeTick) {
                 cell->flags |= REMOVE_BIT;
                 cell->eatenBy = 0;
+                continue;
             }
         }
 
@@ -363,8 +415,7 @@ unsigned int resolve(Cell cells[],
                 
                 if (cell == other) continue; // Same cell
                 if (r1 < other->r) continue; // Skip double check
-                else if (r1 == other->r && cell > other) continue;
-
+                
                 unsigned char other_flags = other->flags;
 
                 // Other cell can be skipped
@@ -413,16 +464,15 @@ unsigned int resolve(Cell cells[],
                     float m = r_sum - d;
 
                     if (d <= 0.f) {
-                        d = 1.f;
-                        dx = 1.f;
-                        dy = 0.f;
+                        continue;
                     } else {
                         dx /= d; 
                         dy /= d;
                     }
                     
                     // Other cell is inside this cell, mark it
-                    other->flags |= (d + r2 < r1) << 2;
+                    other->flags |= (d + r2 < r1) << 2; 
+                    // 1 << 2 = 0x4 which is INSIDE_BIT, but we are doing branchless here
 
                     float b = r2 * r2;
                     float sum = a + b;
@@ -458,7 +508,7 @@ unsigned int resolve(Cell cells[],
                         other->flags |= REMOVE_BIT;
                         if (IS_PLAYER(type) && IS_EJECTED(other->type)) {
                             float ratio = other->r / (r1 + 100.f);
-                            cell->boost += ratio * 0.02f * other->boost;
+                            cell->boost += ratio * 0.025f * other->boost;
                             float bx = cell->boostX + ratio * 0.02f * other->boostX;
                             float by = cell->boostY + ratio * 0.02f * other->boostY;
                             float norm = sqrt(bx * bx + by * by);
@@ -476,12 +526,40 @@ unsigned int resolve(Cell cells[],
                 }
             }
         }
-        
+
         cell->r = r1;
         cell->x = x;
         cell->y = y;
     }
     
+    unsigned char lock_type = 0;
+    float line_a;
+    float line_b;
+    float line_c;
+    
+    while (*ptr_copy) {
+        Cell* cell = &cells[*ptr_copy++];
+        unsigned char type = cell->type;
+        if (cell->flags & LOCK_BIT) {
+            if (lock_type != type) {
+                if (type > 250) break; // only player cells can use lock bit
+                line_a = get_line_a(type);
+                line_b = get_line_b(type);
+                line_c = get_line_c(type);
+                lock_type = type;
+            }
+            if (line_a) {
+                // Project x
+                cell->x = (-line_c - line_b * cell->y) / line_a;
+            } else if (line_b) {
+                // Project y
+                cell->y = (-line_c - line_a * cell->x) / line_b;
+            } else {
+                // Idk men.
+            }
+        }
+    }
+
     return collisions;
 }
 
