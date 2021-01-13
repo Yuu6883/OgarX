@@ -23,7 +23,7 @@ engine.setOptions({
     EJECT_SIZE: 38,
     EJECT_LOSS: 38.4,
     EJECT_DELAY: 50,
-    BOTS: 0,
+    BOTS: 100,
     PELLET_COUNT: 5000,
     PLAYER_SPAWN_SIZE: 1500,
     MAP_HW: 30000,
