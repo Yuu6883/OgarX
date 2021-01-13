@@ -12,7 +12,7 @@ const server = new Server();
 const engine = server.game.engine;
 
 engine.setOptions({
-    TIME_SCALE: 1.15, // magic that make everything work like a certain ball game
+    TIME_SCALE: 1.2, // magic that make everything work like a certain ball game
     // PHYSICS_TPS: 4,
     PLAYER_MAX_CELLS: 128,
     PLAYER_MERGE_NEW_VER: true,
