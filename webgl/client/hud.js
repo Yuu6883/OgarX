@@ -106,7 +106,10 @@ module.exports = class HUD {
             this.pressing.delete(e.key);
         });
 
-        window.addEventListener("blur", _ => state.focused = 0);
+        window.addEventListener("blur", _ => {
+            state.focused = 0;
+            this.pressing.clear();
+        });
         window.addEventListener("focus", _ => state.focused = 1);
         state.focused = 1;
 
