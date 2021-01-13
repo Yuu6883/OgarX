@@ -25,7 +25,7 @@ module.exports = class Controller {
         this.maxScore = 0;
         this.score = 0;
 
-        this.viewportScale = 4;
+        this.viewportScale = 3;
 
         /** @type {import("./handle")} */
         this.handle = null;

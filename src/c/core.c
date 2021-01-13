@@ -17,6 +17,8 @@ typedef struct {
 typedef struct {
     float x;
     float y;
+    float hw;
+    float hh;
     void* tl;
     void* tr;
     void* bl;
@@ -559,8 +561,6 @@ unsigned int resolve(Cell cells[],
             float y0 = cell->y;
             cell->x = (line_b * (line_b * x0 - line_a * y0) - line_a * line_c) * line_a_b_sqr_sum_inv;
             cell->y = (line_a * (-line_b * x0 + line_a * y0) - line_b * line_c) * line_a_b_sqr_sum_inv;
-        } else {
-            // log_magic();
         }
     }
 
@@ -568,47 +568,77 @@ unsigned int resolve(Cell cells[],
 }
 
 unsigned int select(Cell cells[], QuadNode* root, 
-    void** node_stack_pointer, unsigned short* list_pointer, 
+    QuadNode** sp, unsigned short* list_pointer, 
     float l, float r, float b, float t) {
     
-    unsigned int list_counter = 0;
-    unsigned int stack_counter = 0;
+    unsigned short* write_pointer = list_pointer;
 
+    QuadNode** node_stack_pointer = sp;
     // Push root to stack
-    node_stack_pointer[stack_counter++] = root;
+    *node_stack_pointer++ = root;
+    // Current node
+    QuadNode* curr;
 
-    while (stack_counter > 0) {
+    while (node_stack_pointer > sp) {
         // Pop from the stack
-        QuadNode* curr = (QuadNode*) node_stack_pointer[--stack_counter];
+        curr = *--node_stack_pointer;
 
-        // Has leaves, push leaves, if they intersect, to stack
-        if (curr->tl) {
-            if (b < curr->y) {
-                if (r > curr->x)
-                    node_stack_pointer[stack_counter++] = curr->br;
-                if (l < curr->x)
-                    node_stack_pointer[stack_counter++] = curr->bl;
-            }
-            if (t > curr->y) {
-                if (r > curr->x)
-                    node_stack_pointer[stack_counter++] = curr->tr;
-                if (l < curr->x)
-                    node_stack_pointer[stack_counter++] = curr->tl;
-            }
-        }
+        if (l < curr->x - curr->hw &&
+            r > curr->x + curr->hw &&
+            b < curr->y - curr->hh &&
+            t > curr->y + curr->hh) {
 
-        for (unsigned int i = 0; i < curr->count; i++) {
-            unsigned short id = *(&curr->indices + i);
-            Cell* cell = &cells[id];
-            if (cell->x - cell->r <= r &&
-                cell->x + cell->r >= l &&
-                cell->y - cell->r <= t &&
-                cell->y + cell->r >= b &&
-                (NOT_PELLET(cell->type) || cell->age > 1)) {
-                list_pointer[list_counter++] = id;
+            // Temp stack pointer to save where we started inclusive check
+            QuadNode** temp_stack_pointer = node_stack_pointer;
+            *node_stack_pointer++ = curr;
+
+            QuadNode* curr_inclusive;
+            
+            while (node_stack_pointer > temp_stack_pointer) {
+                // Pop from the stack
+                curr_inclusive = *--node_stack_pointer;
+                // Has leaves, push leaves without checking if they intersect
+                if (curr_inclusive->tl) {
+                    *node_stack_pointer++ = curr_inclusive->br;
+                    *node_stack_pointer++ = curr_inclusive->bl;
+                    *node_stack_pointer++ = curr_inclusive->tr;
+                    *node_stack_pointer++ = curr_inclusive->tl;
+                }
+
+                // Copy count * 2 bytes of indices data directly to write pointer
+                memcpy(write_pointer, &curr_inclusive->indices, curr_inclusive->count << 1);
+                write_pointer += curr_inclusive->count;
+            }
+        } else {
+            // Has leaves, push leaves, if they intersect, to stack
+            if (curr->tl) {
+                if (b < curr->y) {
+                    if (r > curr->x)
+                        *node_stack_pointer++ = curr->br;
+                    if (l < curr->x)
+                        *node_stack_pointer++ = curr->bl;
+                }
+                if (t > curr->y) {
+                    if (r > curr->x)
+                        *node_stack_pointer++ = curr->tr;
+                    if (l < curr->x)
+                        *node_stack_pointer++ = curr->tl;
+                }
+            }
+
+            for (unsigned int i = 0; i < curr->count; i++) {
+                unsigned short id = *(&curr->indices + i);
+                Cell* cell = &cells[id];
+                if (cell->x - cell->r <= r &&
+                    cell->x + cell->r >= l &&
+                    cell->y - cell->r <= t &&
+                    cell->y + cell->r >= b &&
+                    (NOT_PELLET(cell->type) || cell->age > 1)) {
+                    *write_pointer++ = id;
+                }
             }
         }
     }
 
-    return list_counter;
+    return write_pointer - list_pointer;
 }

@@ -26,10 +26,10 @@ const insideQuad = (cell, node) => {
 
 /**
  * QuadNode serialize to:
- * x, y (2 * 4 = 8 bytes)
+ * x, y, hw, hw (4 * 4 = 8 bytes)
  * 4 childpointers (4 * 4 = 16 bytes)
  * count (2 bytes)
- * Total = 26 + 2 * items
+ * Total = 34 + 2 * items
  */
 
 class QuadNode {
@@ -97,7 +97,7 @@ class QuadNode {
 
     __init_ptr() {
         this.__ptr = this.tree.__offset;
-        this.tree.__offset += 26 + 2 * this.items.size;
+        this.tree.__offset += 34 + 2 * this.items.size;
         if (this.branches) {
             this.branches[0].__init_ptr();
             this.branches[1].__init_ptr();
@@ -108,29 +108,39 @@ class QuadNode {
 
     /** @param {DataView} view */
     __write(view) {
-        view.setFloat32(this.__ptr,      this.x, true);
-        view.setFloat32(this.__ptr + 4,  this.y, true);
+
+        let ptr = this.__ptr;
+        view.setFloat32(ptr, this.x, true);
+        ptr += 4;
+        view.setFloat32(ptr, this.y, true);
+        ptr += 4;
+        view.setFloat32(ptr, this.hw, true);
+        ptr += 4;
+        view.setFloat32(ptr, this.hh, true);
+        ptr += 4;
 
         if (this.branches) {
-            view.setUint32(this.__ptr + 8,  view.byteOffset + this.branches[0].__ptr, true);
-            view.setUint32(this.__ptr + 12, view.byteOffset + this.branches[1].__ptr, true);
-            view.setUint32(this.__ptr + 16, view.byteOffset + this.branches[2].__ptr, true);
-            view.setUint32(this.__ptr + 20, view.byteOffset + this.branches[3].__ptr, true);
+            view.setUint32(ptr, view.byteOffset + this.branches[0].__ptr, true);
+            ptr += 4;
+            view.setUint32(ptr, view.byteOffset + this.branches[1].__ptr, true);
+            ptr += 4;
+            view.setUint32(ptr, view.byteOffset + this.branches[2].__ptr, true);
+            ptr += 4;
+            view.setUint32(ptr, view.byteOffset + this.branches[3].__ptr, true);
+            ptr += 4;
         } else {
-            view.setUint32(this.__ptr + 8, 0, true);
+            view.setUint32(ptr, 0, true);
+            ptr += 16;
         }
 
         this.tree.__serialized += this.items.size;
-        view.setUint16(this.__ptr + 24, this.items.size, true);
-        let ptr = this.__ptr + 26;
+        view.setUint16(ptr, this.items.size, true);
+        ptr += 2;
 
         for (const cell_id of this.items) {
             view.setUint16(ptr, cell_id, true);
             ptr += 2;
         }
-
-        // console.log(view.buffer.slice(view.byteOffset + this.__ptr, 
-        //     view.byteOffset + this.__ptr + 26 + this.items.size * 2));
 
         if (this.branches) {
             this.branches[0].__write(view);

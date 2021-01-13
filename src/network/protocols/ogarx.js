@@ -19,7 +19,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** 
      * @param {import("../../game")} game
-     * @param {WebSocket} ws 
+     * @param {import("uWebSockets.js").WebSocket} ws 
      * @param {ArrayBuffer} init_message
      */
     constructor(game, ws, init_message) {
@@ -46,6 +46,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 get_cell_type, get_cell_eatenby 
             }
         });
+        this.view = new DataView(this.memory.buffer);
 
         this.join();
         this.sendInitPacket();
@@ -163,11 +164,10 @@ module.exports = class OgarXProtocol extends Protocol {
             AUED_table_ptr, AUED_table_ptr + 16 // 4 * 4 bytes after the table
         );
 
-        const view = new DataView(this.memory.buffer);
-        const A_count = view.getUint32(AUED_table_ptr + 0,  true);
-        const U_count = view.getUint32(AUED_table_ptr + 4,  true);
-        const E_count = view.getUint32(AUED_table_ptr + 8,  true);
-        const D_count = view.getUint32(AUED_table_ptr + 12, true);
+        const A_count = this.view.getUint32(AUED_table_ptr + 0,  true);
+        const U_count = this.view.getUint32(AUED_table_ptr + 4,  true);
+        const E_count = this.view.getUint32(AUED_table_ptr + 8,  true);
+        const D_count = this.view.getUint32(AUED_table_ptr + 12, true);
 
         const vx = this.controller.viewportX;
         const vy = this.controller.viewportY;
@@ -181,6 +181,7 @@ module.exports = class OgarXProtocol extends Protocol {
         if (mem_check > 0) {
             const extra_page = Math.ceil(mem_check / 65536);
             this.memory.grow(extra_page);
+            this.view = new DataView(this.memory.buffer);
             console.log(`Growing ${extra_page} page of memory in ogar69 protocol ` +
                 `memory for controller(${this.controller.name})`);
         }

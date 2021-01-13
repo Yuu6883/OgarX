@@ -17,9 +17,8 @@
 extern short get_cell_x(void* ptr, unsigned short id);
 extern short get_cell_y(void* ptr, unsigned short id);
 extern unsigned short get_cell_r(void* ptr, unsigned short id);
-
-extern unsigned char get_cell_type(void* ptr, unsigned short id);
 extern unsigned short get_cell_eatenby(void* ptr, unsigned short id);
+extern unsigned char  get_cell_type(void* ptr, unsigned short id);
 
 // Step 1
 void move_hashtable() {

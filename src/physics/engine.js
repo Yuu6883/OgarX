@@ -118,6 +118,7 @@ module.exports = class Engine {
                 roundf: Math.round,
                 unlock_line: id => this.game.controls[id].unlock(),
                 log_magic: () => console.log("MAGIC"),
+                log_compare: (a, b) => console.log(`Intersect: ${a}, Include: ${b}`),
                 get_score: id => this.game.controls[id].score,
                 get_line_a: id => this.game.controls[id].linearEquation[0],
                 get_line_b: id => this.game.controls[id].linearEquation[1],
