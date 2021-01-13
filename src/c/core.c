@@ -26,6 +26,7 @@ typedef struct {
 } QuadNode;
 
 #define IS_PLAYER(type) type <= 250
+#define NOT_PLAYER(type) type > 250
 #define IS_DEAD(type) type == 251
 #define IS_ALIVE(type) type != 251
 #define IS_MOTHER_CELL(type) type == 252
@@ -42,8 +43,6 @@ typedef struct {
 #define REMOVE_BIT 0x20
 #define MERGE_BIT 0x40
 #define POP_BIT 0x80
-
-#define WALL_BITS 0xa
 
 extern float get_score(unsigned char id);
 extern void unlock_line(unsigned char id);
@@ -92,7 +91,9 @@ void update(Cell cells[], unsigned short* ptr, float dt,
             float db = cell->boost * 0.0025f * dt;
             cell->x += cell->boostX * db;
             cell->y += cell->boostY * db;
-            cell->flags |= UPDATE_BIT;
+            if (NOT_PLAYER(cell->type)) {
+                cell->flags |= UPDATE_BIT;
+            }
             cell->boost -= db;
         }
 
@@ -108,8 +109,8 @@ void update(Cell cells[], unsigned short* ptr, float dt,
             // Decay and set the autosplit bit for player cells
             if (cell->r > decay_min) {
                 cell->r -= curr_multi * cell->r * static_decay * dt * 0.0001f;
-                cell->flags |= UPDATE_BIT;
             }
+
             if (auto_size && cell->r > auto_size && !(cell->flags & AUTOSPLIT_BIT)) {
                 cell->flags |= AUTOSPLIT_BIT;
                 cell->age = 0.0f;
@@ -121,20 +122,20 @@ void update(Cell cells[], unsigned short* ptr, float dt,
         float hr = cell->r / 2;
         if (cell->x < l + hr) {
             cell->x = l + hr;
-            cell->flags |= WALL_BITS;
+            cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostX = -cell->boostX;
         } else if (cell->x > r - hr) {
             cell->x = r - hr;
-            cell->flags |= WALL_BITS;
+            cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostX = -cell->boostX;
         }
         if (cell->y > t - hr) {
             cell->y = t - hr;
-            cell->flags |= WALL_BITS;
+            cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostY = -cell->boostY;
         } else if (cell->y < b + hr) {
             cell->y = b + hr;
-            cell->flags |= WALL_BITS;
+            cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostY = -cell->boostY;
         }
         
@@ -214,7 +215,8 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
         } else {
             // End of world.
         }
-        if (all_flags & LOCK_BIT) {
+        // This bit is used for checking wall
+        if (all_flags & UPDATE_BIT) {
             // IF ANY CELL TOUCHES THE WALL
             unlock_line(cells[indices[0]].type);
         }
@@ -327,6 +329,8 @@ void sort_indices(Cell cells[], unsigned short indices[], int n) {
         } while (index < i); 
     }
 }
+
+extern void log_magic();
 
 #define PHYSICS_NON 0
 #define PHYSICS_EAT 1
@@ -536,27 +540,27 @@ unsigned int resolve(Cell cells[],
     float line_a;
     float line_b;
     float line_c;
+    float line_a_b_sqr_sum_inv;
     
     while (*ptr_copy) {
         Cell* cell = &cells[*ptr_copy++];
         unsigned char type = cell->type;
+        if (NOT_PLAYER(type)) break; // only player cells can use lock bit
+
         if (cell->flags & LOCK_BIT) {
             if (lock_type != type) {
-                if (type > 250) break; // only player cells can use lock bit
                 line_a = get_line_a(type);
                 line_b = get_line_b(type);
                 line_c = get_line_c(type);
+                line_a_b_sqr_sum_inv = 1.f / (line_a * line_a + line_b * line_b);
                 lock_type = type;
             }
-            if (line_a) {
-                // Project x
-                cell->x = (-line_c - line_b * cell->y) / line_a;
-            } else if (line_b) {
-                // Project y
-                cell->y = (-line_c - line_a * cell->x) / line_b;
-            } else {
-                // Idk men.
-            }
+            float x0 = cell->x;
+            float y0 = cell->y;
+            cell->x = (line_b * (line_b * x0 - line_a * y0) - line_a * line_c) * line_a_b_sqr_sum_inv;
+            cell->y = (line_a * (-line_b * x0 + line_a * y0) - line_b * line_c) * line_a_b_sqr_sum_inv;
+        } else {
+            // log_magic();
         }
     }
 

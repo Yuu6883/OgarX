@@ -41,7 +41,7 @@ const DefaultSettings = {
     PLAYER_MIN_SPLIT_SIZE: 60,
     PLAYER_MIN_EJECT_SIZE: 60,
     PLAYER_NO_MERGE_DELAY: 650,
-    PLAYER_NO_COLLI_DELAY: 450,
+    PLAYER_NO_COLLI_DELAY: 650,
     PLAYER_NO_EJECT_DELAY: 200,
     PLAYER_MERGE_TIME: 1,
     PLAYER_MERGE_INCREASE: 1,
@@ -116,10 +116,8 @@ module.exports = class Engine {
                 memory: this.memory,
                 powf: Math.pow,
                 roundf: Math.round,
-                unlock_line: id => {
-                    this.game.controls[id].unlock();
-                    console.log("UNLOCKED");
-                },
+                unlock_line: id => this.game.controls[id].unlock(),
+                log_magic: () => console.log("MAGIC"),
                 get_score: id => this.game.controls[id].score,
                 get_line_a: id => this.game.controls[id].linearEquation[0],
                 get_line_b: id => this.game.controls[id].linearEquation[1],
@@ -303,8 +301,8 @@ module.exports = class Engine {
                     this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
                         Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
                 } else {
-                    this.game.controls[cell.type].lockDir = false;
                     const splits = this.distributeCellMass(cell);
+                    splits.length && (this.game.controls[cell.type].lockDir = false);
                     for (const mass of splits) {
                         const angle = Math.random() * 2 * Math.PI;
                         this.splitFromCell(cell, Math.sqrt(mass * 100),

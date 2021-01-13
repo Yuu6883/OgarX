@@ -12,9 +12,9 @@ const server = new Server();
 const engine = server.game.engine;
 
 engine.setOptions({
-    // TIME_SCALE: 0.1,
-    // PHYSICS_TPS: 2,
-    VIRUS_COUNT: 0,
+    // TIME_SCALE: 0.2,
+    // PHYSICS_TPS: 4,
+    VIRUS_COUNT: 250,
     PLAYER_MAX_CELLS: 128,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_AUTOSPLIT_SIZE: 0,
@@ -46,7 +46,7 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
     await server.open(sslOptions);
     engine.start();
 
-    setInterval(() => {
-        console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
-    }, 1000);
+    // setInterval(() => {
+    //     console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
+    // }, 1000);
 })();

@@ -25,7 +25,7 @@ module.exports = class Controller {
         this.maxScore = 0;
         this.score = 0;
 
-        this.viewportScale = 5;
+        this.viewportScale = 1;
 
         /** @type {import("./handle")} */
         this.handle = null;
@@ -60,7 +60,6 @@ module.exports = class Controller {
         this.linearEquation[0] = y1 - y2;
         this.linearEquation[1] = x2 - x1;
         this.linearEquation[2] = x1 * y2 - x2 * y1;
-        console.log(this.linearEquation);
         // INVALID LINEAR EQUATION
         if (!this.linearEquation[0] && !this.linearEquation[1]) return false;
         this.lockDir = true;
