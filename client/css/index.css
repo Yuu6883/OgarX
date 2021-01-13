@@ -84,12 +84,20 @@ body {
     color: #eee;
     background-color: #00000033;
 }
+#stats {
+    position: absolute;
+    top: 10px;
+    right: calc(15% + 30px);
+    z-index: 1;
+    color: #eee;
+    background-color: transparent;
+}
 #leaderboard p {
     margin: 5px;
 }
 #server-name {
-    margin: 10px;
-    text-align: center;
+    margin: 0px;
+    text-align: left;
 }
 #chat {
     overflow-y: scroll;
