@@ -82,8 +82,8 @@ module.exports = class HUD {
     }
 
     resize() {
-        this.viewport.width  = window.devicePixelRatio * window.innerWidth;
-        this.viewport.height = window.devicePixelRatio * window.innerHeight;
+        this.viewport.width  = Math.floor(window.devicePixelRatio * window.innerWidth);
+        this.viewport.height = Math.floor(window.devicePixelRatio * window.innerHeight);
         this.canvas.style.width = window.innerWidth + "px";
         this.canvas.style.height = window.innerHeight + "px";
     }

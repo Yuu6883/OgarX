@@ -2,7 +2,6 @@ if (self.importScripts) {
     importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");    
 }
 
-// const Cell = require("./cell");
 const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
@@ -16,8 +15,6 @@ const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
    MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE,
    QUAD_VERT_SHADER_SOURCE, 
    BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE } = require("./shaders");
-
-const ZOOM_SPEED = 5;
 
 const NAME_MASS_MIN = 0.03;
 const NAME_SCALE = 0.25;
@@ -75,6 +72,7 @@ class Renderer {
         this.drawMass  = this.drawMass.bind(this);
 
         this.options = {
+            ZOOM_SPEED: 3,
             DRAW_DELAY: 120,
             DRAW_NAME: true,
             DRAW_MASS: true,
@@ -173,9 +171,6 @@ class Renderer {
 
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
-
-        // this.cells = Array.from({ length: CELL_LIMIT }, (_, id) => 
-        //     new Cell(new DataView(this.core.buffer, id * this.BYTES_PER_CELL_DATA, this.BYTES_PER_CELL_DATA), id));
 
         this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
         console.log(`Table offset: ${this.cellTypesTableOffset}`);
@@ -309,7 +304,7 @@ class Renderer {
 
     async genCells() {
         for (let i = 1; i < 256; i++)
-            this.loadPlayerData({ id: i, ...randomPlayer() });
+            this.loadPlayerData({ id: i, ...this.randomPlayer() });
 
         this.GEN_CELLS = 65536;
         const view = new DataView(this.core.buffer, 0, this.GEN_CELLS * this.BYTES_PER_CELL_DATA);
@@ -351,8 +346,30 @@ class Renderer {
             Array.from({ length: number }, _ => this.gl.createFramebuffer()));
     }
 
+    freeFrameBuffer(name) {
+        if (!this.fbo.has(name)) throw new Error(`Trying to free none existing framebuffer "${name}`);
+        const fbs = this.fbo.get(name);
+        if (Array.isArray(fbs)) {
+            for (const f of fbs) this.gl.deleteFramebuffer(f);
+        } else this.gl.deleteFramebuffer(fbs);
+        this.fbo.delete(name);
+    }
+
+    rellocPeelingBuffers(w, h) {
+        if (w <= this.FBO_WIDTH && h <= this.FBO_HEIGHT) return;
+        console.log(`Reallocating framebuffers to [${w}, ${h}]`);
+        this.freeFrameBuffer("peel_depths");
+        this.freeFrameBuffer("peel_colors");
+        this.freeFrameBuffer("blend_back");
+        this.setUpPeelingBuffers(w, h);
+    }
+
     /** Make sure texture units [0-6] are not changed anywhere later in rendering */
-    setUpPeelingBuffers() {
+    setUpPeelingBuffers(w = 1920, h = 1080) {
+
+        this.FBO_WIDTH = w;
+        this.FBO_HEIGHT = h;
+
         this.allocFrameBuffer("peel_depths", 2);
         this.allocFrameBuffer("peel_colors", 2);
         this.allocFrameBuffer("blend_back");
@@ -374,21 +391,21 @@ class Renderer {
             gl.activeTexture(gl.TEXTURE0 + texture_unit_offset);
             gl.bindTexture(gl.TEXTURE_2D, depthTarget);
             FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, 1920, 1080, 0, gl.RG, gl.FLOAT, null);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, w, h, 0, gl.RG, gl.FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
 
             const frontColorTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE1 + texture_unit_offset);
             gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
             FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
 
             const backColorTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE2 + texture_unit_offset);
             gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
             FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("peel_colors")[i]);
@@ -405,7 +422,7 @@ class Renderer {
             gl.activeTexture(gl.TEXTURE6);
             gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
             FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         }
@@ -648,15 +665,16 @@ class Renderer {
             this.mouse.x / this.viewport.width  * 2 - 1, 
             this.mouse.y / this.viewport.height * 2 - 1);
 
-        this.target.scale *= (1 + this.mouse.resetScroll() / 1000);
-        this.target.scale = Math.max(this.target.scale, 0.01);
-        this.target.scale = Math.min(this.target.scale, 10000);
+        const scroll = this.mouse.resetScroll();
+        this.target.scale *= (1 + scroll / 1000);
+        this.target.scale = Math.min(Math.max(this.target.scale, 0.01), 10000);
     }
 
     // Smooth update camera
     lerpCamera(d = 1 / 60, position) {
+        const l = Math.min(Math.max(d * this.options.ZOOM_SPEED, 0), 1);
         vec3.lerp(this.camera.position, this.camera.position, this.target.position, d);
-        this.camera.scale += (this.target.scale - this.camera.scale) * d * ZOOM_SPEED;
+        this.camera.scale += (this.target.scale - this.camera.scale) * l;
 
         const x = position ? position.x : this.camera.position[0];
         const y = position ? position.y : this.camera.position[1];
@@ -878,6 +896,7 @@ class Renderer {
 
         const gl = this.gl;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        this.rellocPeelingBuffers(gl.drawingBufferWidth, gl.drawingBufferHeight);
         const NUM_PASS = 2;
         let offsetBack;
         this.clearPeelingBuffers();
