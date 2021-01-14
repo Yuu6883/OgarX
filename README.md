@@ -1,17 +1,18 @@
 # <strong> Ogar69 </strong>
-Yeah it's OGAR 69 pogchamp<br>
-Server is working now, but need to start on the client (temp client scrapped from a certain game is in `/client`)
+Yeah it's OGAR 69 pog<br>
+Server is mostly finished and optimized to the point where it can't be optimized anymore.
+Client is mostly finished as well but need optimization since it runs poorly on laptops (OIT shader eats too much GPU power), and it needs a simpler rewrite.
 
-# Project Goals
-* New protocol
-* Specialized & optimized quadtree (mostly done)
-* JS (instead of c++)
+## Technology
+* New buffer protocol 
+* Specialized & optimized quadtree
+* JS (instead of c++, core is mostly in c and compiled to WebAssembly)
 * Raw WebGL client
 
-## WebGL Renderer
+## Demo
+**IMPORTANT: only works with latest Chrome**<br>
+https://ogar69.yuu.dev/demo<br>
+(Local server is implemented with SharedWorker)
 
-### Internal Buffer
-[currX(4)|currY(4)|currSize(4)|oldX(4)|oldY(4)|oldSize(4)|netX(4)|netY(4)|netSize(4)|type(1)] -> 37 bytes per cell
-
-### Render Buffer
-[X(4)|Y(4)|size(4)|type(1)] -> 13 bytes
+## Notes
+I will write a long post about how I over-engineered everything and made it so optimized compared to other Ogar projects (self-proclaimed). Stay toned!
