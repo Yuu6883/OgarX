@@ -82,15 +82,20 @@ body {
     transition: opacity 0.25s linear;
     z-index: 1;
     color: #eee;
-    background-color: #00000033;
+    background-color: #00000044;
 }
 #stats {
     position: absolute;
     top: 10px;
-    right: calc(15% + 30px);
+    right: calc(15% + 50px);
     z-index: 1;
     color: #eee;
-    background-color: transparent;
+    background-color: #00000044;
+}
+#ping, #fps, #bandwidth {
+    display: inline-block;
+    width: 1.5em;
+    text-align: right;
 }
 #leaderboard p {
     margin: 5px;
