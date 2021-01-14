@@ -82,8 +82,23 @@ module.exports = class HUD {
     }
 
     resize() {
-        this.viewport.width  = Math.floor(window.devicePixelRatio * window.innerWidth);
-        this.viewport.height = Math.floor(window.devicePixelRatio * window.innerHeight);
+        
+        let w = Math.floor(window.devicePixelRatio * window.innerWidth);
+        let h = Math.floor(window.devicePixelRatio * window.innerHeight);
+
+        if (w > screen.width) {
+            w = screen.width;
+            h = Math.floor(h * screen.width / w);
+        } 
+
+        if (h > screen.height) {
+            w = Math.floor(w * screen.height / h);
+            h = screen.height;
+        }
+
+        this.viewport.width  = w;
+        this.viewport.height = h;
+        
         this.canvas.style.width = window.innerWidth + "px";
         this.canvas.style.height = window.innerHeight + "px";
     }
