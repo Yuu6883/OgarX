@@ -86,16 +86,6 @@ module.exports = class HUD {
         let w = Math.floor(window.devicePixelRatio * window.innerWidth);
         let h = Math.floor(window.devicePixelRatio * window.innerHeight);
 
-        if (w > screen.width) {
-            w = screen.width;
-            h = Math.floor(h * screen.width / w);
-        } 
-
-        if (h > screen.height) {
-            w = Math.floor(w * screen.height / h);
-            h = screen.height;
-        }
-
         this.viewport.width  = w;
         this.viewport.height = h;
         
