@@ -835,6 +835,7 @@ class Renderer {
             return;
         }
 
+        this.fps++;
         const delta = now - this.lastTimestamp;
         this.lastTimestamp = now;
         
@@ -934,7 +935,6 @@ class Renderer {
         
         this.updateTextures();
         this.lastDraw = now;
-        this.fps++;
     }
 
     updateTextures() {

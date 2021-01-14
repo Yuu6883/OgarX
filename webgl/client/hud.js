@@ -84,12 +84,13 @@ module.exports = class HUD {
     resize() {
         this.viewport.width  = window.devicePixelRatio * window.innerWidth;
         this.viewport.height = window.devicePixelRatio * window.innerHeight;
-        this.canvas.style.width = window.innerWidth;
-        this.canvas.style.height = window.innerHeight;
+        this.canvas.style.width = window.innerWidth + "px";
+        this.canvas.style.height = window.innerHeight + "px";
     }
 
     registerEvents() {
         window.onresize = this.resize.bind(this);
+        this.resize();
 
         this.keys = new Keyboard(this);
         /** @type {Set<string>} */
@@ -122,8 +123,14 @@ module.exports = class HUD {
 
         state.focused = 1;
 
-        canvas.addEventListener("mousemove", e => (this.mouse.x = e.clientX, this.mouse.y = e.clientY));
-        canvas.addEventListener("wheel", e => this.mouse.updateScroll(e.deltaY), { passive: true });
+        canvas.addEventListener("mousemove", e => {
+            this.mouse.x = e.clientX * window.devicePixelRatio;
+            this.mouse.y = e.clientY * window.devicePixelRatio;
+        });
+        canvas.addEventListener("wheel", e => {
+            if (e.ctrlKey) return;
+            this.mouse.updateScroll(e.deltaY);
+        }, { passive: true });
     }
 
     initUIComponents() {
@@ -191,14 +198,17 @@ module.exports = class HUD {
 
         this.pingElem = document.getElementById("ping");
         this.fpsElem = document.getElementById("fps");
-        this.cellsElem = document.getElementById("cells");
-        this.textElem = document.getElementById("text");
+        this.bwElem = document.getElementById("bandwidth");
+        // this.cellsElem = document.getElementById("cells");
+        // this.textElem = document.getElementById("text");
         
         this.updateInterval = setInterval(() => {
             this.pingElem.innerText = this.stats.ping;
             this.fpsElem.innerText = this.stats.fps;
-            this.cellsElem.innerText = this.stats.cells;
-            this.textElem.innerText = this.stats.text;
+            const kbs = this.stats.bandwidth / 1024;
+            this.bwElem.innerText = kbs < 1024 ? `${~~kbs}kbs` : `${(kbs / 1024).toFixed(1)}mbs`;
+            // this.cellsElem.innerText = this.stats.cells;
+            // this.textElem.innerText = this.stats.text;
         }, 1000);
     }
 
