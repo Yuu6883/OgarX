@@ -21,7 +21,7 @@ module.exports = class SocketServer {
     }
 
     /** @param {uWS.AppOptions} uWSOption */
-    open(uWSOption, port = 3000) {
+    open(uWSOption, port = 443) {
         if (this.listening || this.sock) return;
         this.listening = true;
         return new Promise(resolve => {
@@ -61,7 +61,7 @@ module.exports = class SocketServer {
                         if (result == "Already up to date.\n") {
                             res.end("Already updated");
                         } else {
-                            res.end("Updating");
+                            res.end(result);
                             process.exit(0);
                         }
                     } else {
