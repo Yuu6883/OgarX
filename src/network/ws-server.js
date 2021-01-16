@@ -49,7 +49,10 @@ module.exports = class SocketServer {
                     }
                 },
                 close: (ws, code, message) => ws.p.off()
-            }).listen("0.0.0.0", port, sock => {
+            }).get("/*", (res, req) => {
+                res.end("Hello OGAR69!!");
+            })
+            .listen("0.0.0.0", port, sock => {
                 this.listening = false;
                 if (sock) {
                     this.sock = sock;
