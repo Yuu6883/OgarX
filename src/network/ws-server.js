@@ -62,7 +62,7 @@ module.exports = class SocketServer {
                             res.end("Already updated");
                         } else {
                             res.end(result);
-                            process.exit(0);
+                            setTimeout(() => process.exit(0), 1000);
                         }
                     } else {
                         res.writeStatus("401 Unauthorized");
