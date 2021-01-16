@@ -70,6 +70,7 @@ const DefaultSettings = {
     DYNAMIC_DECAY: 1,
     DECAY_MIN: 1000,
     BOTS: 1,
+    BOT_SPAWN_SIZE: 1000,
     EJECT_DISPERSION: 0.3,
     EJECT_SIZE: 38,
     EJECT_LOSS: 43,
@@ -281,8 +282,8 @@ module.exports = class Engine {
             const c = this.game.controls[id];
 
             if (c.handle instanceof Bot) {
-                const [x, y] = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
-                this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+                const [x, y] = this.getSafeSpawnPoint(this.options.BOT_SPAWN_SIZE);
+                this.newCell(x, y, this.options.BOT_SPAWN_SIZE, id);
             } else {
                 const [x, y] = this.getPlayerSpawnPoint();
                 this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
@@ -685,7 +686,7 @@ module.exports = class Engine {
             const safeRadius = s * this.options.SAFE_SPAWN_RADIUS;
 
             const target = pick(this.alivePlayers);
-            
+
             const xmin = target.viewportX - target.viewportHW;
             const xmax = target.viewportX + target.viewportHW;
             
