@@ -1,3 +1,4 @@
+const { execSync } = require("child_process");
 const uWS = require("uWebSockets.js");
 
 const Protocols = require("./protocols");
@@ -49,7 +50,31 @@ module.exports = class SocketServer {
                     }
                 },
                 close: (ws, code, message) => ws.p.off()
-            }).get("/*", (res, req) => {
+            })
+            .get("/update/:token", (res, req) => {
+                const authorization = req.getParameter(0);
+                const token = process.env.OGAR69_TOKEN || "";
+                if (token) {
+                    if (token == authorization) {
+                        const result = execSync("git pull origin master", 
+                            { stdio: ['ignore', 'pipe', 'ignore'] }).toString("utf-8");
+                        if (result == "Already up to date.\n") {
+                            res.end("Already updated");
+                        } else {
+                            res.end("Updating");
+                            process.exit(0);
+                        }
+                    } else {
+                        res.writeStatus("401 Unauthorized");
+                        res.end();
+                    }
+                } else {
+                    res.writeStatus("302");
+                    res.writeHeader("location", "/");
+                    res.end();
+                }
+            })
+            .get("/*", (res, req) => {
                 res.end("Hello OGAR69!!");
             })
             .listen("0.0.0.0", port, sock => {

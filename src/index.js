@@ -46,7 +46,7 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
     await server.open(sslOptions, process.env.PORT);
     engine.start();
 
-    setInterval(() => {
-        console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
-    }, 1000);
+    // setInterval(() => {
+    //     console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
+    // }, 1000);
 })();

@@ -106,10 +106,15 @@ body {
     width: 1.5em;
     text-align: left;
 }
-#mycells, #linelock {
+#linelock {
     display: inline-block;
-    width: 8em;
+    width: 6em;
     text-align: left;
+}
+#mycells {
+    display: inline-block;
+    width: 2em;
+    text-align: right;
 }
 .uk-notification-message {
     background-color: #111;

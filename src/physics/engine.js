@@ -3,6 +3,22 @@ if (typeof performance == "undefined") {
     eval(`global.performance = require("perf_hooks").performance;`);
 }
 
+/** @template T @param {T[]} array */
+const pick = array => array[~~(Math.random() * array.length)];
+
+/**
+ * @param {number} v 
+ * @param {number} min 
+ * @param {number} max 
+ */
+const clamp = (v, min, max) => v <= min ? min : v >= max ? max : v;
+
+/**
+ * @param {number} min 
+ * @param {number} max 
+ */
+const range = (min, max) => Math.random() * (max - min) + min;
+
 const Cell = require("./cell");
 const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
@@ -198,11 +214,13 @@ module.exports = class Engine {
 
     /** @param {number} dt */
     tick(dt) {
-        
+
         // Has player
         if (this.game.handles > this.bots.length &&
             this.bots.length < this.options.BOTS)
             this.bots.push(new Bot(this.game));
+
+        this.alivePlayers = this.game.controls.filter(c => c.alive && !(c.handle instanceof Bot));
 
         // No need to reserve space for indices now since we are only going to query it
         this.treePtr = this.BYTES_PER_CELL * this.options.CELL_LIMIT;
@@ -233,7 +251,7 @@ module.exports = class Engine {
         this.resolve();
         this.postResolve();
 
-        this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
+        this.leaderboard = this.game.controls.filter(c => c.alive).sort((a, b) => b.score - a.score);
     }
 
     spawnCells() {
@@ -260,16 +278,18 @@ module.exports = class Engine {
         }
 
         for (const id of this.spawnArray) {
-            const [x, y] = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
-            this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
-            
             const c = this.game.controls[id];
+
+            if (c.handle instanceof Bot) {
+                const [x, y] = this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
+                this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+            } else {
+                const [x, y] = this.getPlayerSpawnPoint();
+                this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+            }
+
             this.game.emit("spawn", c);
             c.afterSpawn();
-
-            if (!(c.handle instanceof Bot)) {
-                console.log(`Spawned ${c.name}(#${c.id}) at x: ${x.toFixed(1)}, y: ${y.toFixed(1)}`);
-            }
         }
         this.spawnArray = [];
     }
@@ -401,12 +421,6 @@ module.exports = class Engine {
     delayKill(id = 0, replace = false) {
         if (!this.game.controls[id].alive) return; // not alive, nothing to kill
         this.killArray.push([id, replace]);
-    }
-
-    countExist() {
-        let existing = 0;
-        for (const c of this.cells) if (c.existsStrict) existing++;
-        return existing;
     }
 
     updateIndices() {
@@ -653,10 +667,41 @@ module.exports = class Engine {
     }
 
     /** @param {number} size */
-    randomPoint(size) {
-        const coord_x = this.options.MAP_HW - size;
-        const coord_y = this.options.MAP_HH - size;
-        return [2 * Math.random() * coord_x - coord_x, 2 * Math.random() * coord_y - coord_y];
+    randomPoint(size, xmin = -this.options.MAP_HW, xmax = this.options.MAP_HW,
+        ymin = -this.options.MAP_HH, ymax = this.options.MAP_HH) {
+
+        xmin = clamp(xmin, -this.options.MAP_HW + size, this.options.MAP_HW - size);
+        xmax = clamp(xmax, -this.options.MAP_HW + size, this.options.MAP_HW - size);
+
+        ymin = clamp(ymin, -this.options.MAP_HH + size, this.options.MAP_HH - size);
+        ymax = clamp(ymax, -this.options.MAP_HH + size, this.options.MAP_HH - size);
+
+        return [range(xmin, xmax), range(ymin, ymax)];
+    }
+
+    getPlayerSpawnPoint() {
+        if (this.alivePlayers.length) {
+            const s = this.options.PLAYER_SPAWN_SIZE;
+            const safeRadius = s * this.options.SAFE_SPAWN_RADIUS;
+
+            const target = pick(this.alivePlayers);
+            
+            const xmin = target.viewportX - target.viewportHW;
+            const xmax = target.viewportX + target.viewportHW;
+            
+            const ymin = target.viewportY - target.viewportHH;
+            const ymax = target.viewportY + target.viewportHH;
+            
+            let tries = this.options.SAFE_SPAWN_TRIES;
+            while (--tries) {
+                const point = this.randomPoint(s, xmin, xmax, ymin, ymax);
+                if (this.wasm.is_safe(0, point[0], point[1], safeRadius,
+                    this.treePtr, this.stackPtr) > 0)
+                    return point;
+            }
+        }
+
+        return this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
     }
 
     /** @param {number} size */
