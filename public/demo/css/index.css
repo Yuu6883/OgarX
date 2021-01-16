@@ -92,10 +92,33 @@ body {
     color: #eee;
     background-color: #00000044;
 }
+#stats2 {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    z-index: 1;
+    color: #eee;
+    transform: translateX(-50%);
+    background-color: #00000044;
+}
 #ping, #fps, #bandwidth {
     display: inline-block;
     width: 1.5em;
-    text-align: right;
+    text-align: left;
+}
+#mycells, #linelock {
+    display: inline-block;
+    width: 8em;
+    text-align: left;
+}
+.uk-notification-message {
+    background-color: #111;
+}
+.text-danger {
+    color: red;
+}
+.text-success {
+    color: greenyellow;
 }
 #leaderboard p {
     margin: 5px;

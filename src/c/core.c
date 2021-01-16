@@ -46,6 +46,8 @@ typedef struct {
 #define MERGE_BIT 0x40
 #define POP_BIT 0x80
 
+#define CLEAR_BITS 0x11
+
 extern float get_score(unsigned char id);
 extern void unlock_line(unsigned char id);
 
@@ -68,7 +70,7 @@ void update(Cell cells[], unsigned short* ptr, float dt,
     static_decay *= 0.01f;
     Cell* cell = &cells[*ptr];
 
-    // Clear cell data 
+    // Clear cell data
     while (cell->flags & REMOVE_BIT) {
         memset(cell, 0, sizeof(Cell));
         cell = &cells[*++ptr]; // increment to next index
@@ -83,7 +85,7 @@ void update(Cell cells[], unsigned short* ptr, float dt,
     while (*ptr) {
         // Increment age, clear bits
         cell->age += dt;
-        cell->flags &= EXIST_BIT;
+        cell->flags &= CLEAR_BITS;
 
         if (IS_EJECTED(cell->type) && cell->age > eject_max_age)
             cell->flags |= REMOVE_BIT;

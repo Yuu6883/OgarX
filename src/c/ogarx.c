@@ -95,12 +95,18 @@ void* write_AUED(
 #define writeFloat32(v) *((float *) dist) = v; dist += 4
 
 // Step 4
-unsigned char* serialize(float vx, float vy,
+unsigned char* serialize(
+    unsigned char cell_count,
+    unsigned char line_lock,
+    float vx, float vy,
     unsigned int table[],
     unsigned short* lists, unsigned char* dist) {
 
     // Write OP code
     writeUint8(4);
+    // Write cell count and line lock (booleans)
+    writeUint8(cell_count);
+    writeUint8(line_lock);
     // Write viewport floats
     writeFloat32(vx);
     writeFloat32(vy);

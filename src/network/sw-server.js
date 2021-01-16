@@ -47,6 +47,7 @@ module.exports = class SharedWorkerServer {
 
                 this.ports.delete(port);
                 ws.p && ws.p.off();
+                if (!this.ports.size) self.close();
             }
 
             // Wait for server to start running (load wasm modules)

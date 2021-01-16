@@ -17,6 +17,7 @@ module.exports = class HUD {
         this.mouse = new Mouse();
         this.state = new State();
         this.viewport = new Viewport();
+        this.server = "";
         
         if (navigator.userAgent.includes("Chrome")) {
 
@@ -38,6 +39,7 @@ module.exports = class HUD {
                 if (data.event === "leaderboard") this.onLeaderboard(data.lb);
                 if (data.event === "connect") this.onConnect();
                 if (data.event === "disconnect") this.onDisconnect();
+                if (data.event === "error") this.onError(data.message || "");
             }
 
             this.registerEvents();
@@ -159,8 +161,8 @@ module.exports = class HUD {
 
         this.playButton = document.getElementById("play");
         this.playButton.addEventListener("click", () => {
-            this.spawn();
             this.hide();
+            this.spawn();
             this.playButton.blur();
         });
 
@@ -184,9 +186,13 @@ module.exports = class HUD {
         });
         this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
-        this.serverInput.value = localStorage.getItem("ogarx_server") || "local";
+        this.serverInput.value = "Select Server";
         this.nameInput.value = localStorage.getItem("ogarx_name") || "";
         this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
+        
+        this.nameInput.autocomplete = Math.random();
+        this.skinInput.autocomplete = Math.random();
+
         updateSkin(true);
 
         this.chatInput.addEventListener("blur", () => this.hide(this.chatInput));
@@ -195,32 +201,31 @@ module.exports = class HUD {
 
         document.querySelectorAll(".servers").forEach(e => {
             e.addEventListener("click", () => {
+                this.server = e.textContent;
                 const server = e.attributes.getNamedItem("server").value;
-                this.serverInput.value = server;
-                this.connect();
+                this.connect(server);
             });
         });
 
         this.pingElem = document.getElementById("ping");
         this.fpsElem = document.getElementById("fps");
         this.bwElem = document.getElementById("bandwidth");
-        // this.cellsElem = document.getElementById("cells");
-        // this.textElem = document.getElementById("text");
+        this.mycellsElem = document.getElementById("mycells");
+        this.linelockElem = document.getElementById("linelock");
         
         this.updateInterval = setInterval(() => {
             this.pingElem.innerText = this.stats.ping;
             this.fpsElem.innerText = this.stats.fps;
             const kbs = this.stats.bandwidth / 1024;
             this.bwElem.innerText = kbs < 1024 ? `${~~kbs}kbs` : `${(kbs / 1024).toFixed(1)}mbs`;
-            // this.cellsElem.innerText = this.stats.cells;
-            // this.textElem.innerText = this.stats.text;
-        }, 1000);
+            this.mycellsElem.innerText = this.stats.mycells;
+            this.linelockElem.innerText = this.stats.linelocked ? "LOCKED" : "UNLOCKED";
+            this.stats.linelocked ? this.linelockElem.classList.add("text-danger") : this.linelockElem.classList.remove("text-danger");
+        }, 100);
     }
 
     sendChat(chat) {
-        if (this.worker) {
-            this.worker.postMessage({ chat });
-        }
+        if (this.worker) this.worker.postMessage({ chat });
     }
 
     /**
@@ -263,22 +268,30 @@ module.exports = class HUD {
 
     get skin() { return this.skinInput.value; }
     get name() { return this.nameInput.value; }
-    get server() { return this.serverInput.value; }
 
-    connect() {
-        const server = this.server.trim();
+    connect(server) {
+        server = server.trim();
         server == "local" ? this.connectToLocal() : this.connectToURL(
             `${window.location.protocol.replace("http", "ws")}//${server}`);
-        localStorage.setItem("ogarx_server", server);
+    }
+
+    onError(message) {
+        UIkit.notification({ message, status: "danger", timeout: 3000 });
     }
 
     onConnect() {
+        this.serverInput.value = this.server;
         this.playButton.disabled = false;
+        this.chatElem.innerHTML = "";
+        this.onChat(0, null, "Connected");
     }
 
     onDisconnect() {
-        this.show(this.hudElem);
+        this.lbElem.innerHTML = "";
+        this.chatElem.innerHTML = "";
         this.playButton.disabled = true;
+        this.show();
+        this.onError("Disconnected");
     }
 
     spawn() {
@@ -297,10 +310,9 @@ module.exports = class HUD {
     }
 
     connectToLocal() {
-        console.log(`Connecting to local shared worker server`);
-        const sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
+        this.sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
         if (this.worker) {
-            this.worker.postMessage({ connect: sw.port, name: this.name, skin: this.skin }, [sw.port]);
+            this.worker.postMessage({ connect: this.sw.port, name: this.name, skin: this.skin }, [this.sw.port]);
         } else {
             const p = this.renderer.protocol;
             p.connect(sw.port, this.name, this.skin);
@@ -308,7 +320,6 @@ module.exports = class HUD {
     }
 
     connectToURL(url) {
-        console.log(`Connecting to remote server`);
         if (this.worker) {
             this.worker.postMessage({ connect: url, name: this.name, skin: this.skin });
         } else {

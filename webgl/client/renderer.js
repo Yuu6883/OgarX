@@ -932,9 +932,7 @@ class Renderer {
         this.stats.text  = text_count;
         
         // Final prog
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        this.clear();
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.useProgram(this.final_prog);
         gl.uniform1i(this.getUniform(this.final_prog, "u_front_color"), offsetBack + 1);
@@ -1060,6 +1058,13 @@ class Renderer {
         }
 
         return offsetBack;
+    }
+
+    clear() {
+        const gl = this.gl;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
     }
 }
 

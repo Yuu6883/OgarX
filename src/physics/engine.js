@@ -33,7 +33,7 @@ const DefaultSettings = {
     PLAYER_SPEED: 1.5,
     PLAYER_SPAWN_DELAY: 3000,
     PLAYER_AUTOSPLIT_SIZE: 1500,
-    PLAYER_AUTOSPLIT_DELAY: 2,
+    PLAYER_AUTOSPLIT_DELAY: 100,
     PLAYER_MAX_CELLS: 16,
     PLAYER_SPAWN_SIZE: 32,
     PLAYER_SPLIT_BOOST: 800,
@@ -44,6 +44,7 @@ const DefaultSettings = {
     PLAYER_NO_MERGE_DELAY: 650,
     PLAYER_NO_COLLI_DELAY: 650,
     PLAYER_NO_EJECT_DELAY: 200,
+    PLAYER_NO_EJECT_POP_DEALY: 500,
     PLAYER_MERGE_TIME: 1,
     PLAYER_MERGE_INCREASE: 1,
     PLAYER_MERGE_NEW_VER: true,
@@ -161,33 +162,33 @@ module.exports = class Engine {
         this.killArray = [];
         /** @type {number[]} */
         this.spawnArray = [];
+
+        /** @type {Bot[]} */
+        this.bots = [];
     }
 
     get running() { return !!this.updateInterval; }
 
     start() {
-        if (this.updateInterval) return;
+        if (this.running) return;
         this.__ltick = performance.now();
-
-        /** @type {Bot[]} */
-        this.bots = [];
 
         this.tickDelay = 1000 / this.options.PHYSICS_TPS;
         this.updateInterval = setInterval(() => {
-            const now = performance.now();
-            this.tick((now - this.__ltick) * this.options.TIME_SCALE);
-            this.__ltick = now;
-            this.usage = (performance.now() - now) / this.tickDelay;
+            this.__now = performance.now();
+            this.tick((this.__now - this.__ltick) * this.options.TIME_SCALE);
+            this.__ltick = this.__now;
+            this.usage = (performance.now() - this.__now) / this.tickDelay;
         }, this.tickDelay);
 
-        const lbDelay = 1000 / this.options.LEADERBOARD_TPS;
+        this.lbDelay = 1000 / this.options.LEADERBOARD_TPS;
         this.leaderboardInterval = setInterval(() => {
             this.game.emit("leaderboard", this.leaderboard);
-        }, lbDelay);
+        }, this.lbDelay);
     }
 
     stop() {
-        if (this.updateInterval) {
+        if (this.running) {
             clearInterval(this.updateInterval);
             clearInterval(this.leaderboardInterval);
         }
@@ -195,13 +196,12 @@ module.exports = class Engine {
         this.leaderboardInterval = null;
     }
 
-    get stopped() { return !this.updateInterval; }
-
-    get __tick() { return Date.now() - this.__start; }
-
     /** @param {number} dt */
     tick(dt) {
-        if (this.bots.length < this.options.BOTS)
+        
+        // Has player
+        if (this.game.handles > this.bots.length &&
+            this.bots.length < this.options.BOTS)
             this.bots.push(new Bot(this.game));
 
         // No need to reserve space for indices now since we are only going to query it
@@ -215,54 +215,10 @@ module.exports = class Engine {
 
         this.spawnCells();
         this.handleInputs(dt);
-
         this.updateIndices();
-        
-        this.wasm.update(0, this.indicesPtr, dt,
-            this.options.EJECT_MAX_AGE,
-            this.options.PLAYER_AUTOSPLIT_SIZE,
-            this.options.DECAY_MIN,
-            this.options.STATIC_DECAY,
-            this.options.DYNAMIC_DECAY,
-            -this.options.MAP_HW, this.options.MAP_HW,
-            -this.options.MAP_HH, this.options.MAP_HH);
-
+        this.updateCells(dt);
         this.updatePlayerCells(dt);
-        
-        // Autosplit and update quadtree
-        if (this.options.PLAYER_AUTOSPLIT_SIZE) {
-            // starting after removed cells
-            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
-                const index = this.resolveIndices.getUint16(i * 2, true);
-                const cell = this.cells[index];
-    
-                if (cell.shouldAuto && cell.age > this.options.PLAYER_AUTOSPLIT_DELAY) {
-                    // const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
-                    // if (cellsLeft <= 0) continue;
-                    const splitTimes = Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE);
-                    const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
-                    for (let i = 1; i < splitTimes; i++) {
-                        const angle = Math.random() * 2 * Math.PI;
-                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
-                    }
-                    cell.r = splitSizes;
-                    cell.updated = true;
-                }
-    
-                // Update quadtree
-                if (cell.type > 250 && !cell.isUpdated) continue;
-                this.tree.update(cell);
-            }
-        } else {
-            // Only update quadtree (starting after removed cells)
-            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
-                const index = this.resolveIndices.getUint16(i * 2, true);
-                const cell = this.cells[index];
-                // Update quadtree
-                if (cell.type > 250 && !cell.isUpdated) continue;
-                this.tree.update(cell);
-            }
-        }
+        this.updateTree();
 
         // Delayed kill, so the flags will be read after resolve and update quadtree
         for (const [id, replace] of this.killArray) 
@@ -274,45 +230,8 @@ module.exports = class Engine {
         // Serialize quadtree, preparing for collision/eat resolution
         this.serialize();
 
-        const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
-            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);
-
-        // Magic goes here
-        this.collisions = this.wasm.resolve(0,
-            this.indicesPtr, this.counters[PELLET_TYPE].size,
-            this.treePtr, this.stackPtr,
-            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
-
-        this.removedCells = [];
-        // Handle pop, update quadtree, remove item from quadtree
-        for (let i = 0; i < this.indices; i++) {
-            const index = this.resolveIndices.getUint16(i * 2, true);
-            const cell = this.cells[index];
-            if (cell.shouldRemove) {
-                this.tree.remove(cell);
-                this.counters[cell.type].delete(cell.id);
-                this.removedCells.push(index);
-                this.cellCount--;
-            } else if (cell.popped) {
-                // pop the cell OR split virus
-                if (cell.type == VIRUS_TYPE) {
-                    cell.r = this.options.VIRUS_SIZE;
-                    this.tree.update(cell);
-                    const angle = Math.atan2(cell.boostX, cell.boostY);
-                    this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
-                        Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
-                } else {
-                    const splits = this.distributeCellMass(cell);
-                    splits.length && (this.game.controls[cell.type].lockDir = false);
-                    for (const mass of splits) {
-                        const angle = Math.random() * 2 * Math.PI;
-                        this.splitFromCell(cell, Math.sqrt(mass * 100),
-                            Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
-                    }
-                }
-            } else if (cell.updated) this.tree.update(cell);
-        }
+        this.resolve();
+        this.postResolve();
 
         this.leaderboard = this.game.controls.filter(c => c.score).sort((a, b) => b.score - a.score);
     }
@@ -346,8 +265,7 @@ module.exports = class Engine {
             
             const c = this.game.controls[id];
             this.game.emit("spawn", c);
-            c.updated = false; // reset updated field after spawning
-            c.lockDir = false; // reset line lock
+            c.afterSpawn();
 
             if (!(c.handle instanceof Bot)) {
                 console.log(`Spawned ${c.name}(#${c.id}) at x: ${x.toFixed(1)}, y: ${y.toFixed(1)}`);
@@ -357,7 +275,6 @@ module.exports = class Engine {
     }
 
     handleInputs(dt) {
-        const __now = this.__tick;
         for (const id in this.game.controls) {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
@@ -382,33 +299,36 @@ module.exports = class Engine {
             let ejected = 0;
             let maxEjectPerTick = dt / this.options.EJECT_DELAY;
             // Eject
-            while (controller.lastEjectTick <= __now + dt && 
-                (controller.ejectAttempts > 0 || controller.ejectMarco) && 
-                maxEjectPerTick--) {
-                controller.ejectAttempts = Math.max(controller.ejectAttempts - 1, 0);
-                ejected++;
+            if (this.__now > controller.lastPoppedTick + this.options.PLAYER_NO_EJECT_POP_DEALY) {
 
-                const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
-                for (const cell_id of [...this.counters[id]]) {
-                    const cell = this.cells[cell_id];
-                    if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
-                    if (cell.age < this.options.PLAYER_NO_EJECT_DELAY) continue;
-                    let dx = controller.mouseX - cell.x;
-                    let dy = controller.mouseY - cell.y;
-                    let d = Math.sqrt(dx * dx + dy * dy);
-                    if (d < 1) dx = 1, dy = 0, d = 1;
-                    else dx /= d, dy /= d;
-                    const sx = cell.x + dx * cell.r;
-                    const sy = cell.y + dy * cell.r;
-                    const a = Math.atan2(dx, dy) - this.options.EJECT_DISPERSION + 
-                        Math.random() * 2 * this.options.EJECT_DISPERSION;
-                    this.newCell(sx, sy, this.options.EJECT_SIZE, EJECTED_TYPE, 
-                        Math.sin(a), Math.cos(a), this.options.EJECT_BOOST);
-                    cell.r = Math.sqrt(cell.r * cell.r - LOSS);
-                    cell.updated = true;
+                while (controller.lastEjectTick <= this.__now + dt && 
+                    (controller.ejectAttempts > 0 || controller.ejectMarco) && 
+                    maxEjectPerTick--) {
+                    controller.ejectAttempts = Math.max(controller.ejectAttempts - 1, 0);
+                    ejected++;
+    
+                    const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
+                    for (const cell_id of [...this.counters[id]]) {
+                        const cell = this.cells[cell_id];
+                        if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
+                        if (cell.age < this.options.PLAYER_NO_EJECT_DELAY) continue;
+                        let dx = controller.mouseX - cell.x;
+                        let dy = controller.mouseY - cell.y;
+                        let d = Math.sqrt(dx * dx + dy * dy);
+                        if (d < 1) dx = 1, dy = 0, d = 1;
+                        else dx /= d, dy /= d;
+                        const sx = cell.x + dx * cell.r;
+                        const sy = cell.y + dy * cell.r;
+                        const a = Math.atan2(dx, dy) - this.options.EJECT_DISPERSION + 
+                            Math.random() * 2 * this.options.EJECT_DISPERSION;
+                        this.newCell(sx, sy, this.options.EJECT_SIZE, EJECTED_TYPE, 
+                            Math.sin(a), Math.cos(a), this.options.EJECT_BOOST);
+                        cell.r = Math.sqrt(cell.r * cell.r - LOSS);
+                        cell.updated = true;
+                    }
+    
+                    controller.lastEjectTick = this.__now + ejected * this.options.EJECT_DELAY;
                 }
-
-                controller.lastEjectTick = __now + ejected * this.options.EJECT_DELAY;
             }
 
             // Idle spectate
@@ -462,10 +382,10 @@ module.exports = class Engine {
             }
 
             // Spawn
-            if (controller.spawn && (__now <= this.options.PLAYER_SPAWN_DELAY || 
-                    __now >= controller.lastSpawnTick + this.options.PLAYER_SPAWN_DELAY)) {
+            if (controller.spawn && (this.__now <= this.options.PLAYER_SPAWN_DELAY || 
+                    this.__now >= controller.lastSpawnTick + this.options.PLAYER_SPAWN_DELAY)) {
                 controller.spawn = false;
-                controller.lastSpawnTick = __now;
+                controller.lastSpawnTick = this.__now;
 
                 this.delayKill(controller.id, true);
                 this.delaySpawn(controller.id);
@@ -507,6 +427,17 @@ module.exports = class Engine {
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
     }
 
+    updateCells(dt) {
+        this.wasm.update(0, this.indicesPtr, dt,
+            this.options.EJECT_MAX_AGE,
+            this.options.PLAYER_AUTOSPLIT_SIZE,
+            this.options.DECAY_MIN,
+            this.options.STATIC_DECAY,
+            this.options.DYNAMIC_DECAY,
+            -this.options.MAP_HW, this.options.MAP_HW,
+            -this.options.MAP_HH, this.options.MAP_HH);
+    }
+
     updatePlayerCells(dt) {
         const initial = Math.round(1000 * this.options.PLAYER_MERGE_TIME);
         
@@ -522,6 +453,43 @@ module.exports = class Engine {
                 initial, this.options.PLAYER_MERGE_INCREASE, this.options.PLAYER_SPEED,
                 this.options.PLAYER_MERGE_TIME, this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER);
             ptr += s << 1;
+        }
+    }
+
+    updateTree() {
+        // Autosplit and update quadtree
+        if (this.options.PLAYER_AUTOSPLIT_SIZE) {
+            // starting after removed cells
+            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
+                const index = this.resolveIndices.getUint16(i * 2, true);
+                const cell = this.cells[index];
+
+                if (cell.shouldAuto && cell.age > this.options.PLAYER_AUTOSPLIT_DELAY) {
+                    // const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
+                    // if (cellsLeft <= 0) continue;
+                    const splitTimes = Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE);
+                    const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
+                    for (let i = 1; i < splitTimes; i++) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                    }
+                    cell.r = splitSizes;
+                    cell.updated = true;
+                }
+
+                // Update quadtree
+                if (cell.type > 250 && !cell.isUpdated) continue;
+                this.tree.update(cell);
+            }
+        } else {
+            // Only update quadtree (starting after removed cells)
+            for (let i = this.removedCells.length; i < this.indices - 1; i++) {
+                const index = this.resolveIndices.getUint16(i * 2, true);
+                const cell = this.cells[index];
+                // Update quadtree
+                if (cell.type > 250 && !cell.isUpdated) continue;
+                this.tree.update(cell);
+            }
         }
     }
 
@@ -543,6 +511,51 @@ module.exports = class Engine {
             for (const cell_id of this.counters[id]) this.cells[cell_id].remove();
         }
         this.counters[id].clear();
+    }
+
+    resolve() {
+        const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
+            this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);
+
+        // Magic goes here
+        this.collisions = this.wasm.resolve(0,
+            this.indicesPtr, this.counters[PELLET_TYPE].size,
+            this.treePtr, this.stackPtr,
+            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
+    }
+
+    postResolve() {
+        this.removedCells = [];
+        // Handle pop, update quadtree, remove item from quadtree
+        for (let i = 0; i < this.indices; i++) {
+            const index = this.resolveIndices.getUint16(i * 2, true);
+            const cell = this.cells[index];
+            if (cell.shouldRemove) {
+                this.tree.remove(cell);
+                this.counters[cell.type].delete(cell.id);
+                this.removedCells.push(index);
+                this.cellCount--;
+            } else if (cell.popped) {
+                // pop the cell OR split virus
+                if (cell.type == VIRUS_TYPE) {
+                    cell.r = this.options.VIRUS_SIZE;
+                    this.tree.update(cell);
+                    const angle = Math.atan2(cell.boostX, cell.boostY);
+                    this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
+                        Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
+                } else {
+                    this.game.controls[cell.type].lastPoppedTick = this.__now;
+                    const splits = this.distributeCellMass(cell);
+                    splits.length && (this.game.controls[cell.type].lockDir = false);
+                    for (const mass of splits) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        this.splitFromCell(cell, Math.sqrt(mass * 100),
+                            Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                    }
+                }
+            } else if (cell.updated) this.tree.update(cell);
+        }
     }
 
     /**

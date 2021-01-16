@@ -16,6 +16,7 @@ module.exports = class Controller {
         this.ejectMarco = false;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;
+        this.lastPoppedTick = 0;
         this.lastEjectTick = 0;
         this.lastSpawnTick = 0;
         this.viewportX = 0;
@@ -25,7 +26,7 @@ module.exports = class Controller {
         this.maxScore = 0;
         this.score = 0;
 
-        this.viewportScale = 2;
+        this.viewportScale = 10;
 
         /** @type {import("./handle")} */
         this.handle = null;
@@ -54,6 +55,10 @@ module.exports = class Controller {
         }
     }
 
+    toggleLock() {
+        this.lockDir ? this.unlock() : this.lock();
+    }
+
     lock() {
         if (this.engine.counters[this.id].size != 1) return false;
         const x1 = this.mouseX, y1 = this.mouseY, x2 = this.viewportX, y2 = this.viewportY;
@@ -80,6 +85,7 @@ module.exports = class Controller {
         this.lockDir = false;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;
+        this.lastPoppedTick = 0;
         this.lastEjectTick = 0;
         this.lastSpawnTick = 0;
         this.viewportX = 0;
@@ -87,5 +93,14 @@ module.exports = class Controller {
         this.viewportHW = 0;
         this.viewportHH = 0;
         this.score = 0;
+    }
+
+    afterSpawn() {
+        this.ejectAttempts = 0;
+        this.ejectMarco = false;
+        this.lastPoppedTick = 0;
+        this.lastEjectTick = 0;
+        this.updated = false; // reset updated field after spawning
+        this.lockDir = false; // reset line lock
     }
 }

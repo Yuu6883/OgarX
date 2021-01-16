@@ -5,8 +5,8 @@ module.exports = class Mouse {
 
     setBuffer(buf) {
         if (!buf) {
-            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(20);
-            else buf = new ArrayBuffer(20);
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(28);
+            else buf = new ArrayBuffer(28);
         }
 
         this.sharedBuffer = buf;
@@ -27,4 +27,10 @@ module.exports = class Mouse {
 
     get bandwidth() { return Atomics.load(this.buffer, 4); }
     set bandwidth(v) { Atomics.store(this.buffer, 4, v); }
+
+    get mycells() { return Atomics.load(this.buffer, 5); }
+    set mycells(v) { Atomics.store(this.buffer, 5, v); }
+
+    get linelocked() { return Atomics.load(this.buffer, 6); }
+    set linelocked(v) { Atomics.store(this.buffer, 6, v); }
 }

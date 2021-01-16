@@ -51,13 +51,13 @@ module.exports = class Protocol extends EventEmitter {
     }
 
     connect(urlOrPort, name = "", skin = "") {
-        this.disconnect();
 
-        this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
+        const oldWs = this.ws;
+
+        const currWs = this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
         this.ws.binaryType = "arraybuffer";
 
         this.ws.onopen = () => {
-            console.log("Connected to server");
             const writer = new Writer();
             writer.writeUInt8(69);
             writer.writeInt16(420);
@@ -119,14 +119,29 @@ module.exports = class Protocol extends EventEmitter {
                     break;
             }
         }
-        this.ws.onerror = e => console.error(e);
+
+        this.ws.onerror = e => self.postMessage({
+            event: "error",
+            message: "Connection failed"
+        });
+
         this.ws.onclose = e => {
             this.emit("close");
+            
             this.renderer.clearCells();
             this.renderer.clearData();
-            console.error(`Socket closed: { code: ${e.code}, reason: ${e.reason} }`);
-            self.postMessage({ event: "disconnect" });
+            this.renderer.clear();
+
+            this.bandwidth = 0;
+            this.renderer.stats.linelocked = 0;
+            this.renderer.stats.mycells = 0;
+            this.renderer.stats.ping = 0;
+
+            if (this.ws == currWs) self.postMessage({ 
+                event: "disconnect", code: e.code, reason: e.reason });
         }
+
+        oldWs && oldWs.close();
     }
 
     get me() { return this.renderer.playerData.get(this.pid) || {}; }
@@ -143,21 +158,16 @@ module.exports = class Protocol extends EventEmitter {
         this.lastPacket = Date.now();
 
         const core = this.renderer.core;
-        const viewport = new DataView(buffer, 1, 8);
+        const header = new DataView(buffer, 1, 10);
+
+        this.renderer.stats.mycells = header.getUint8(0);
+        this.renderer.stats.linelocked = header.getUint8(1);
         
-        this.renderer.target.position[0] = viewport.getFloat32(0, true);
-        this.renderer.target.position[1] = viewport.getFloat32(4, true);
+        this.renderer.target.position[0] = header.getFloat32(2, true);
+        this.renderer.target.position[1] = header.getFloat32(6, true);
         
-        core.HEAPU8.set(new Uint8Array(buffer, 9), this.renderer.cellTypesTableOffset);                 
+        core.HEAPU8.set(new Uint8Array(buffer, 11), this.renderer.cellTypesTableOffset);                 
         core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
-    }
-
-    disconnect() {
-        if (!this.ws) return;
-
-        console.log("Disconnecting on client");
-        this.ws.close();
-        this.ws = null;
     }
 
     /**

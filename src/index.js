@@ -23,7 +23,7 @@ engine.setOptions({
     EJECT_SIZE: 38,
     EJECT_LOSS: 38.4,
     EJECT_DELAY: 50,
-    BOTS: 100,
+    BOTS: 70,
     PELLET_COUNT: 5000,
     PLAYER_SPAWN_SIZE: 1500,
     MAP_HW: 30000,
@@ -46,7 +46,7 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
     await server.open(sslOptions, process.env.PORT);
     engine.start();
 
-    // setInterval(() => {
-    //     console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
-    // }, 1000);
+    setInterval(() => {
+        console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
+    }, 1000);
 })();

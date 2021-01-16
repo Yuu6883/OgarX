@@ -12,11 +12,23 @@ module.exports = class Bot extends Handle {
         this.join();
         this.controller.name = pick(BOTS.names);
         this.controller.skin = pick(BOTS.skins);
+
+        this.__nextActionTick = 0;
     };
+
+    get myCellIDs() { return this.game.engine.counters[this.controller.id]; }
     
+    set nextAction(v) { this.__nextActionTick = this.game.engine.__now + 1000 * v; }
+
     onTick() {
 
-        const s = this.game.engine.options.PLAYER_SPAWN_SIZE;
+        const c = this.controller;
+        const g = this.game;
+        const e = g.engine;
+        const cells = e.cells;
+        const s = e.options.PLAYER_SPAWN_SIZE;
+        
+        if (e.__now < this.__nextActionTick) return;
         
         // if (!this.controller.alive || this.controller.score < s * s / 500) 
         //     this.controller.spawn = true;
@@ -26,23 +38,42 @@ module.exports = class Bot extends Handle {
         // this.controller.mouseX = this.controller.viewportX;
         // this.controller.mouseY = this.controller.viewportY;
 
-        // Less than 20% of or spawn mass
-        if (!this.controller.alive || this.controller.score < s * s / 500) {
-            this.controller.spawn = true;
+        // Less than 20% of or spawn mass and 3 second spawn cooldown
+        if (!c.alive || c.score < s * s / 500) {
+            c.spawn = true;
+            this.nextAction = 5;
+            // console.log("BOT SPAWN");
         } else {
-            if (this.game.engine.counters[this.controller.id].size > 5) {
-                this.controller.ejectMarco = true;
+            let canEjectCount = 0;
+            for (const cell_id of this.myCellIDs) {
+                if (cells[cell_id].r > e.options.PLAYER_MIN_EJECT_SIZE) canEjectCount++;
+            }
+
+            if (canEjectCount > 3) {
+                c.ejectMarco = true;
+                c.mouseX = c.viewportX;
+                c.mouseY = c.viewportY;
+
+                this.nextAction = 1; // 1 sec
+                // console.log("BOT SF");
             } else {
-                this.controller.ejectMarco = false;
-                this.controller.mouseX = this.controller.viewportX;
-                this.controller.mouseY = this.controller.viewportY;
                 
-                // Solotrick to random direction
-                if (Math.random() < 0.005) {
-                    this.controller.splitAttempts = 7;
+                if (this.myCellIDs.size < 20 && Math.random() < 0.1) {
+                    // Solotrick to random direction
+                    c.ejectMarco = true;
+                    c.splitAttempts = 7;
                     const a = Math.random() * Math.PI * 2;
-                    this.controller.mouseX = this.controller.viewportX + 1000 * Math.sin(a);
-                    this.controller.mouseY = this.controller.viewportY + 1000 * Math.cos(a);
+                    c.mouseX = c.viewportX + 1000 * Math.sin(a);
+                    c.mouseY = c.viewportY + 1000 * Math.cos(a);
+                    this.nextAction = 5;
+                    // console.log("BOT SOLOTRICK");
+                } else {
+                    // Idle
+                    c.ejectMarco = false;
+                    c.mouseX = c.viewportX;
+                    c.mouseY = c.viewportY;
+                    this.nextAction = 1;
+                    // console.log("BOT IDEL");
                 }
             }
         }
