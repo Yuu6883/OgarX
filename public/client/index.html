@@ -13,16 +13,38 @@
 <body>
     <div id="chat"></div>
     <input id="chat-input" type="text" placeholder="Chat" />
-    <svg id="keyboard" height="512" viewBox="0 0 512 512" width="512" xmlns="http://www.w3.org/2000/svg"><g><path d="m482 201h-181.732c17.597-18.112 34.732-44.991 34.732-81 0-35.445 8.214-46.562 15.371-52.287 10.99-8.792 31.231-12.713 65.629-12.713 8.284 0 15-6.716 15-15s-6.716-15-15-15c-42.803 0-67.247 5.588-84.371 19.287-23.602 18.882-26.629 50.381-26.629 75.713 0 46.583-41.523 74.289-52.895 81h-222.105c-16.542 0-30 13.458-30 30v226c0 16.542 13.458 30 30 30h452c16.542 0 30-13.458 30-30v-226c0-16.542-13.458-30-30-30zm0 256h-452v-226h452c.019 231.146.1 226 0 226z"/><path d="m96 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m151 344c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m185 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m265 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m376 329h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m431 280c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m320 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m240 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m160 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m80 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m432 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m352 393h-192c-8.284 0-15 6.716-15 15s6.716 15 15 15h192c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/></g></svg>
-    <div id="key-menu">
-        <div id="keys"></div></br>
-        <button id="close-key-menu">Close</button>
+    <div id="settings-bar" class="uk-inline">
+        <span class="settings-icon" uk-toggle="target: #render-menu-offcanvas" uk-icon="settings"></span>
+        <span class="settings-icon" uk-toggle="target: #key-menu-offcanvas"><svg height="512" viewBox="0 0 512 512" width="512" xmlns="http://www.w3.org/2000/svg"><g><path d="m482 201h-181.732c17.597-18.112 34.732-44.991 34.732-81 0-35.445 8.214-46.562 15.371-52.287 10.99-8.792 31.231-12.713 65.629-12.713 8.284 0 15-6.716 15-15s-6.716-15-15-15c-42.803 0-67.247 5.588-84.371 19.287-23.602 18.882-26.629 50.381-26.629 75.713 0 46.583-41.523 74.289-52.895 81h-222.105c-16.542 0-30 13.458-30 30v226c0 16.542 13.458 30 30 30h452c16.542 0 30-13.458 30-30v-226c0-16.542-13.458-30-30-30zm0 256h-452v-226h452c.019 231.146.1 226 0 226z"/><path d="m96 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m151 344c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m185 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m265 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m376 329h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m431 280c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m320 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m240 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m160 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m80 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m432 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m352 393h-192c-8.284 0-15 6.716-15 15s6.716 15 15 15h192c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/></g></svg></span>
+    </div>
+    <div id="key-menu-offcanvas" uk-offcanvas>
+        <div id="offcanvas-menu" class="uk-offcanvas-bar">
+            <h3 class="uk-center">Hotkeys</h3>
+            <div id="keys" class="key-value"></div>
+            <a class="uk-offcanvas-close" type="button" uk-close></a>
+        </div>
+    </div>
+    <div id="render-menu-offcanvas" uk-offcanvas>
+        <div id="offcanvas-menu" class="uk-offcanvas-bar">
+            <h3 class="uk-center">Render Options</h3>
+            <div id="render-options" class="key-value">
+                <span>Skin</span><span id="render-skin" class="selectable"></span>
+                <span>Name</span><span id="render-name" class="selectable"></span>
+                <span>Mass</span><span id="render-mass" class="selectable"></span>
+                <span>Draw Delay</span>
+                <div class="uk-inline">
+                    <input id="render-delay-input" class="slider" type="range" value="0" min="50" max="300" step="10">
+                    <span id="render-delay-display" class="uk-overlay uk-position-center">69</span>
+                </div>
+            </div>
+            <a class="uk-offcanvas-close" type="button" uk-close></a>
+        </div>
     </div>
     <div id="leaderboard">
-        <h3 id="server-name">Ogar69</h3>
+        <h3 id="server-name"></h3>
         <div id="leaderboard-data" class="uk-inline"></div>
     </div>
-    <div id="stats">
+    <div id="stats1">
         FPS: <span id="fps"></span>&nbsp; PING: <span id="ping"></span>&nbsp; BANDWIDTH: <span id="bandwidth"></span>
         <!-- <br>Cells: <span id="cells"></span>Text: <span id="text"></span> -->
     </div>

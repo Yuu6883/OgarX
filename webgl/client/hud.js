@@ -1,8 +1,9 @@
 const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
+const Input = require("./input");
+const Options = require("./options");
 const Viewport = require("./viewport");
-const Keyboard = require("./keyboard");
 
 module.exports = class HUD {
 
@@ -99,41 +100,25 @@ module.exports = class HUD {
         window.onresize = this.resize.bind(this);
         this.resize();
 
-        this.keys = new Keyboard(this);
-        /** @type {Set<string>} */
-        this.pressing = new Set();
-        const state = this.state;
+        document.addEventListener("contextmenu", e => e.preventDefault());
 
-        window.addEventListener("keydown", e => {
-            if (e.key == "Tab") e.preventDefault();
-            if (e.key == "Escape") this.toggle();
-            if (e.key == "Enter") this.toggle(this.chatInput);
-            if (this.pressing.has(e.key)) return;
-            this.keys.keyDown(e.key);
-            this.pressing.add(e.key);
-        });
+        this.input = new Input(this);
+        this.options = new Options(this);
+        
+        this.state.focused = 1;
 
-        window.addEventListener("keyup", e => {
-            this.keys.keyUp(e.key);
-            this.pressing.delete(e.key);
-        });
-
-        window.addEventListener("blur", _ => {
-            state.focused = 0;
-        });
-
-        window.addEventListener("focus", _ => {
-            state.focused = 1;
-            for (const k of this.pressing) this.keys.keyUp(k);
-            this.pressing.clear();
-        });
-
-        state.focused = 1;
+        window.addEventListener("keydown", e => this.input.keyDown(e));
+        window.addEventListener("keyup", e => this.input.keyUp(e));
+        window.addEventListener("blur", _ => this.input.blur());
+        window.addEventListener("focus", _ => this.input.focus());
+        window.addEventListener("mousedown", e => this.input.keyDown({ key: `MOUSE ${e.button}`}));
+        window.addEventListener("mouseup",   e => this.input.keyUp({ key: `MOUSE ${e.button}`}));
 
         canvas.addEventListener("mousemove", e => {
             this.mouse.x = e.clientX * window.devicePixelRatio;
             this.mouse.y = e.clientY * window.devicePixelRatio;
         });
+
         canvas.addEventListener("wheel", e => {
             if (e.ctrlKey) return;
             this.mouse.updateScroll(e.deltaY);
@@ -284,6 +269,9 @@ module.exports = class HUD {
         this.playButton.disabled = false;
         this.chatElem.innerHTML = "";
         this.onChat(0, null, "Connected");
+
+        this.show(document.getElementById("stats1"));
+        this.show(document.getElementById("stats2"));
     }
 
     onDisconnect() {
@@ -292,6 +280,9 @@ module.exports = class HUD {
         this.playButton.disabled = true;
         this.show();
         this.onError("Disconnected");
+        
+        this.hide(document.getElementById("stats1"));
+        this.hide(document.getElementById("stats2"));
     }
 
     spawn() {

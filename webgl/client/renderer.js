@@ -20,7 +20,6 @@ const NAME_MASS_MIN = 0.03;
 const NAME_SCALE = 0.25;
 const NAME_Y_OFFSET = -0.03;
 
-const LONG_MASS = true;
 const MASS_GAP = 0;
 const MASS_SCALE = 0.25;
 const MASS_Y_OFFSET = -0.33;
@@ -71,13 +70,6 @@ class Renderer {
         this.drawNames = this.drawNames.bind(this);
         this.drawMass  = this.drawMass.bind(this);
 
-        this.options = {
-            ZOOM_SPEED: 3,
-            DRAW_DELAY: 120,
-            DRAW_NAME: true,
-            DRAW_MASS: true,
-            DRAW_SKIN: true,
-        };
         this.fps = 0;
 
         this.fpsInterval = setInterval(() => {
@@ -672,7 +664,7 @@ class Renderer {
 
     // Smooth update camera
     lerpCamera(d = 1 / 60, position) {
-        const l = Math.min(Math.max(d * this.options.ZOOM_SPEED, 0), 1);
+        const l = Math.min(Math.max(d * this.state.zoom, 0), 1);
         vec3.lerp(this.camera.position, this.camera.position, this.target.position, d);
         this.camera.scale += (this.target.scale - this.camera.scale) * l;
 
@@ -700,7 +692,7 @@ class Renderer {
         gl.bindVertexArray(this.quadVAO);
         gl.activeTexture(gl.TEXTURE11);
 
-        if (!this.options.DRAW_SKIN) {
+        if (!this.state.skin) {
             gl.bindTexture(gl.TEXTURE_2D, this.empty_texture);
         }
 
@@ -724,7 +716,7 @@ class Renderer {
 
             const textures = this.playerTextures.get(i) || {};
             
-            if (this.options.DRAW_SKIN) gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
+            if (this.state.skin || i > 250) gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
@@ -792,7 +784,9 @@ class Renderer {
             const x = buffer[o];
             const y = buffer[o + 1];
             const size = buffer[o + 2];
-            const mass = LONG_MASS ? Math.floor(buffer[o + 3]).toString() : "";
+            // mass = 1 is short, 2 is long
+            const mass = this.state.mass - 1 ? Math.floor(buffer[o + 3]).toString() : 
+                buffer[o + 3] > 1000 ? (buffer[o + 3] / 1000).toFixed(1) + "k" : buffer[o + 3];
             
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
@@ -860,7 +854,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / this.options.DRAW_DELAY : 0;
+        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / this.state.draw : 0;
 
         const cell_count = this.core.instance.exports.draw_cells(0, 
             this.cellTypesTableOffset, 
@@ -885,7 +879,7 @@ class Renderer {
         //         }
         //     }
         // }
-        this.lerpCamera(delta / this.options.DRAW_DELAY, position);
+        this.lerpCamera(delta / this.state.draw, position);
         this.checkViewport();
 
         if (!this.state.focused) {
@@ -905,7 +899,7 @@ class Renderer {
         const funcs = [this.drawCells];
 
         // Configurable if we want to draw mass
-        if (this.options.DRAW_MASS || this.options.DRAW_NAME) {
+        if (this.state.mass || this.state.name) {
             text_count = this.core.instance.exports.draw_text(0,
                 this.cellTypesTableOffset, // end of cell buffer
                 this.cellBufferEnd,  // table offset
@@ -914,12 +908,12 @@ class Renderer {
                 NAME_MASS_MIN,
                 this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
 
-            if (this.options.DRAW_NAME) {
+            if (this.state.name) {
                 progs.push(this.peel_prog2);
                 funcs.push(this.drawNames);
             }
 
-            if (this.options.DRAW_MASS) {
+            if (this.state.mass) {
                 this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
                 progs.push(this.peel_prog3);
                 funcs.push(this.drawMass);

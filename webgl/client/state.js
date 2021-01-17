@@ -5,12 +5,12 @@ module.exports = class State {
 
     setBuffer(buf) {
         if (!buf) {
-            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(7);
-            else buf = new ArrayBuffer(7);
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(100);
+            else buf = new ArrayBuffer(100);
         }
 
         this.sharedBuffer = buf;
-        this.buffer = new Uint8Array(this.sharedBuffer);
+        this.buffer = new Int32Array(this.sharedBuffer);
     }
 
     get spectate() { return Atomics.load(this.buffer, 0); }
@@ -33,6 +33,24 @@ module.exports = class State {
 
     get lineLock() { return Atomics.load(this.buffer, 6); }
     set lineLock(v) { Atomics.store(this.buffer, 6, v); }
+
+    get skin() { return Atomics.load(this.buffer, 7); }
+    set skin(v) { Atomics.store(this.buffer, 7, v) }
+
+    get name() { return Atomics.load(this.buffer, 8); }
+    set name(v) { Atomics.store(this.buffer, 8, v); }
+
+    get mass() { return Atomics.load(this.buffer, 9); }
+    set mass(v) { Atomics.store(this.buffer, 9, v); }
+
+    get draw() { return Atomics.load(this.buffer, 10); }
+    set draw(v) { Atomics.store(this.buffer, 10, v); }
+
+    get zoom() { return Atomics.load(this.buffer, 11); }
+    set zoom(v) { Atomics.store(this.buffer, 11, v); }
+
+    get resolution() { return Atomics.load(this.buffer, 12); }
+    set resolution(v) { Atomics.store(this.buffer, 12, v); }
 
     exchange() {
         return {

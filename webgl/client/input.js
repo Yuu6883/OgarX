@@ -21,19 +21,8 @@ module.exports = class Keyboard {
 
         this.menuElem = document.getElementById("key-menu");
 
-        this.openElem = document.getElementById("keyboard");
-        this.openElem.addEventListener("click", () => {
-            this.openElem.style.opacity = 0;
-            this.hud.toggle(this.menuElem);
-            this.menuElem.style.left = "0px";
-        });
-
-        this.closeElem = document.getElementById("close-key-menu");
-        this.closeElem.addEventListener("click", () => {
-            this.openElem.style.opacity = 1;
-            this.hud.toggle(this.menuElem);
-            this.menuElem.style.left = "-200px";
-        });
+        /** @type {Set<string>} */
+        this.pressing = new Set();
 
         this.updateKeys();
         this.save();
@@ -50,14 +39,14 @@ module.exports = class Keyboard {
         this.labels = [];
 
         for (const i in events) {
-            const label = document.createElement("h4");
+            const label = document.createElement("span");
             const k = this.keys[i].toUpperCase();
-            label.textContent = `${events[i]}: `;
+            label.textContent = `${events[i]}`;
             const b = document.createElement("b");
             b.innerText = (KeyNameMap[k] || k).toUpperCase();
-            b.classList.add("hot-key");
-            label.appendChild(b);
+            b.classList.add("selectable");
             keys.appendChild(label);
+            keys.appendChild(b);
             this.labels.push(b);
 
             b.addEventListener("mouseenter", _ => {
@@ -67,16 +56,34 @@ module.exports = class Keyboard {
             b.addEventListener("mouseleave", _ => {
                 this.hovered = null;
             });
+
+            b.addEventListener("click", e => {
+                this.setKey(b, `MOUSE ${e.button}`);
+                e.preventDefault();
+                e.stopPropagation();
+            });
         }
     }
 
-    keyDown(key = "") {
-        if (this.hovered) {
-            const index = this.labels.indexOf(this.hovered);
-            this.hovered.innerText = (KeyNameMap[key] || key).toUpperCase();
-            this.keys[index] = key;
-            this.save();
-        }
+    setKey(element = this.hovered, key = "") {
+        const index = this.labels.indexOf(element);
+        element.innerText = (KeyNameMap[key] || key).toUpperCase();
+        this.keys[index] = key;
+        this.save();
+    }
+
+    /** @param {KeyboardEvent} e */
+    keyDown(e) {
+        if (e.ctrlKey) return;
+        if (e.key == "Tab") e.preventDefault();
+        if (e.key == "Escape") this.hud.toggle();
+        if (e.key == "Enter") this.hud.toggle(this.hud.chatInput);
+        if (this.pressing.has(e.key)) return;
+        this.pressing.add(e.key);
+
+        const key = e.key;
+
+        if (this.hovered) this.setKey(this.hovered, key);
 
         const action = events[this.keys.indexOf(key)];
         if (!action) return;
@@ -93,7 +100,13 @@ module.exports = class Keyboard {
         }
     }
 
-    keyUp(key = "") {
+    /** @param {KeyboardEvent} e */
+    keyUp(e) {
+        if (e.ctrlKey) return;
+        this.pressing.delete(e.key);
+
+        const key = e.key;
+
         const action = events[this.keys.indexOf(key)];
         if (!action) return;
         const state = this.hud.state;
@@ -101,5 +114,15 @@ module.exports = class Keyboard {
         switch (action) {
             case "Feed":         state.macro   = 0; break;
         }
+    }
+
+    blur() {
+        this.hud.state.focused = 0;
+    }
+
+    focus() {
+        this.hud.state.focused = 1;
+        for (const k of this.pressing) this.keyUp(k);
+        this.pressing.clear();
     }
 }

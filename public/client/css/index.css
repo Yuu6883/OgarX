@@ -4,8 +4,9 @@
 }
 body {
     font-family: "Lato";
+    color: #eee;
     background-color: black;
-    position: absolute;
+    position: absolute!important;
     top: 0px;
     left: 0px;
     width: 100%;
@@ -13,44 +14,60 @@ body {
     margin: 0px;
     overflow: hidden;
 }
-#keyboard {
+#settings-bar {
     position: absolute;
     top:  15px;
     left: 15px;
     z-index: 1;
+    height: 50px;
+    width: auto;
+}
+.settings-icon {
+    margin: 5px;
+}
+.settings-icon svg {
     width: 30px;
     height: 30px;
-    fill: rgba(238, 238, 238, 0.5);
+    opacity: 1;
+    color: rgba(238, 238, 238, 0.5)!important;
+    fill: rgba(238, 238, 238, 0.5)!important;
+    transition: fill 0.25s linear, color 0.25s linear;
     cursor: pointer;
-    transition: fill 0.25s linear;
 }
-#keyboard:hover {
-    fill: rgba(238, 238, 238, 0.9);
+.settings-icon svg:hover {
+    color: rgba(238, 238, 238, 0.9)!important;
+    fill: rgba(238, 238, 238, 0.9)!important;
 }
-#keys, h1, h2, h3, h4, h5, h6 {
-    color: #eee;
+.key-value {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 15px;
 }
-#key-menu {
-    position: absolute;
-    top:  0px;
-    left: -200px;
-    width: 200px;
-    height: 100vh;
-    z-index: 1;
-    transition: left 0.5s linear, opacity 0.25s linear;
-    justify-content: center;
+.key-value * {
+    padding: 8px;
+    margin-top: 10px;
+    font-size: 18px;
+}
+.key-value *:nth-child(2n-1) {
+    text-align: right;
+}
+h1, h2, h3, h4, h5, h6 {
+    font-weight: bold;
+    color: #93a7e1!important;
+}
+#offcanvas-menu {
+    background-color: rgba(14, 14, 14, 0.8);
     align-items: center;
     display: flex;
     flex-direction: column;
-    background-color: rgb(0,0,0,0.75);
 }
-.hot-key {
+.selectable {
     color: rgba(238, 238, 238, 0.8);
-    transition: color 0.25s linear;
+    transition: color 0.1s linear;
     cursor: pointer;
 }
-.hot-key:hover {
-    color: rgba(238, 238, 238, 1);
+.selectable:hover {
+    color: #93a7e1;
 }
 #canvas {
     position: absolute;
@@ -77,20 +94,22 @@ body {
     height: auto;
     margin: 0;
     position: absolute;
-    top: 0;
+    top: 30px;
     right: 0;
     transition: opacity 0.25s linear;
     z-index: 1;
     color: #eee;
     background-color: #00000044;
 }
-#stats {
+#stats1 {
     position: absolute;
     top: 10px;
-    right: calc(15% + 50px);
+    right: 40px;
     z-index: 1;
     color: #eee;
     background-color: #00000044;
+    opacity: 0;
+    transition: opacity 0.25s linear;
 }
 #stats2 {
     position: absolute;
@@ -100,6 +119,8 @@ body {
     color: #eee;
     transform: translateX(-50%);
     background-color: #00000044;
+    opacity: 0;
+    transition: opacity 0.25s linear;
 }
 #ping, #fps, #bandwidth {
     display: inline-block;
@@ -162,7 +183,7 @@ body {
     opacity: 0;
     z-index: 1;
 }
-input {
+input[type="text"] {
     padding: 5px;
     font-size: 20px;
     background-color: transparent;
@@ -225,4 +246,45 @@ select {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
+}
+
+#render-delay-display {
+    pointer-events: none;
+    margin-top: -3px;
+}
+
+/* The slider itself */
+.slider {
+    -webkit-appearance: none;  /* Override default CSS styles */
+    appearance: none;
+    padding: 0;
+    margin: 0;
+    width: 100%; /* Full-width */
+    height: 25px; /* Specified height */
+    background:rgba(136, 136, 136, 0.25); /* Grey background */
+    outline: none; /* Remove outline */
+    -webkit-transition: .2s; /* 0.2 seconds transition on hover */
+    transition: opacity .2s;
+}
+  
+/* Mouse-over effects */
+.slider:hover {
+    background: rgba(238, 238, 238, 0.3); 
+}
+  
+/* The slider handle (use -webkit- (Chrome, Opera, Safari, Edge) and -moz- (Firefox) to override default look) */
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none; /* Override default look */
+    appearance: none;
+    width: 8px; /* Set a specific slider handle width */
+    height: 25px; /* Slider handle height */
+    background: #93a7e1;
+    cursor: pointer; /* Cursor on hover */
+}
+  
+.slider::-moz-range-thumb {
+    width: 8px; /* Set a specific slider handle width */
+    height: 25px; /* Slider handle height */
+    background: #93a7e1;
+    cursor: pointer; /* Cursor on hover */
 }
