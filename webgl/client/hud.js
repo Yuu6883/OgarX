@@ -70,17 +70,17 @@ module.exports = class HUD {
     }
 
     show(elem = this.hudElem) {
-        elem.focus();
         elem.classList.add("fade-in");
         elem.classList.remove("fade-out");
         elem.hidden = false;
+        elem.focus();
     }
 
     hide(elem = this.hudElem) {
-        elem.blur();
         elem.classList.remove("fade-in");
         elem.classList.add("fade-out");
         setTimeout(() => elem.hidden = true, 250);
+        elem.blur();
     }
 
     toggle(elem = this.hudElem) {
