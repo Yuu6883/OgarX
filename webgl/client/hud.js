@@ -299,6 +299,7 @@ module.exports = class HUD {
 
         this.show(document.getElementById("stats1"));
         this.show(document.getElementById("stats2"));
+        this.show(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = serverName;
         this.serverAccordion.toggle(0, true);
     }
@@ -314,6 +315,7 @@ module.exports = class HUD {
         
         this.hide(document.getElementById("stats1"));
         this.hide(document.getElementById("stats2"));
+        this.hide(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = "";
         this.serverAccordion.toggle(0, true);
     }
