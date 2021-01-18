@@ -65,6 +65,7 @@ module.exports = class OgarXProtocol extends Protocol {
         writer.writeUInt16(this.controller.id);
         writer.writeUInt16(this.game.engine.options.MAP_HW);
         writer.writeUInt16(this.game.engine.options.MAP_HH);
+        writer.writeUTF16String(this.game.name);
         this.ws.send(writer.finalize(), true);
     }
 

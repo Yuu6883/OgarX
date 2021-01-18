@@ -2,6 +2,7 @@ const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
 const Input = require("./input");
+const Skins = require("./skins");
 const Options = require("./options");
 const Viewport = require("./viewport");
 
@@ -38,7 +39,7 @@ module.exports = class HUD {
                 if (data.event === "ready") this.ready = true;
                 if (data.event === "chat") this.onChat(data.pid, data.player, data.message);
                 if (data.event === "leaderboard") this.onLeaderboard(data.lb);
-                if (data.event === "connect") this.onConnect();
+                if (data.event === "connect") this.onConnect(data.server);
                 if (data.event === "disconnect") this.onDisconnect();
                 if (data.event === "error") this.onError(data.message || "");
             }
@@ -70,18 +71,20 @@ module.exports = class HUD {
 
     show(elem = this.hudElem) {
         elem.focus();
-        elem.style.opacity = 1;
-        elem.style.zIndex = 1;
+        elem.classList.add("fade-in");
+        elem.classList.remove("fade-out");
+        elem.hidden = false;
     }
 
     hide(elem = this.hudElem) {
         elem.blur();
-        elem.style.opacity = 0;
-        setTimeout(() => elem.style.zIndex = 0, 250);
+        elem.classList.remove("fade-in");
+        elem.classList.add("fade-out");
+        setTimeout(() => elem.hidden = true, 250);
     }
 
     toggle(elem = this.hudElem) {
-        elem.style.opacity == 1 ? this.hide(elem) : this.show(elem);
+        elem.hidden ? this.show(elem) : this.hide(elem);
     }
 
     resize() {
@@ -114,7 +117,7 @@ module.exports = class HUD {
         window.addEventListener("mousedown", e => this.input.keyDown({ key: `MOUSE ${e.button}`}));
         window.addEventListener("mouseup",   e => this.input.keyUp({ key: `MOUSE ${e.button}`}));
 
-        canvas.addEventListener("mousemove", e => {
+        window.addEventListener("mousemove", e => {
             this.mouse.x = e.clientX * window.devicePixelRatio;
             this.mouse.y = e.clientY * window.devicePixelRatio;
         });
@@ -125,6 +128,24 @@ module.exports = class HUD {
         }, { passive: true });
     }
 
+    updateSkin(ignoreError = false) {
+
+        if (!this.skin) {
+            this.skinElem.src = "/static/img/skin.png";
+            return;
+        } else console.log(`Loading skin from ${this.skin}`);
+
+        const img = new Image();
+        img.onload = () => {
+            this.skins.current = this.skinElem.src = this.skin;
+        }
+        ignoreError || (img.onerror = () => {
+            this.onError(`Failed to load skin "${this.skin}"`);
+            this.skinElem.src = "/static/img/skin.png";
+        });
+        img.src = this.skin;
+    }
+
     initUIComponents() {
         this.hudElem = document.getElementById("hud");
         this.skinElem = document.getElementById("skin");
@@ -132,17 +153,10 @@ module.exports = class HUD {
         this.serverInput = document.getElementById("server-input");
         this.nameInput = document.getElementById("name-input");
 
-        const updateSkin = (ignoreError = false) => {
-            const img = new Image();
-            img.onload = () => {
-                this.skinInput.classList.remove("danger");
-                this.skinElem.src = this.skin;
-            }
-            ignoreError || (img.onerror = () => this.skinInput.classList.add("danger"));
-            img.src = this.skin;
-        }
+        this.skins = new Skins(this);
+        this.skinInput.value = this.skins.current;
 
-        this.skinInput.addEventListener("blur", updateSkin);
+        this.skinInput.addEventListener("blur", () => this.updateSkin());
 
         this.playButton = document.getElementById("play");
         this.playButton.addEventListener("click", () => {
@@ -150,6 +164,7 @@ module.exports = class HUD {
             this.spawn();
             this.playButton.blur();
         });
+        this.spectateButton = document.getElementById("spectate");
 
         this.chatElem = document.getElementById("chat");
         this.chatInput = document.getElementById("chat-input");
@@ -172,17 +187,28 @@ module.exports = class HUD {
         this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
         this.serverInput.value = "Select Server";
-        this.nameInput.value = localStorage.getItem("ogarx_name") || "";
-        this.skinInput.value = localStorage.getItem("ogarx_skin") || "";
+        this.serverInput.addEventListener("click", () => this.serverAccordion.toggle(0, true));
         
+        this.nameInput.value = localStorage.getItem("ogarx-name") || "";
+
         this.nameInput.autocomplete = Math.random();
         this.skinInput.autocomplete = Math.random();
+        this.serverAccordion = UIkit.accordion("#server-accordion");
 
-        updateSkin(true);
+        this.updateSkin(true);
 
         this.chatInput.addEventListener("blur", () => this.hide(this.chatInput));
 
         this.lbElem = document.getElementById("leaderboard-data");
+
+        if (window.origin == "https://localhost") {
+            const localButton = document.createElement("button");
+            localButton.classList.add("servers", "uk-inline");
+            localButton.setAttribute("server", "localhost:3000");
+            localButton.innerText = "Dev";
+            document.getElementById("server-list").prepend(localButton);
+            window.hud = this;
+        }
 
         document.querySelectorAll(".servers").forEach(e => {
             e.addEventListener("click", () => {
@@ -264,33 +290,39 @@ module.exports = class HUD {
         UIkit.notification({ message, status: "danger", timeout: 3000 });
     }
 
-    onConnect() {
+    onConnect(serverName = "Server") {
         this.serverInput.value = this.server;
-        this.playButton.disabled = false;
+        this.show(this.playButton);
+        this.show(this.spectateButton);
         this.chatElem.innerHTML = "";
         this.onChat(0, null, "Connected");
 
         this.show(document.getElementById("stats1"));
         this.show(document.getElementById("stats2"));
+        document.getElementById("server-name").innerText = serverName;
+        this.serverAccordion.toggle(0, true);
     }
 
     onDisconnect() {
         this.lbElem.innerHTML = "";
         this.chatElem.innerHTML = "";
-        this.playButton.disabled = true;
+        this.hide(this.playButton);
+        this.hide(this.spectateButton);
+
         this.show();
         this.onError("Disconnected");
         
         this.hide(document.getElementById("stats1"));
         this.hide(document.getElementById("stats2"));
+        document.getElementById("server-name").innerText = "";
+        this.serverAccordion.toggle(0, true);
     }
 
     spawn() {
         const name = this.name;
         const skin = this.skin;
         
-        localStorage.setItem("ogarx_name", name);
-        localStorage.setItem("ogarx_skin", skin);
+        localStorage.setItem("ogarx-name", name);
 
         if (this.worker) {
             this.worker.postMessage({ spawn: true, name, skin });

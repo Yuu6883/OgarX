@@ -265,8 +265,7 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
                     node_stack_pointer[stack_counter++] = curr->tl;
             }
         }
-        // TODO: optimize if the quadnode is inside box, we don't need to check item at all
-
+        
         for (unsigned int i = 0; i < curr->count; i++) {
             Cell* cell = &cells[*(&curr->indices + i)];
             if (cell->type > 253) continue;

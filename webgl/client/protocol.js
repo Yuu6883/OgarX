@@ -79,8 +79,9 @@ module.exports = class Protocol extends EventEmitter {
                         width: 2 * reader.readUInt16(), 
                         height: 2 * reader.readUInt16()
                     };
+                    const server = reader.readUTF16String();
                     this.emit("protocol");
-                    self.postMessage({ event: "connect" });
+                    self.postMessage({ event: "connect", server });
                     break;
                 case 2:
                     this.renderer.clearCells();
@@ -126,6 +127,7 @@ module.exports = class Protocol extends EventEmitter {
         });
 
         this.ws.onclose = e => {
+            delete this.ping;
             this.emit("close");
             
             this.renderer.clearCells();

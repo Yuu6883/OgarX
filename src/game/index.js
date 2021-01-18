@@ -7,9 +7,10 @@ const MAX_PLAYER = 250;
 
 module.exports = class Game extends EventEmitter {
 
-    constructor() {
+    constructor(name = "Server") {
         super();
         this.setMaxListeners(MAX_PLAYER);
+        this.name = name;
         this.engine = new Engine(this);
         this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(this.engine, i));
         this.handles = 0;

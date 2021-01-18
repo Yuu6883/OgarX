@@ -65,6 +65,7 @@ const DefaultSettings = {
     PLAYER_MERGE_INCREASE: 1,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_VIEW_SCALE: 1,
+    PLAYER_VIEW_MIN: 4000,
     PLAYER_DEAD_DELAY: 5000,
     STATIC_DECAY: 1,
     DYNAMIC_DECAY: 1,
@@ -361,12 +362,13 @@ module.exports = class Engine {
             //     continue;
             // }
 
-            if (this.counters[id].size) {
+            if (controller.alive) {
                 // Update viewport
                 let size = 0, size_x = 0, size_y = 0;
                 let x = 0, y = 0, score = 0, factor = 0;
                 let min_x = this.options.MAP_HW, max_x = -this.options.MAP_HW;
                 let min_y = this.options.MAP_HH, max_y = -this.options.MAP_HH;
+
                 for (const cell_id of this.counters[id]) {
                     const cell = this.cells[cell_id];
                     x += cell.x * cell.r;
@@ -378,18 +380,24 @@ module.exports = class Engine {
                     score += cell.r * cell.r / 100;
                     size += cell.r;
                 }
+
+                controller.box.l = min_x;
+                controller.box.r = max_x;
+                controller.box.b = min_y;
+                controller.box.t = max_y;
+
                 size = size || 1;
                 factor = Math.pow(this.counters[id].size + 50, 0.1);
                 controller.viewportX = x / size;
                 controller.viewportY = y / size;
                 size = (factor + 1) * Math.sqrt(score * 100);
-                size_x = size_y = Math.max(size, 4000);
+                size_x = size_y = Math.max(size, this.options.PLAYER_VIEW_MIN);
                 size_x = Math.max(size_x, (controller.viewportX - min_x) * 1.75);
                 size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
                 size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
                 size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
-                controller.viewportHW = controller.viewportScale * size_x * this.options.PLAYER_VIEW_SCALE;
-                controller.viewportHH = controller.viewportScale * size_y * this.options.PLAYER_VIEW_SCALE;
+                controller.viewportHW = size_x * this.options.PLAYER_VIEW_SCALE;
+                controller.viewportHH = size_y * this.options.PLAYER_VIEW_SCALE;
     
                 controller.score = score;
                 controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
@@ -687,11 +695,10 @@ module.exports = class Engine {
 
             const target = pick(this.alivePlayers);
 
-            const xmin = target.viewportX - target.viewportHW;
-            const xmax = target.viewportX + target.viewportHW;
-            
-            const ymin = target.viewportY - target.viewportHH;
-            const ymax = target.viewportY + target.viewportHH;
+            const xmin = target.box.l - this.options.PLAYER_VIEW_MIN;
+            const xmax = target.box.r + this.options.PLAYER_VIEW_MIN;
+            const ymin = target.box.b - this.options.PLAYER_VIEW_MIN;
+            const ymax = target.box.t + this.options.PLAYER_VIEW_MIN;
             
             let tries = this.options.SAFE_SPAWN_TRIES;
             while (--tries) {

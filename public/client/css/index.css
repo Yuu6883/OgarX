@@ -13,6 +13,8 @@ body {
     height: 100%;
     margin: 0px;
     overflow: hidden;
+    user-select: none;
+    z-index: -2;
 }
 #settings-bar {
     position: absolute;
@@ -23,7 +25,10 @@ body {
     width: auto;
 }
 .settings-icon {
-    margin: 5px;
+    margin: 5px 5px 5px 5px;
+    width: 30px;
+    height: 30px;
+    outline: none;
 }
 .settings-icon svg {
     width: 30px;
@@ -42,6 +47,27 @@ body {
     display: grid;
     grid-template-columns: auto auto;
     column-gap: 15px;
+}
+#skins {
+    padding: 20px;
+    overflow-y: scroll;
+    display: grid;
+    grid-template-columns: auto auto;
+    row-gap: 15px;
+    column-gap: 15px;
+}
+.skin-item {
+    width: 100px;
+    height: 100px;
+    cursor: pointer;
+}
+.skin-item img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+}
+.skin-item .selected {
+    border: solid 5px #93a7e1;
 }
 .key-value * {
     padding: 8px;
@@ -73,21 +99,35 @@ h1, h2, h3, h4, h5, h6 {
     position: absolute;
     top:  0px;
     left: 0px;
+    z-index: -1;
 }
 #hud {
-    padding: 20px;
-    max-width: 1000px;
-    height: auto;
-    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     text-align: center;
-    transition: opacity 0.25s linear;
-    z-index: 1;
-    background-color: #000000ee;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%,rgba(125,185,232,0) 100%);
 }
+
+.fade-in {
+    animation: fadeIn ease 0.5s;
+}
+@keyframes fadeIn {
+    0% { opacity:0; }
+    100% { opacity:1; }
+}
+
+.fade-out {
+    animation: fadeOut ease 0.5s;
+}
+@keyframes fadeOut {
+    0% { opacity:1; }
+    100% { opacity:0; }
+}
+
 #leaderboard {
     padding: 10px;
     width: 15%;
@@ -96,7 +136,6 @@ h1, h2, h3, h4, h5, h6 {
     position: absolute;
     top: 30px;
     right: 0;
-    transition: opacity 0.25s linear;
     z-index: 1;
     color: #eee;
     background-color: #00000044;
@@ -108,8 +147,6 @@ h1, h2, h3, h4, h5, h6 {
     z-index: 1;
     color: #eee;
     background-color: #00000044;
-    opacity: 0;
-    transition: opacity 0.25s linear;
 }
 #stats2 {
     position: absolute;
@@ -119,8 +156,6 @@ h1, h2, h3, h4, h5, h6 {
     color: #eee;
     transform: translateX(-50%);
     background-color: #00000044;
-    opacity: 0;
-    transition: opacity 0.25s linear;
 }
 #ping, #fps, #bandwidth {
     display: inline-block;
@@ -160,7 +195,7 @@ h1, h2, h3, h4, h5, h6 {
     position: absolute;
     bottom: 0px;
     left: 0px;
-    width: 30vw;
+    width: 25vw;
     height: 40vh;
     z-index: 1;
 }
@@ -170,23 +205,30 @@ h1, h2, h3, h4, h5, h6 {
 #skin {
     width: 200px;
     height: 200px;
+    border-radius: 50%;
 }
-.uk-dropdown {
-    background-color: #000000ee;
-    color: #eee;
+#skin-tab {
+    min-width: 300px;
+}
+#skin-input {
+    text-align: center;
+    width: 300px;
 }
 #chat-input {
     position: absolute;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    opacity: 0;
     z-index: 1;
 }
+.uk-overlay-default {
+    background-color: transparent;
+}
 input[type="text"] {
+    margin: auto;
     padding: 5px;
     font-size: 20px;
-    background-color: transparent;
+    background-color: rgba(0, 0, 0, 0.8);
     color: #eee;
     outline: none;
     border: none;
@@ -196,7 +238,8 @@ input[type="text"] {
     -moz-appearance: none;
     -webkit-appearance: none;
 }
-input:focus #server-input:hover {
+input[type="text"]:focus, #server-input:hover, .uk-accordion-title:hover {
+    color: #eee;
     background-color: #22222277;
     border-bottom: solid 3px #93a7e1;
 }
@@ -208,9 +251,8 @@ button {
     min-width: 100px;
     outline: none;
     padding: 8px;
-    margin-bottom: 16px;
     font-size: 20px;
-    background-color: transparent;
+    background-color: rgba(0, 0, 0, 0.8);
     color: #eee;
     border: solid 3px rgba(255, 255, 255, 0.25);
     appearance: none;
@@ -224,9 +266,6 @@ button:hover {
 button:disabled {
     cursor: not-allowed;
     border: solid 3px #444;
-}
-.danger {
-    border: solid 3px #e19393!important;
 }
 ::-webkit-scrollbar {
     width: 10px;

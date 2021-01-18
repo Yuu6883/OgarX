@@ -26,7 +26,7 @@ module.exports = class Controller {
         this.maxScore = 0;
         this.score = 0;
 
-        this.viewportScale = 1;
+        this.box = { l: 0, r: 0, b: 0, t: 0 };
 
         /** @type {import("./handle")} */
         this.handle = null;
@@ -93,6 +93,7 @@ module.exports = class Controller {
         this.viewportHW = 0;
         this.viewportHH = 0;
         this.score = 0;
+        this.box = { l: 0, r: 0, b: 0, t: 0 };
     }
 
     afterSpawn() {

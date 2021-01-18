@@ -17,7 +17,7 @@ const bufferToString = buffer => {
 module.exports = class SocketServer {
 
     constructor() {
-        this.game = new Game();
+        this.game = new Game(process.env.OGAR69_SERVER);
     }
 
     /** @param {uWS.AppOptions} uWSOption */
