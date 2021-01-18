@@ -16,16 +16,32 @@ const bufferToString = buffer => {
 
 module.exports = class SocketServer {
 
-    constructor() {
-        this.game = new Game(process.env.OGAR69_SERVER);
+    constructor(name) {
+        this.modes = require("../modes");
+        this.game = new Game(name);
     }
 
-    /** @param {uWS.AppOptions} uWSOption */
-    open(uWSOption, port = 443) {
-        if (this.listening || this.sock) return;
+    setGameMode(mode = "") {
+        if (this.modes.has(mode)) {
+            this.game.engine.setOptions(this.modes.get(mode));
+            console.log(`Gamemode is set to "${mode}"`);
+        } else {
+            console.error(`Gamemode "${mode}" doesn't exist`);
+        }
+    }
+
+    /** 
+     * @param {Object} arg0
+     * @param {uWS.AppOptions} arg0.sslOptions
+     * @param {number} [arg0.port=443]
+     * @param {string} [arg0.endpoint=/]
+     * @return {Promise<boolean>}
+     */
+    open({ sslOptions, port = 443, endpoint = "/" }) {
+        if (this.listening || this.sock) return false;
         this.listening = true;
         return new Promise(resolve => {
-            (uWSOption ? uWS.SSLApp(uWSOption) : uWS.App()).ws("/", {
+            (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App()).ws(endpoint, {
                 idleTimeout: 10,
                 maxBackpressure: 1024,
                 maxPayloadLength: 512,
@@ -53,7 +69,7 @@ module.exports = class SocketServer {
             })
             .get("/update/:token", (res, req) => {
                 const authorization = req.getParameter(0);
-                const token = process.env.OGAR69_TOKEN || "";
+                const token = process.env.OGARX_TOKEN || "";
                 if (token) {
                     if (token == authorization) {
                         const result = execSync("git pull origin master", 
@@ -62,7 +78,6 @@ module.exports = class SocketServer {
                             res.end("Already updated");
                         } else {
                             res.end(result);
-                            setTimeout(() => process.exit(0), 1000);
                         }
                     } else {
                         res.writeStatus("401 Unauthorized");
@@ -74,18 +89,36 @@ module.exports = class SocketServer {
                     res.end();
                 }
             })
+            .get("/restart/:token", (res, req) => {
+                const authorization = req.getParameter(0);
+                const token = process.env.OGARX_TOKEN || "";
+                if (token) {
+                    if (token == authorization) {
+                        res.end("Restarting");
+                        setTimeout(() => process.exit(0), 1000);
+                    } else {
+                        res.writeStatus("401 Unauthorized");
+                        res.end();
+                    }
+                } else {
+                    res.writeStatus("302");
+                    res.writeHeader("location", "/");
+                    res.end();
+                }
+            })
             .get("/*", (res, req) => {
-                res.end("Hello OGAR69!!");
+                res.end("Hello OGARX!!");
             })
             .listen("0.0.0.0", port, sock => {
                 this.listening = false;
                 if (sock) {
                     this.sock = sock;
-                    console.log(`WS-Server opened on port ${port}`);
+                    console.log(`WS-Server opened on :${port}${endpoint}`);
+                    resolve(true);
                 } else {
-                    console.error(`WS-Server failed to open`);
+                    console.error(`WS-Server failed to open on :${port}${endpoint}`);
+                    resolve(false);
                 }
-                resolve(true);
             });
         });
     }

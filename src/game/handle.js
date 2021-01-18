@@ -21,10 +21,18 @@ module.exports = class Handle {
             .on("spawn", this.onSpawn)
             .on("error", this.onError)
             .on("leaderboard", this.onLeaderboard);
+
+        /** @type {[string, Function][]} */
+        this.extraEvents = [];
     };
     
     join() { this.game.addHandler(this); }
     remove() { this.game.removeHandler(this); }
+
+    register(event, callback) {
+        this.game.on(event, callback);
+        this.extraEvents.push([event, callback]);
+    }
 
     off() {
         this.remove();
@@ -36,6 +44,9 @@ module.exports = class Handle {
             .off("spawn", this.onSpawn)
             .off("error", this.onError)
             .off("leaderboard", this.onLeaderboard);
+        for (const [event, cb] of this.extraEvents)
+            this.game.off(event, cb);
+        this.extraEvents = [];
     }
 
     // Virtual methods

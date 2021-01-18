@@ -202,11 +202,17 @@ module.exports = class HUD {
         this.lbElem = document.getElementById("leaderboard-data");
 
         if (window.origin == "https://localhost") {
-            const localButton = document.createElement("button");
-            localButton.classList.add("servers", "uk-inline");
-            localButton.setAttribute("server", "localhost:3000");
-            localButton.innerText = "Dev";
-            document.getElementById("server-list").prepend(localButton);
+            const localButton1 = document.createElement("button");
+            localButton1.classList.add("servers", "uk-inline");
+            localButton1.setAttribute("server", "localhost:3000/mega");
+            localButton1.innerText = "Dev Mega";
+            document.getElementById("server-list").append(localButton1);
+
+            const localButton2 = document.createElement("button");
+            localButton2.classList.add("servers", "uk-inline");
+            localButton2.setAttribute("server", "localhost:3001/covid");
+            localButton2.innerText = "Dev Covid";
+            document.getElementById("server-list").append(localButton2);
             window.hud = this;
         }
 

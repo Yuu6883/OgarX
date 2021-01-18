@@ -80,6 +80,7 @@ const DefaultSettings = {
     EJECT_MAX_AGE: 10000,
     WORLD_RESTART_MULT: 0.75,
     WORLD_KILL_OVERSIZE: false,
+    WORLD_OVERSIZE_MESSAGE: "${c.name} died from oversize",
     EAT_OVERLAP: 3,
     EAT_MULT: 1.140175425099138
 }
@@ -108,16 +109,15 @@ module.exports = class Engine {
         this.game = game;
         this.options = Object.assign({}, DefaultSettings);
         this.collisions = 0;
+        this.shouldRestart = false;
+
+        /** @type {Bot[]} */
+        this.bots = [];
     }
     
     /** @param {typeof DefaultSettings} options */
     setOptions(options) {
         Object.assign(this.options, options);
-
-        /** @type {Set<number>[]} */
-        this.counters = Array.from({ length: 256 }, _ => new Set());
-        this.shouldRestart = false;
-        this.__next_cell_id = 1;
     }
 
     /** @param {ArrayBuffer|Buffer} wasm_buffer */
@@ -153,6 +153,11 @@ module.exports = class Engine {
     }
 
     bindBuffers() {
+        
+        /** @type {Set<number>[]} */
+        this.counters = Array.from({ length: 256 }, _ => new Set());
+        this.__next_cell_id = 1;
+
         // Fill 0 in case we are reusing the buffer
         new Uint32Array(this.memory.buffer).fill(0);
 
@@ -180,9 +185,6 @@ module.exports = class Engine {
         this.killArray = [];
         /** @type {number[]} */
         this.spawnArray = [];
-
-        /** @type {Bot[]} */
-        this.bots = [];
     }
 
     get running() { return !!this.updateInterval; }
@@ -214,8 +216,16 @@ module.exports = class Engine {
         this.leaderboardInterval = null;
     }
 
+    restart() {
+        this.shouldRestart = false;
+        this.game.emit("restart");
+        this.bindBuffers();
+    }
+
     /** @param {number} dt */
     tick(dt) {
+
+        if (this.shouldRestart) this.restart();
 
         // Has player
         if (this.game.handles > this.bots.length &&
@@ -402,6 +412,7 @@ module.exports = class Engine {
                 controller.score = score;
                 controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
                 if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
+                    this.game.emit("oversize", controller);
                     if (this.options.WORLD_KILL_OVERSIZE) {
                         this.delayKill(id);
                     } else {

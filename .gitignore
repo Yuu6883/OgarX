@@ -5,6 +5,8 @@ node_modules/*
 
 config.json*
 
+src/modes/custom/*
+
 debug.log*
 
 public/client/js/*

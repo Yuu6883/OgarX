@@ -14,6 +14,16 @@ module.exports = class Game extends EventEmitter {
         this.engine = new Engine(this);
         this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(this.engine, i));
         this.handles = 0;
+
+        this.on("oversize", /** @param {import("./controller")} c */ c => {
+            try {
+                this.emit("chat", null, eval(`\`${this.engine.options.WORLD_OVERSIZE_MESSAGE}\``));
+            } catch (e) {
+                console.error(`Eval of "${this.engine.options.WORLD_OVERSIZE_MESSAGE}" failed in "oversize" listener: `, e);
+            }
+        });
+
+        this.on("restart", () => this.emit("chat", null, "Restarting Server..."));
     }
 
     /** @param {import("./handle")} handle */

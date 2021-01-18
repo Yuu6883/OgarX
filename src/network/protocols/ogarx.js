@@ -218,12 +218,14 @@ module.exports = class OgarXProtocol extends Protocol {
         writer.writeUTF16String(controller.skin);
         this.ws.send(writer.finalize(), true);
         
-        if (this.controller == controller) {
-            const CLEAR_SCREEN = new ArrayBuffer(1);
-            new Uint8Array(CLEAR_SCREEN)[0] = 2;
-            this.ws.send(CLEAR_SCREEN, true);
-            this.wasm.exports.clean(0, this.memory.buffer.byteLength);
-        }
+        if (this.controller == controller) this.clear();
+    }
+
+    clear() {
+        const CLEAR_SCREEN = new ArrayBuffer(1);
+        new Uint8Array(CLEAR_SCREEN)[0] = 2;
+        this.ws.send(CLEAR_SCREEN, true);
+        this.wasm.exports.clean(0, this.memory.buffer.byteLength);
     }
 
     /** 

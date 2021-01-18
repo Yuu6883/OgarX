@@ -1,3 +1,4 @@
+/** @type {typeof import("../../physics/engine").DefaultSettings} */
 module.exports = {
     VIRUS_COUNT: 0,
     PLAYER_MIN_SPLIT_SIZE: 150,

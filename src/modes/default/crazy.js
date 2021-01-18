@@ -1,3 +1,4 @@
+/** @type {typeof import("../../physics/engine").DefaultSettings} */
 module.exports = {
     VIRUS_COUNT: 100,
     PLAYER_MAX_CELLS: 200,

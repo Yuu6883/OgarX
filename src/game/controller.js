@@ -33,7 +33,7 @@ module.exports = class Controller {
     }
 
     get alive() { return !!this.engine.counters[this.id].size; }
-    get name() { return this.__name; }
+    get name() { return this.__name || "Unnamed"; }
     get skin() { return this.__skin; }
 
     get mouseX() { return this.__mouseX; }

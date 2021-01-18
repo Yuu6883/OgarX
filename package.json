@@ -25,6 +25,7 @@
     "gl-matrix": "^3.3.0"
   },
   "dependencies": {
+    "pm2": "^4.5.1",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v18.4.0"
   }
 }
