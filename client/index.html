@@ -12,15 +12,23 @@
 </head>
 <body>
     <div id="chat"></div>
-    <input id="chat-input" type="text" placeholder="Chat" />
+    <input id="chat-input" type="text" placeholder="Chat" hidden />
     <div id="settings-bar" class="uk-inline">
-        <span class="settings-icon" uk-toggle="target: #render-menu-offcanvas" uk-icon="settings"></span>
-        <span class="settings-icon" uk-toggle="target: #key-menu-offcanvas"><svg height="512" viewBox="0 0 512 512" width="512" xmlns="http://www.w3.org/2000/svg"><g><path d="m482 201h-181.732c17.597-18.112 34.732-44.991 34.732-81 0-35.445 8.214-46.562 15.371-52.287 10.99-8.792 31.231-12.713 65.629-12.713 8.284 0 15-6.716 15-15s-6.716-15-15-15c-42.803 0-67.247 5.588-84.371 19.287-23.602 18.882-26.629 50.381-26.629 75.713 0 46.583-41.523 74.289-52.895 81h-222.105c-16.542 0-30 13.458-30 30v226c0 16.542 13.458 30 30 30h452c16.542 0 30-13.458 30-30v-226c0-16.542-13.458-30-30-30zm0 256h-452v-226h452c.019 231.146.1 226 0 226z"/><path d="m96 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m151 344c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m185 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m265 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m376 329h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m431 280c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m320 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m240 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m160 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m80 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m432 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m352 393h-192c-8.284 0-15 6.716-15 15s6.716 15 15 15h192c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/></g></svg></span>
+        <span class="settings-icon" uk-tooltip="Render Options" uk-toggle="target: #render-menu-offcanvas" uk-icon="settings"></span>
+        <span class="settings-icon" uk-tooltip="Hotkeys" uk-toggle="target: #key-menu-offcanvas"><svg height="512" viewBox="0 0 512 512" width="512" xmlns="http://www.w3.org/2000/svg"><g><path d="m482 201h-181.732c17.597-18.112 34.732-44.991 34.732-81 0-35.445 8.214-46.562 15.371-52.287 10.99-8.792 31.231-12.713 65.629-12.713 8.284 0 15-6.716 15-15s-6.716-15-15-15c-42.803 0-67.247 5.588-84.371 19.287-23.602 18.882-26.629 50.381-26.629 75.713 0 46.583-41.523 74.289-52.895 81h-222.105c-16.542 0-30 13.458-30 30v226c0 16.542 13.458 30 30 30h452c16.542 0 30-13.458 30-30v-226c0-16.542-13.458-30-30-30zm0 256h-452v-226h452c.019 231.146.1 226 0 226z"/><path d="m96 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m151 344c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m185 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m265 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m376 329h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m431 280c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m320 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m240 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m160 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m80 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m432 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m352 393h-192c-8.284 0-15 6.716-15 15s6.716 15 15 15h192c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/></g></svg></span>
     </div>
     <div id="key-menu-offcanvas" uk-offcanvas>
         <div id="offcanvas-menu" class="uk-offcanvas-bar">
             <h3 class="uk-center">Hotkeys</h3>
             <div id="keys" class="key-value"></div>
+            <a class="uk-offcanvas-close" type="button" uk-close></a>
+        </div>
+    </div>
+    <div id="skin-menu-offcanvas" uk-offcanvas="flip: true; bg-close: false;">
+        <div id="offcanvas-menu" class="uk-offcanvas-bar">
+            <h3><button id="add-skin">Add Skin</button></h3>
+            <div id="skins">
+            </div>
             <a class="uk-offcanvas-close" type="button" uk-close></a>
         </div>
     </div>
@@ -40,35 +48,56 @@
             <a class="uk-offcanvas-close" type="button" uk-close></a>
         </div>
     </div>
-    <div id="leaderboard">
+    <div id="leaderboard" hidden>
         <h3 id="server-name"></h3>
         <div id="leaderboard-data" class="uk-inline"></div>
     </div>
-    <div id="stats1">
+    <div id="stats1" hidden>
         FPS: <span id="fps"></span>&nbsp; PING: <span id="ping"></span>&nbsp; BANDWIDTH: <span id="bandwidth"></span>
         <!-- <br>Cells: <span id="cells"></span>Text: <span id="text"></span> -->
     </div>
-    <div id="stats2">
-        LINE: <span id="linelock"></span>&nbsp; <span id="mycells"></span> CELLS
-    </div>
-    <div id="hud">
-        <div style="width: 100%;"><img id="skin" src="/static/img/skin.png" /></div>
+    <div id="stats2" hidden>LINE: <span id="linelock"></span>&nbsp; <span id="mycells"></span> CELLS</div>
+    <div id="hud" class="fade-in">
+        <div id="skin-tab" class="uk-margin-auto uk-inline-clip uk-transition-toggle" tabindex="0">
+            <img id="skin" src="/static/img/skin.png" />
+            <div class="uk-position-cover uk-transition-fade uk-margin-medium-bottom uk-overlay uk-overlay-default uk-padding-remove uk-margin-remove-left uk-margin-remove-right">
+                <input class="uk-inline uk-position-bottom" id="skin-input" type="text" placeholder="Skin" />
+            </div>
+            <div class="uk-transition-fade uk-position-bottom-left uk-overlay uk-overlay-default uk-padding-remove">
+                <span uk-tooltip="Delete Skin" uk-icon="trash" class="settings-icon" id="delete-skin"></span>
+            </div>
+            <div class="uk-transition-fade uk-position-bottom-right uk-overlay uk-overlay-default uk-padding-remove">
+                <span uk-tooltip="More Skins" uk-icon="folder" class="settings-icon" uk-toggle="target: #skin-menu-offcanvas"></span>
+            </div>
+            <div class="uk-transition-fade uk-position-center-left uk-overlay uk-overlay-default uk-padding-remove">
+                <span id="prev-skin" uk-tooltip="Previous Skin" uk-icon="chevron-double-left" class="settings-icon"></span>
+            </div>
+            <div class="uk-transition-fade uk-position-center-right uk-overlay uk-overlay-default uk-padding-remove">
+                <span id="next-skin" uk-tooltip="Next Skin" uk-icon="chevron-double-right" class="settings-icon"></span>
+            </div>
+        </div>
         <div>
             <div class="uk-inline">
-                <p><input id="skin-input" type="text" placeholder="Skin" /></p>
-                <p><input id="name-input" type="text" placeholder="Name" /></p>
-                <p><input id="server-input" disabled type="text" placeholder="Select Server"></input></p>
-                <div uk-dropdown="pos: right-center;">
-                    <ul class="uk-nav uk-dropdown-nav">
-                        <button class="uk-inline servers" server="local">Local</button><br>
-                        <button class="uk-inline servers" server="localhost:3000">Dev</button><br>
-                        <button class="uk-inline servers" server="na.yuu.dev">NA</button><br>
-                        <button class="uk-inline servers" server="eu.yuu.dev">EU</button>
-                    </ul>
+                <p></p><input id="name-input" type="text" placeholder="Name" /></p>
+                <ul id="server-accordion">
+                    <li>
+                        <input id="server-input" readonly type="text" placeholder="Select Server"></input>
+                        <div class="uk-accordion-content">
+                            <div id="server-list">
+                                <button class="servers uk-inline" server="local">Local</button>
+                                <button class="servers uk-inline" server="na.yuu.dev">NA</button>
+                                <button class="servers uk-inline" server="eu.yuu.dev">EU</button>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div>
+                <div class="uk-inline">
+                    <button id="play" hidden>Play</button>
+                    <button id="spectate" hidden>Spectate</button>
                 </div>
             </div>
-            <br>
-            <p class="uk-inline"><button disabled id="play">Play</button></p>
         </div>
     </div>
     <canvas id="canvas"></canvas>
