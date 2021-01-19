@@ -14,6 +14,9 @@ module.exports = class Protocol extends EventEmitter {
         
         this.pingInterval = self.setInterval(() => {
 
+            this.renderer.stats.bandwidth = this.bandwidth;
+            this.bandwidth = 0;
+            
             if (!this.pid || this.ping) return;
             
             const PING = new ArrayBuffer(1);
@@ -21,8 +24,6 @@ module.exports = class Protocol extends EventEmitter {
             this.send(PING);
             this.ping = Date.now();
 
-            this.renderer.stats.bandwidth = this.bandwidth;
-            this.bandwidth = 0;
         }, 1000);
 
         const state = this.renderer.state;
@@ -65,6 +66,8 @@ module.exports = class Protocol extends EventEmitter {
             writer.writeUTF16String(skin);
             this.ws.send(writer.finalize());
             this.emit("open");
+
+            delete this.ping;
         }
 
         /** @param {{ data: ArrayBuffer }} e */
