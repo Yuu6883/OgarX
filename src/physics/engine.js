@@ -127,8 +127,8 @@ module.exports = class Engine {
         this.__start = performance.now();
         this.__ltick = performance.now();
 
-        // 60mb ram (way more than enough)
-        this.memory = new WebAssembly.Memory({ initial: 1000 });
+        // 12.8mb ram (more than enough)
+        this.memory = new WebAssembly.Memory({ initial: 200 });
 
         // Load wasm module
         const module = await WebAssembly.instantiate(
