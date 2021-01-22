@@ -3,20 +3,20 @@ const path = require("path");
 const browserify = require("browserify");
 const minifier = require("babel-minify");
 
-const MAIN_IN  = path.resolve(__dirname, "webgl", "client", "main.js");
-const MAIN_OUT = path.resolve(__dirname, "public", "client", "js", "main.min.js");
+const MAIN_IN  = path.resolve(__dirname, "webgl", "game", "main.js");
+const MAIN_OUT = path.resolve(__dirname, "public", "js", "main.min.js");
 
-const RENDERER_IN  = path.resolve(__dirname, "webgl", "client", "renderer.js");
-const RENDERER_OUT = path.resolve(__dirname, "public", "client", "js", "renderer.min.js");
+const RENDERER_IN  = path.resolve(__dirname, "webgl", "game", "renderer.js");
+const RENDERER_OUT = path.resolve(__dirname, "public", "js", "renderer.min.js");
 
-const LOADER_IN  = path.resolve(__dirname, "webgl", "client", "loader.js");
-const LOADER_OUT = path.resolve(__dirname, "public", "client", "js", "loader.min.js");
+const LOADER_IN  = path.resolve(__dirname, "webgl", "game", "loader.js");
+const LOADER_OUT = path.resolve(__dirname, "public", "js", "loader.min.js");
 
 const CONTROL_IN  = path.resolve(__dirname, "webgl", "control", "control.js");
-const CONTROL_OUT = path.resolve(__dirname, "public", "client", "js", "control.min.js");
+const CONTROL_OUT = path.resolve(__dirname, "public", "js", "control.min.js");
 
 const SW_IN  = path.resolve(__dirname, "src", "worker.js");
-const SW_OUT = path.resolve(__dirname, "public", "client", "js", "sw.min.js");
+const SW_OUT = path.resolve(__dirname, "public", "js", "sw.min.js");
 
 /** @returns {Promise<string>} */
 const streamToString = stream => {

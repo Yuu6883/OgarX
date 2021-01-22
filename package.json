@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "node build.js",
-    "demo": "rm -rf ./public/demo/* && cp -r ./public/client/* ./public/demo/"
+    "build": "node build.js"
   },
   "repository": {
     "type": "git",

@@ -13,6 +13,7 @@ module.exports = {
     BOTS: 100,
     BOT_SPAWN_SIZE: 1400,
     PELLET_COUNT: 5000,
+    PLAYER_VIEW_SCALE: 5,
     PLAYER_SPAWN_SIZE: 1500,
     MAP_HW: 30000,
     MAP_HH: 30000

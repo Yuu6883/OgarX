@@ -201,7 +201,7 @@ module.exports = class HUD {
 
         this.lbElem = document.getElementById("leaderboard-data");
 
-        if (window.origin == "https://localhost") {
+        if (/^https?\:\/\/localhost$/.test(window.origin)) {
             const localButton1 = document.createElement("button");
             localButton1.classList.add("servers", "uk-inline");
             localButton1.setAttribute("server", "localhost:3000/mega");
