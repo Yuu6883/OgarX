@@ -37,11 +37,11 @@ module.exports = class SocketServer {
      * @param {string} [arg0.endpoint=/]
      * @return {Promise<boolean>}
      */
-    open({ sslOptions, port = 443, endpoint = "/" }) {
+    open({ sslOptions, port = 443, endpoint = "" }) {
         if (this.listening || this.sock) return false;
         this.listening = true;
         return new Promise(resolve => {
-            (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App()).ws(endpoint, {
+            (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App()).ws(`/${endpoint}`, {
                 idleTimeout: 10,
                 maxBackpressure: 1024,
                 maxPayloadLength: 512,
@@ -114,10 +114,10 @@ module.exports = class SocketServer {
                 this.listening = false;
                 if (sock) {
                     this.sock = sock;
-                    console.log(`WS-Server opened on :${port}${endpoint}`);
+                    console.log(`WS-Server opened on :${port}/${endpoint}`);
                     resolve(true);
                 } else {
-                    console.error(`WS-Server failed to open on :${port}${endpoint}`);
+                    console.error(`WS-Server failed to open on :${port}/${endpoint}`);
                     resolve(false);
                 }
             });

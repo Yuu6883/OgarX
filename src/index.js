@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const CORE_PATH  = path.resolve(__dirname, "..", "public", "static", "wasm", "server.wasm");
-const OGARX_PATH = path.resolve(__dirname, "..", "public", "static", "wasm", "ogarx.wasm");
+const PROTOCOL_PATH = path.resolve(__dirname, "..", "public", "static", "wasm", "ogarx.wasm");
 const SSL_FOLDER_PATH = path.resolve(__dirname, "..", "ssl");
 const SSL_PATH = path.resolve(SSL_FOLDER_PATH, "options.json");
 
@@ -25,7 +25,7 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
 
 (async () => {
     await engine.init(fs.readFileSync(CORE_PATH));
-    await OgarXProtocol.init(fs.readFileSync(OGARX_PATH));
+    await OgarXProtocol.init(fs.readFileSync(PROTOCOL_PATH));
 
     const opened = await server.open({ 
         sslOptions, 
