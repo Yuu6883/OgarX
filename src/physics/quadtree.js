@@ -95,58 +95,45 @@ class QuadNode {
         }
     }
 
-    __init_ptr() {
-        this.__ptr = this.tree.__offset;
+    __serialize() {
+        let ptr = this.__ptr = this.tree.__offset;
         this.tree.__offset += 34 + 2 * this.items.size;
-        if (this.branches) {
-            this.branches[0].__init_ptr();
-            this.branches[1].__init_ptr();
-            this.branches[2].__init_ptr();
-            this.branches[3].__init_ptr();
-        }
-    }
-
-    /** @param {DataView} view */
-    __write(view) {
-
-        let ptr = this.__ptr;
-        view.setFloat32(ptr, this.x, true);
+        
+        const v = this.tree.__view;
+        v.setFloat32(ptr, this.x, true);
         ptr += 4;
-        view.setFloat32(ptr, this.y, true);
+        v.setFloat32(ptr, this.y, true);
         ptr += 4;
-        view.setFloat32(ptr, this.hw, true);
+        v.setFloat32(ptr, this.hw, true);
         ptr += 4;
-        view.setFloat32(ptr, this.hh, true);
+        v.setFloat32(ptr, this.hh, true);
         ptr += 4;
 
         if (this.branches) {
-            view.setUint32(ptr, view.byteOffset + this.branches[0].__ptr, true);
+            this.branches[0].__serialize();
+            this.branches[1].__serialize();
+            this.branches[2].__serialize();
+            this.branches[3].__serialize();
+
+            v.setUint32(ptr, v.byteOffset + this.branches[0].__ptr, true);
             ptr += 4;
-            view.setUint32(ptr, view.byteOffset + this.branches[1].__ptr, true);
+            v.setUint32(ptr, v.byteOffset + this.branches[1].__ptr, true);
             ptr += 4;
-            view.setUint32(ptr, view.byteOffset + this.branches[2].__ptr, true);
+            v.setUint32(ptr, v.byteOffset + this.branches[2].__ptr, true);
             ptr += 4;
-            view.setUint32(ptr, view.byteOffset + this.branches[3].__ptr, true);
+            v.setUint32(ptr, v.byteOffset + this.branches[3].__ptr, true);
             ptr += 4;
         } else {
-            view.setUint32(ptr, 0, true);
+            v.setUint32(ptr, 0, true);
             ptr += 16;
         }
 
-        this.tree.__serialized += this.items.size;
-        view.setUint16(ptr, this.items.size, true);
+        v.setUint16(ptr, this.items.size, true);
         ptr += 2;
 
         for (const cell_id of this.items) {
-            view.setUint16(ptr, cell_id, true);
+            v.setUint16(ptr, cell_id, true);
             ptr += 2;
-        }
-
-        if (this.branches) {
-            this.branches[0].__write(view);
-            this.branches[1].__write(view);
-            this.branches[2].__write(view);
-            this.branches[3].__write(view);
         }
     }
 
@@ -187,8 +174,6 @@ class QuadTree {
         this.root = new QuadNode(this, x, y, hw, hh, null);
         this.maxLevel = maxLevel;
         this.maxItems = maxItems;
-
-        this.__serialized = 0;
     }
 
     /** @param {import("./cell")} cell */
@@ -255,10 +240,10 @@ class QuadTree {
 
     /** @param {DataView} view */
     serialize(view) {
+        this.__view = view;
         this.__offset = 0;
-        this.__serialized = 0;
-        this.root.__init_ptr();
-        this.root.__write(view);
+        this.root.__serialize();
+
         const end = this.__offset;
         this.__offset = 0;
         return end;
