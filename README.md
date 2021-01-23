@@ -11,7 +11,7 @@ Client is mostly finished as well but need optimization since it runs poorly on 
 
 ## Demo
 **IMPORTANT: only works with latest Chrome**<br>
-https://ogar69.yuu.dev/demo<br>
+https://ogar69.yuu.dev<br>
 (Local server is implemented with SharedWorker)
 
 ## Notes
