@@ -1,5 +1,4 @@
-# <strong> Ogar69 </strong>
-Yeah it's OGAR 69 pog<br>
+# <strong> OgarX </strong>
 Server is mostly finished and optimized to the point where it can't be optimized anymore.
 Client is mostly finished as well but need optimization since it runs poorly on laptops (OIT shader eats too much GPU power), and it needs a simpler rewrite.
 
