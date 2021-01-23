@@ -34,10 +34,11 @@ module.exports = class SocketServer {
      * @param {Object} arg0
      * @param {uWS.AppOptions} arg0.sslOptions
      * @param {number} [arg0.port=443]
-     * @param {string} [arg0.endpoint=/]
+     * @param {string} [arg0.token=""]
+     * @param {string} [arg0.endpoint=""]
      * @return {Promise<boolean>}
      */
-    open({ sslOptions, port = 443, endpoint = "" }) {
+    open({ sslOptions, port = 443, endpoint = "", token = "" }) {
         if (this.listening || this.sock) return false;
         this.listening = true;
         return new Promise(resolve => {
@@ -70,7 +71,6 @@ module.exports = class SocketServer {
             })
             .get("/update/:token", (res, req) => {
                 const authorization = req.getParameter(0);
-                const token = process.env.OGARX_TOKEN || "";
                 if (token) {
                     if (token == authorization) {
                         const result = execSync("git pull origin master", 
@@ -92,7 +92,6 @@ module.exports = class SocketServer {
             })
             .get("/restart/:token", (res, req) => {
                 const authorization = req.getParameter(0);
-                const token = process.env.OGARX_TOKEN || "";
                 if (token) {
                     if (token == authorization) {
                         res.end("Restarting");
@@ -107,17 +106,17 @@ module.exports = class SocketServer {
                     res.end();
                 }
             })
-            .get("/*", (res, req) => {
-                res.end("Hello OGARX!!");
-            })
+            .get("/*", (res, req) => res.end("Hello OGARX!!"))
             .listen("0.0.0.0", port, sock => {
                 this.listening = false;
                 if (sock) {
                     this.sock = sock;
-                    console.log(`WS-Server opened on :${port}/${endpoint}`);
+                    console.log(`WS-Server opened on :${port}/${endpoint} ` +
+                        `${token ? "WITH" : "WITHOUT"} token`);
                     resolve(true);
                 } else {
-                    console.error(`WS-Server failed to open on :${port}/${endpoint}`);
+                    console.error(`WS-Server failed to open on :${port}/${endpoint}` +
+                        `${token ? "WITH" : "WITHOUT"} token`);
                     resolve(false);
                 }
             });

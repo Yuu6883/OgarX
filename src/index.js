@@ -30,7 +30,8 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
     const opened = await server.open({ 
         sslOptions, 
         port: process.env.OGARX_PORT, 
-        endpoint: process.env.OGARX_ENDPOINT });
+        endpoint: process.env.OGARX_ENDPOINT 
+    });
 
     if (!opened) process.exit(1);
     engine.start();
