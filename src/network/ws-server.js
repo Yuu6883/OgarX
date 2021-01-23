@@ -65,6 +65,7 @@ module.exports = class SocketServer {
                         ws.p.onMessage(new DataView(message));
                     }
                 },
+                drain: ws => ws.p && ws.p.onDrain(),
                 close: (ws, code, message) => ws.p.off()
             })
             .get("/update/:token", (res, req) => {

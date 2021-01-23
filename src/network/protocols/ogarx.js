@@ -20,12 +20,12 @@ module.exports = class OgarXProtocol extends Protocol {
     /** 
      * @param {import("../../game")} game
      * @param {import("uWebSockets.js").WebSocket} ws 
-     * @param {ArrayBuffer} init_message
+     * @param {ArrayBuffer} initMessage
      */
-    constructor(game, ws, init_message) {
+    constructor(game, ws, initMessage) {
         super(game);
         this.ws = ws;
-        this.init(init_message);
+        this.init(initMessage);
 
         this.last_vlist_ptr = 131072; // 2 * 64k or 2 ^ 17
         this.last_vlist_len = 0;
@@ -33,8 +33,8 @@ module.exports = class OgarXProtocol extends Protocol {
         this.curr_vlist_len = 0;
     }
 
-    /** @param {ArrayBuffer} init_message */
-    async init(init_message) {
+    /** @param {ArrayBuffer} initMessage */
+    async init(initMessage) {
         const { get_cell_x, get_cell_y, get_cell_r, 
             get_cell_type, get_cell_eatenby } = this.game.engine.wasm;
 
@@ -51,7 +51,7 @@ module.exports = class OgarXProtocol extends Protocol {
         this.join();
         this.sendInitPacket();
         
-        const reader = new Reader(new DataView(init_message));
+        const reader = new Reader(new DataView(initMessage));
         reader.skip(3); // Skip handshake bytes
 
         this.controller.name = reader.readUTF16String();
@@ -67,6 +67,9 @@ module.exports = class OgarXProtocol extends Protocol {
         writer.writeUInt16(this.game.engine.options.MAP_HH);
         writer.writeUTF16String(this.game.name);
         this.ws.send(writer.finalize(), true);
+    }
+
+    onDrain() {
     }
 
     /** @param {DataView} view */
@@ -127,6 +130,9 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     onTick() {
+        // Backpressure built up
+        if (this.ws.getBufferedAmount()) return;
+
         const engine = this.game.engine;
 
         // Query visible cells from the controller
