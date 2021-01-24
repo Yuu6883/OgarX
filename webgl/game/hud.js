@@ -216,6 +216,13 @@ module.exports = class HUD {
             localButton2.setAttribute("server", "localhost:3001/covid");
             localButton2.innerText = "Dev Covid";
             document.getElementById("server-list").append(localButton2);
+            
+            const localButton3 = document.createElement("button");
+            localButton3.classList.add("servers", "uk-inline");
+            localButton3.setAttribute("server", "localhost:3002/omega");
+            localButton3.innerText = "Dev Omega";
+            document.getElementById("server-list").append(localButton3);
+
             window.hud = this;
         }
 
