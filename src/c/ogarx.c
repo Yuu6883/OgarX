@@ -14,6 +14,7 @@
 #define PELLET_TYPE 254
 #define TABLE_SIZE 65536
 
+extern unsigned char get_cell_updated(void* ptr, unsigned short id);
 extern short get_cell_x(void* ptr, unsigned short id);
 extern short get_cell_y(void* ptr, unsigned short id);
 extern unsigned short get_cell_r(void* ptr, unsigned short id);
@@ -51,7 +52,7 @@ void* write_AUED(
     for (unsigned int i = 0; i < curr_visible_list_length; i++) {
         unsigned short cell_id = curr_visible_list[i];
         if (last_visible_table[cell_id]) {
-            if (get_cell_type(0, cell_id) != PELLET_TYPE) {
+            if (get_cell_updated(0, cell_id)) {
                 *U_ptr = cell_id;
                 U_ptr += 4;
             }

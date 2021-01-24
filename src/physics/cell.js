@@ -140,6 +140,10 @@ module.exports = class Cell {
     }
 
     get positionString() { return `Cell#${this.id}[x: ${this.x}, y: ${this.y}]` }
+    get flagsString() { 
+        const s = TYPES_TO_STRING[this.type];
+        return `Cell#${this.id}[type=${s ? `${s}(${this.type})` : `Player#${this.type}`},flags=${this.flags.toString(2).padStart(8, "0")}]`;
+    }
 
     toString() {
         // if (!this.exists) return `Cell[None]`;

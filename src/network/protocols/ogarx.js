@@ -35,14 +35,14 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {ArrayBuffer} initMessage */
     async init(initMessage) {
-        const { get_cell_x, get_cell_y, get_cell_r, 
+        const { get_cell_updated, get_cell_x, get_cell_y, get_cell_r, 
             get_cell_type, get_cell_eatenby } = this.game.engine.wasm;
 
         const memory = this.memory = new WebAssembly.Memory({ initial: 16, maximum: 32 }); // 1mb, 2mb
         this.wasm = await WebAssembly.instantiate(OgarXProtocol.Module, {
             env: { 
                 memory,
-                get_cell_x, get_cell_y, get_cell_r, 
+                get_cell_updated, get_cell_x, get_cell_y, get_cell_r, 
                 get_cell_type, get_cell_eatenby 
             }
         });
