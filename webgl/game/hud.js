@@ -4,6 +4,7 @@ const State = require("./state");
 const Input = require("./input");
 const Skins = require("./skins");
 const Options = require("./options");
+const Minimap = require("./minimap");
 const Viewport = require("./viewport");
 
 module.exports = class HUD {
@@ -42,6 +43,7 @@ module.exports = class HUD {
                 if (data.event === "connect") this.onConnect(data.server);
                 if (data.event === "disconnect") this.onDisconnect();
                 if (data.event === "error") this.onError(data.message || "");
+                if (data.event === "minimap") this.minimap.onData(data.minimap);
             }
 
             this.registerEvents();
@@ -153,6 +155,7 @@ module.exports = class HUD {
         this.serverInput = document.getElementById("server-input");
         this.nameInput = document.getElementById("name-input");
 
+        this.minimap = new Minimap(this);
         this.skins = new Skins(this);
         this.skinInput.value = this.skins.current;
 

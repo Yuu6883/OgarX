@@ -25,6 +25,7 @@ module.exports = class Controller {
         this.viewportHH = 0;
         this.maxScore = 0;
         this.score = 0;
+        this.showOnMinimap = false;
 
         this.box = { l: 0, r: 0, b: 0, t: 0 };
 
@@ -94,6 +95,7 @@ module.exports = class Controller {
         this.viewportHH = 0;
         this.score = 0;
         this.box = { l: 0, r: 0, b: 0, t: 0 };
+        this.showOnMinimap = false;
     }
 
     afterSpawn() {

@@ -54,6 +54,7 @@ module.exports = class OgarXProtocol extends Protocol {
         const reader = new Reader(new DataView(initMessage));
         reader.skip(3); // Skip handshake bytes
 
+        this.controller.showOnMinimap = true;
         this.controller.name = reader.readUTF16String();
         this.controller.skin = reader.readUTF16String();
         this.game.emit("join", this.controller, true);
@@ -68,6 +69,14 @@ module.exports = class OgarXProtocol extends Protocol {
         writer.writeUTF16String(this.game.name);
         this.ws.send(writer.finalize(), true);
     }
+
+    clear() {
+        const CLEAR_SCREEN = new ArrayBuffer(1);
+        new Uint8Array(CLEAR_SCREEN)[0] = 2;
+        this.ws.send(CLEAR_SCREEN, true);
+        this.wasm.exports.clean(0, this.memory.buffer.byteLength);
+    }
+
 
     onDrain() {
     }
@@ -126,6 +135,20 @@ module.exports = class OgarXProtocol extends Protocol {
         writer.writeUInt8(count);
         for (let i = 0; i < count; i++)
             writer.writeUInt8(controllers[i].id);
+        this.ws.send(writer.finalize(), true);
+    }
+
+    /** @param {import("../../game/controller")[]} controllers */
+    onMinimap(controllers) {
+        const writer = new Writer();
+        writer.writeUInt8(6);
+        writer.writeUInt8(controllers.length);
+        for (const c of controllers) {
+            writer.writeUInt8(c.id);
+            writer.writeFloat32(c.viewportX);
+            writer.writeFloat32(c.viewportY);
+            writer.writeFloat32(c.score);
+        }
         this.ws.send(writer.finalize(), true);
     }
 
@@ -225,13 +248,6 @@ module.exports = class OgarXProtocol extends Protocol {
         this.ws.send(writer.finalize(), true);
         
         if (this.controller == controller) this.clear();
-    }
-
-    clear() {
-        const CLEAR_SCREEN = new ArrayBuffer(1);
-        new Uint8Array(CLEAR_SCREEN)[0] = 2;
-        this.ws.send(CLEAR_SCREEN, true);
-        this.wasm.exports.clean(0, this.memory.buffer.byteLength);
     }
 
     /** 

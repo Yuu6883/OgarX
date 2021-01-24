@@ -78,10 +78,11 @@ module.exports = class Protocol extends EventEmitter {
             switch (OP) {
                 case 1:
                     this.pid = reader.readUInt16();
-                    const map = { 
-                        width: 2 * reader.readUInt16(), 
-                        height: 2 * reader.readUInt16()
+                    this.map = { 
+                        hw: reader.readUInt16(), 
+                        hh: reader.readUInt16()
                     };
+                    console.log(`Map Dimension: ${this.map.hw << 1}x${this.map.hh << 1}`);
                     const server = reader.readUTF16String();
                     this.emit("protocol");
                     self.postMessage({ event: "connect", server });
@@ -100,12 +101,11 @@ module.exports = class Protocol extends EventEmitter {
                     break;
                 // Leaderboard
                 case 5:
-                    const rank = reader.readInt16();
-                    const count = reader.readUInt8();
-                    const lb = { rank, me: this.me, players: [] }
-                    for (let i = 0; i < count; i++) lb.players.push(
-                        this.renderer.playerData.get(reader.readUInt8()));
-                    self.postMessage({ event: "leaderboard", lb });
+                    this.parseLeaderboard(reader);
+                    break;
+                // Minimap
+                case 6:
+                    this.parseMinimap(reader);
                     break;
                 // Chat
                 case 10:
@@ -173,6 +173,34 @@ module.exports = class Protocol extends EventEmitter {
         
         core.HEAPU8.set(new Uint8Array(buffer, 11), this.renderer.cellTypesTableOffset);                 
         core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
+    }
+
+    /** @param {Reader} reader */
+    parseLeaderboard(reader) {
+        const rank = reader.readInt16();
+        const count = reader.readUInt8();
+        const lb = { rank, me: this.me, players: [] }
+        for (let i = 0; i < count; i++) lb.players.push(
+            this.renderer.playerData.get(reader.readUInt8()));
+        self.postMessage({ event: "leaderboard", lb });
+    }
+
+    /** @param {Reader} reader */
+    parseMinimap(reader) {
+        const count = reader.readUInt8();
+        const minimap = [];
+        for (let i = 0; i < count; i++) {
+            const pid = reader.readUInt8();
+            const player = this.renderer.playerData.get(pid) || {};
+            player.id = pid;
+            if (pid == this.pid) player.me = true;
+            const x = reader.readFloat32(), y = reader.readFloat32();
+            player.x = x / (this.map.hw << 1) + 0.5;
+            player.y = y / (this.map.hh << 1) + 0.5;
+            player.score = reader.readFloat32();
+            minimap.push(player);
+        }
+        self.postMessage({ event: "minimap", minimap });
     }
 
     /**

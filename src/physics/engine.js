@@ -25,9 +25,10 @@ const Controller = require("../game/controller");
 const Bot = require("../bot");
 
 const DefaultSettings = {
-    LEADERBOARD_TPS: 2,
     TIME_SCALE: 1,
     PHYSICS_TPS: 20,
+    MINIMAP_TPS: 5,
+    LEADERBOARD_TPS: 2,
     MAX_CELL_PER_TICK: 50,
     CELL_LIMIT: 65536,
     QUADTREE_MAX_ITEMS: 24,
@@ -201,17 +202,26 @@ module.exports = class Engine {
 
         this.lbDelay = 1000 / this.options.LEADERBOARD_TPS;
         this.leaderboardInterval = setInterval(() => {
-            this.game.emit("leaderboard", this.leaderboard);
+            const lb = this.game.controls.filter(c => c.alive).sort((a, b) => b.score - a.score);
+            this.game.emit("leaderboard", lb);
         }, this.lbDelay);
+
+        this.minimapDelay = 1000 / this.options.MINIMAP_TPS;
+        this.minimapInterval = setInterval(() => {
+            const minimap = this.game.controls.filter(c => c.showOnMinimap && c.alive);
+            this.game.emit("minimap", minimap);
+        }, this.minimapDelay);
     }
 
     stop() {
         if (this.running) {
             clearInterval(this.updateInterval);
             clearInterval(this.leaderboardInterval);
+            clearInterval(this.minimapInterval);
         }
         this.updateInterval = null;
         this.leaderboardInterval = null;
+        this.minimapInterval = null;
     }
 
     restart() {
@@ -260,8 +270,6 @@ module.exports = class Engine {
 
         this.resolve();
         this.postResolve();
-
-        this.leaderboard = this.game.controls.filter(c => c.alive).sort((a, b) => b.score - a.score);
     }
 
     spawnCells() {

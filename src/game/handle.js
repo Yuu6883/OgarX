@@ -11,6 +11,7 @@ module.exports = class Handle {
         this.onLeave = this.onLeave.bind(this);
         this.onSpawn = this.onSpawn.bind(this);
         this.onError = this.onError.bind(this);
+        this.onMinimap = this.onMinimap.bind(this);
         this.onLeaderboard = this.onLeaderboard.bind(this);
 
         this.game
@@ -20,6 +21,7 @@ module.exports = class Handle {
             .on("leave", this.onLeave)
             .on("spawn", this.onSpawn)
             .on("error", this.onError)
+            .on("minimap", this.onMinimap)
             .on("leaderboard", this.onLeaderboard);
 
         /** @type {[string, Function][]} */
@@ -43,6 +45,7 @@ module.exports = class Handle {
             .off("leave", this.onLeave)
             .off("spawn", this.onSpawn)
             .off("error", this.onError)
+            .off("minimap", this.onMinimap)
             .off("leaderboard", this.onLeaderboard);
         for (const [event, cb] of this.extraEvents)
             this.game.off(event, cb);
@@ -56,5 +59,6 @@ module.exports = class Handle {
     onLeave(controller) {};
     onSpawn(controller) {};
     onError(err) {};
+    onMinimap(controllers) {};
     onLeaderboard(controllers) {};
 }
