@@ -58,6 +58,8 @@ const DefaultSettings = {
     PLAYER_SPLIT_CAP: 4,
     PLAYER_MIN_SPLIT_SIZE: 60,
     PLAYER_MIN_EJECT_SIZE: 60,
+    PLAYER_MIN_SPLIT_INCREASE: 0,
+    PLAYER_MIN_EJECT_INCREASE: 0,
     PLAYER_NO_MERGE_DELAY: 650,
     PLAYER_NO_COLLI_DELAY: 650,
     PLAYER_NO_EJECT_DELAY: 200,
@@ -317,13 +319,16 @@ module.exports = class Engine {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
             
+            const MULTI = Math.max(Math.log2(controller.score * (1 + this.options.PLAYER_MIN_SPLIT_INCREASE)) / 16, 1);
+            const MIN_SPLIT_SIZE = MULTI * this.options.PLAYER_MIN_SPLIT_SIZE;
+
             // Split
             let attempts = this.options.PLAYER_SPLIT_CAP;
             while (controller.splitAttempts > 0 && attempts-- > 0) {
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (this.counters[id].size >= this.options.PLAYER_MAX_CELLS) break;
-                    if (cell.r < this.options.PLAYER_MIN_SPLIT_SIZE) continue;
+                    if (cell.r < MIN_SPLIT_SIZE) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);
@@ -345,10 +350,15 @@ module.exports = class Engine {
                     controller.ejectAttempts = Math.max(controller.ejectAttempts - 1, 0);
                     ejected++;
     
-                    const LOSS = this.options.EJECT_LOSS * this.options.EJECT_LOSS;
+                    const MULTI = Math.max(Math.log2(controller.score * (1 + this.options.PLAYER_MIN_SPLIT_INCREASE)) / 16, 1);
+                    const LOSS = MULTI * MULTI * this.options.EJECT_LOSS * this.options.EJECT_LOSS;
+                    const EJECT_SIZE = this.options.EJECT_SIZE = EJECT_SIZE * MULTI;
+                    const MIN_EJECT_SIZE = this.options.PLAYER_MIN_EJECT_SIZE * MULTI;
+                    const EJECT_BOOST = this.options.EJECT_BOOST * MULTI;
+
                     for (const cell_id of [...this.counters[id]]) {
                         const cell = this.cells[cell_id];
-                        if (cell.r < this.options.PLAYER_MIN_EJECT_SIZE) continue;
+                        if (cell.r < MIN_EJECT_SIZE) continue;
                         if (cell.age < this.options.PLAYER_NO_EJECT_DELAY) continue;
                         let dx = controller.mouseX - cell.x;
                         let dy = controller.mouseY - cell.y;
@@ -359,8 +369,8 @@ module.exports = class Engine {
                         const sy = cell.y + dy * cell.r;
                         const a = Math.atan2(dx, dy) - this.options.EJECT_DISPERSION + 
                             Math.random() * 2 * this.options.EJECT_DISPERSION;
-                        this.newCell(sx, sy, this.options.EJECT_SIZE, EJECTED_TYPE, 
-                            Math.sin(a), Math.cos(a), this.options.EJECT_BOOST);
+                        this.newCell(sx, sy, EJECT_SIZE, EJECTED_TYPE, 
+                            Math.sin(a), Math.cos(a), EJECT_BOOST);
                         cell.r = Math.sqrt(cell.r * cell.r - LOSS);
                         cell.updated = true;
                     }
