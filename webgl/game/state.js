@@ -1,6 +1,7 @@
 module.exports = class State {
     constructor () {
         this.setBuffer();
+        this.quality = 0;
     }
 
     setBuffer(buf) {
@@ -12,6 +13,8 @@ module.exports = class State {
         this.sharedBuffer = buf;
         this.buffer = new Int32Array(this.sharedBuffer);
     }
+
+    get resolution() { return [1, 0.9, 0.8, 0.7, 0.6, 0.5][this.quality] || 1; }
 
     get spectate() { return Atomics.load(this.buffer, 0); }
     set spectate(v) { Atomics.store(this.buffer, 0, v) }
@@ -48,9 +51,6 @@ module.exports = class State {
 
     get zoom() { return Atomics.load(this.buffer, 11); }
     set zoom(v) { Atomics.store(this.buffer, 11, v); }
-
-    get resolution() { return Atomics.load(this.buffer, 12); }
-    set resolution(v) { Atomics.store(this.buffer, 12, v); }
 
     exchange() {
         return {

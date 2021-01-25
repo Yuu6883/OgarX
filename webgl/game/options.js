@@ -3,14 +3,16 @@ const DEFAULT = {
     skin: 1,
     name: 1,
     mass: 1,
-    draw: 120
+    draw: 120,
+    quality: 0
 };
 const OPTION_KEYS = Object.keys(DEFAULT);
 
 const MultiChoice = {
     skin: ["Disabled", "Enabled"],
     name: ["Disabled", "Enabled"],
-    mass: ["Disabled", "Short", "Long"]
+    mass: ["Disabled", "Short", "Long"],
+    quality: ["x1.0", "x0.8", "x0.7", "x0.6", "x0.5"]
 }
 
 module.exports = class Options {
@@ -36,6 +38,7 @@ module.exports = class Options {
                 const newIndex = this.hud.state[key] = (this.hud.state[key] + 1) % MultiChoice[key].length;
                 elem.innerText = MultiChoice[key][newIndex];
                 this.save();
+                if (key == "quality") this.hud.resize();
             });
             elem.innerText = MultiChoice[key][this.hud.state[key]];
         }

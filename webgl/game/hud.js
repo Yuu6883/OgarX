@@ -91,8 +91,8 @@ module.exports = class HUD {
 
     resize() {
         
-        let w = Math.floor(window.devicePixelRatio * window.innerWidth);
-        let h = Math.floor(window.devicePixelRatio * window.innerHeight);
+        let w = Math.floor(this.state.resolution * window.devicePixelRatio * window.innerWidth);
+        let h = Math.floor(this.state.resolution * window.devicePixelRatio * window.innerHeight);
 
         this.viewport.width  = w;
         this.viewport.height = h;
@@ -120,8 +120,8 @@ module.exports = class HUD {
         window.addEventListener("mouseup",   e => this.input.keyUp({ key: `MOUSE ${e.button}`}));
 
         window.addEventListener("mousemove", e => {
-            this.mouse.x = e.clientX * window.devicePixelRatio;
-            this.mouse.y = e.clientY * window.devicePixelRatio;
+            this.mouse.x = ~~(e.clientX * window.devicePixelRatio * this.state.resolution);
+            this.mouse.y = ~~(e.clientY * window.devicePixelRatio * this.state.resolution);
         });
 
         canvas.addEventListener("wheel", e => {
