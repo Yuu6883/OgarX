@@ -53,8 +53,8 @@ extern void unlock_line(unsigned char id);
 
 size_t bytes_per_cell() { return sizeof(Cell); }
 unsigned char get_cell_updated(Cell ptr[], unsigned short id) { return IS_PLAYER(ptr[id].type) || (ptr[id].flags & UPDATE_BIT); };
-short get_cell_x(Cell ptr[], unsigned short id) { return ptr[id].x; };
-short get_cell_y(Cell ptr[], unsigned short id) { return ptr[id].y; };
+float get_cell_x(Cell ptr[], unsigned short id) { return ptr[id].x; };
+float get_cell_y(Cell ptr[], unsigned short id) { return ptr[id].y; };
 unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
 unsigned char  get_cell_type(Cell ptr[], unsigned short id) { return ptr[id].type; };
 unsigned short get_cell_eatenby(Cell ptr[], unsigned short id) { return ptr[id].eatenBy; };

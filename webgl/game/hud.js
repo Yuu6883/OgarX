@@ -7,6 +7,18 @@ const Options = require("./options");
 const Minimap = require("./minimap");
 const Viewport = require("./viewport");
 
+const msToText = ms => {
+    if (ms < 1000) return `${ms}ms`;
+    const s = ms / 1000;
+    if (s < 60) return `${Math.round(s)}s`;
+    const m = s / 60;
+    if (m < 60) return `${Math.round(m)}min`;
+    const h = m / 60;
+    return `${h.toFixed(1)}h`;
+}
+
+const scoreToText = s => s > 1000000 ? `${(s / 1000000).toFixed(2)}M` : s > 1000 ? `${(s / 1000).toFixed(1)}K` : s;
+
 module.exports = class HUD {
 
     constructor() {
@@ -44,6 +56,7 @@ module.exports = class HUD {
                 if (data.event === "disconnect") this.onDisconnect();
                 if (data.event === "error") this.onError(data.message || "");
                 if (data.event === "minimap") this.minimap.onData(data.minimap);
+                if (data.event === "stats") this.onStats(data.kills, data.score, data.surviveTime);
             }
 
             this.registerEvents();
@@ -167,7 +180,10 @@ module.exports = class HUD {
             this.spawn();
             this.playButton.blur();
         });
+        // TODO
         this.spectateButton = document.getElementById("spectate");
+        this.respawnButton = document.getElementById("respawn-button");
+        this.respawnButton.addEventListener("click", () => this.state.respawn = 1);
 
         this.chatElem = document.getElementById("chat");
         this.chatInput = document.getElementById("chat-input");
@@ -234,21 +250,27 @@ module.exports = class HUD {
             });
         });
 
+        this.gameoverElem = document.getElementById("game-over");
+        this.respawnSpinner = document.getElementById("respawn-spinner");
         this.pingElem = document.getElementById("ping");
         this.fpsElem = document.getElementById("fps");
         this.bwElem = document.getElementById("bandwidth");
         this.mycellsElem = document.getElementById("mycells");
         this.linelockElem = document.getElementById("linelock");
-        
+        this.scoreElem = document.getElementById("score");
+
         this.updateInterval = setInterval(() => {
             this.pingElem.innerText = this.stats.ping;
             this.fpsElem.innerText = this.stats.fps;
             const kbs = this.stats.bandwidth / 1024;
-            this.bwElem.innerText = kbs < 1024 ? `${~~kbs}kbs` : `${(kbs / 1024).toFixed(1)}mbs`;
-            this.mycellsElem.innerText = this.stats.mycells;
+            this.bwElem.innerText = kbs < 1024 ? `${~~kbs}KBs` : `${(kbs / 1024).toFixed(1)}MBs`;
+            const c = this.mycellsElem.innerText = this.stats.mycells;
             this.linelockElem.innerText = this.stats.linelocked ? "LOCKED" : "UNLOCKED";
             this.stats.linelocked ? this.linelockElem.classList.add("text-danger") : this.linelockElem.classList.remove("text-danger");
-        }, 100);
+            this.scoreElem.innerText = scoreToText(this.stats.score);
+
+            if (c && !this.gameoverElem.hidden) this.hide(this.gameoverElem);
+        }, 50);
     }
 
     sendChat(chat) {
@@ -306,6 +328,29 @@ module.exports = class HUD {
         UIkit.notification({ message, status: "danger", timeout: 3000 });
     }
 
+    /**
+     * @param {number} kills 
+     * @param {number} score 
+     * @param {number} surviveTime 
+     */
+    onStats(kills, score, surviveTime) {
+        document.getElementById("kills").innerText = kills;
+        document.getElementById("max-score").innerText = scoreToText(score);
+        document.getElementById("survive-time").innerText = msToText(surviveTime);
+        this.show(this.gameoverElem);
+
+        const a = this.state.auto_respawn;
+        if (a) {
+            this.respawnSpinner.hidden = false;
+            this.respawnButton.setAttribute("disabled", "");
+            this.respawnButton.innerText = "Respawning";
+        } else {
+            this.respawnSpinner.hidden = true;
+            this.respawnButton.removeAttribute("disabled");
+            this.respawnButton.innerText = "Respawn";
+        }
+    }
+
     onConnect(serverName = "Server") {
         this.serverInput.value = this.server;
         this.show(this.playButton);
@@ -315,6 +360,7 @@ module.exports = class HUD {
 
         this.show(document.getElementById("stats1"));
         this.show(document.getElementById("stats2"));
+        this.show(document.getElementById("stats3"));
         this.show(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = serverName;
         this.serverAccordion.toggle(0, true);
@@ -331,6 +377,7 @@ module.exports = class HUD {
         
         this.hide(document.getElementById("stats1"));
         this.hide(document.getElementById("stats2"));
+        this.hide(document.getElementById("stats3"));
         this.hide(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = "";
         this.serverAccordion.toggle(0, true);

@@ -1,3 +1,4 @@
+#include "limits.h"
 #include "memory.h"
 
 // Memory layout
@@ -15,8 +16,8 @@
 #define TABLE_SIZE 65536
 
 extern unsigned char get_cell_updated(void* ptr, unsigned short id);
-extern short get_cell_x(void* ptr, unsigned short id);
-extern short get_cell_y(void* ptr, unsigned short id);
+extern float get_cell_x(void* ptr, unsigned short id);
+extern float get_cell_y(void* ptr, unsigned short id);
 extern unsigned short get_cell_r(void* ptr, unsigned short id);
 extern unsigned short get_cell_eatenby(void* ptr, unsigned short id);
 extern unsigned char  get_cell_type(void* ptr, unsigned short id);
@@ -95,10 +96,13 @@ void* write_AUED(
 #define writeInt16(v) *((short*) dist) = v; dist += 2
 #define writeFloat32(v) *((float *) dist) = v; dist += 4
 
+#define CLAMP(v, min, max) v < min ? min : v > max ? max : v
+
 // Step 4
 unsigned char* serialize(
     unsigned char cell_count,
     unsigned char line_lock,
+    float score,
     float vx, float vy,
     unsigned int table[],
     unsigned short* lists, unsigned char* dist) {
@@ -108,6 +112,7 @@ unsigned char* serialize(
     // Write cell count and line lock (booleans)
     writeUint8(cell_count);
     writeUint8(line_lock);
+    writeFloat32(score);
     // Write viewport floats
     writeFloat32(vx);
     writeFloat32(vy);
@@ -129,8 +134,10 @@ unsigned char* serialize(
 
         writeUint16(cell_id);
         writeUint16(get_cell_type(0, cell_id));
-        writeInt16(get_cell_x(0, cell_id));
-        writeInt16(get_cell_y(0, cell_id));
+        float x = get_cell_x(0, cell_id);
+        writeInt16(CLAMP(x, SHRT_MIN, SHRT_MAX));
+        float y = get_cell_y(0, cell_id);
+        writeInt16(CLAMP(y, SHRT_MIN, SHRT_MAX));
         writeUint16(get_cell_r(0, cell_id));
 
         A_ptr += 4;
@@ -142,8 +149,10 @@ unsigned char* serialize(
         unsigned short cell_id = *U_ptr;
 
         writeUint16(cell_id);
-        writeInt16(get_cell_x(0, cell_id));
-        writeInt16(get_cell_y(0, cell_id));
+        float x = get_cell_x(0, cell_id);
+        writeInt16(CLAMP(x, SHRT_MIN, SHRT_MAX));
+        float y = get_cell_y(0, cell_id);
+        writeInt16(CLAMP(y, SHRT_MIN, SHRT_MAX));
         writeUint16(get_cell_r(0, cell_id));
 
         U_ptr += 4;

@@ -24,7 +24,11 @@ module.exports = class Controller {
         this.viewportHW = 0;
         this.viewportHH = 0;
         this.maxScore = 0;
+        this.dead = false;
+        this.autoRespawn = false;
+        this.kills = 0;
         this.score = 0;
+        this.surviveTime = 0;
         this.showOnMinimap = false;
 
         this.box = { l: 0, r: 0, b: 0, t: 0 };
@@ -93,7 +97,12 @@ module.exports = class Controller {
         this.viewportY = 0;
         this.viewportHW = 0;
         this.viewportHH = 0;
+        this.maxScore = 0;
+        this.kills = 0;
         this.score = 0;
+        this.dead = false;
+        this.autoRespawn = false;
+        this.surviveTime = 0;
         this.box = { l: 0, r: 0, b: 0, t: 0 };
         this.showOnMinimap = false;
     }
@@ -105,5 +114,16 @@ module.exports = class Controller {
         this.lastEjectTick = 0;
         this.updated = false; // reset updated field after spawning
         this.lockDir = false; // reset line lock
+        this.dead = false;
+        this.autoRespawn = false;
+        this.surviveTime = 0;
+    }
+
+    get canSpawn() {
+        const e = this.engine;
+        // Player requesting spawn OR player is dead and requested auto respawn
+        return (this.spawn || (!this.alive && this.autoRespawn)) && 
+            (e.__now <= e.options.PLAYER_SPAWN_DELAY || 
+             e.__now >= this.lastSpawnTick + e.options.PLAYER_SPAWN_DELAY);
     }
 }

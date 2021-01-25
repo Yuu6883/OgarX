@@ -85,7 +85,8 @@ const DefaultSettings = {
     WORLD_KILL_OVERSIZE: false,
     WORLD_OVERSIZE_MESSAGE: "${c.name} died from oversize",
     EAT_OVERLAP: 3,
-    EAT_MULT: 1.140175425099138
+    EAT_MULT: 1.140175425099138,
+    SOCKET_WATERMARK: 1024 * 512 // 500kb
 }
 
 const DEAD_CELL_TYPE = 251;
@@ -231,6 +232,15 @@ module.exports = class Engine {
         this.game.emit("restart");
         this.bindBuffers();
     }
+    
+    delaySpawn(id) {
+        this.spawnArray.push(id);
+    }
+
+    delayKill(id = 0, replace = false) {
+        if (!this.game.controls[id].alive) return; // not alive, nothing to kill
+        this.killArray.push([id, replace]);
+    }
 
     /** @param {number} dt */
     tick(dt) {
@@ -259,11 +269,7 @@ module.exports = class Engine {
         this.updateCells(dt);
         this.updatePlayerCells(dt);
         this.updateTree();
-
-        // Delayed kill, so the flags will be read after resolve and update quadtree
-        for (const [id, replace] of this.killArray) 
-            this.kill(id, replace);
-        this.killArray = [];
+        this.handleKills();
 
         // Sort indices (because we added new cells and we need to sort by size)
         this.sortIndices();
@@ -439,8 +445,7 @@ module.exports = class Engine {
             }
 
             // Spawn
-            if (controller.spawn && (this.__now <= this.options.PLAYER_SPAWN_DELAY || 
-                    this.__now >= controller.lastSpawnTick + this.options.PLAYER_SPAWN_DELAY)) {
+            if (controller.canSpawn) {
                 controller.spawn = false;
                 controller.lastSpawnTick = this.__now;
 
@@ -449,15 +454,6 @@ module.exports = class Engine {
 
             } else controller.spawn = false;
         }
-    }
-
-    delaySpawn(id) {
-        this.spawnArray.push(id);
-    }
-
-    delayKill(id = 0, replace = false) {
-        if (!this.game.controls[id].alive) return; // not alive, nothing to kill
-        this.killArray.push([id, replace]);
     }
 
     updateIndices() {
@@ -544,6 +540,13 @@ module.exports = class Engine {
         }
     }
 
+    handleKills() {
+        // Delayed kill, so the flags will be read after resolve and update quadtree
+        for (const [id, replace] of this.killArray) 
+            this.kill(id, replace);
+        this.killArray = [];
+    }
+
     /**
      * Only set the bit for remove
      * @param {number} id
@@ -558,6 +561,7 @@ module.exports = class Engine {
                 this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
                 this.wasm.clear_cell(0, cell_id); // 0 out memory of this cell because it's not needed anymore
             }
+            this.game.controls[id].deadTick = true;
         } else {
             for (const cell_id of this.counters[id]) this.cells[cell_id].remove();
         }
@@ -587,6 +591,12 @@ module.exports = class Engine {
                 this.counters[cell.type].delete(cell.id);
                 this.removedCells.push(index);
                 this.cellCount--;
+                if (cell.type <= 250 && !this.counters[cell.type].size) {
+                    cell.eatenBy && this.game.controls[this.cells[cell.eatenBy].type].kills++;
+                    this.game.controls[cell.type].surviveTime = this.__now - this.game.controls[cell.type].lastSpawnTick;
+                    this.game.controls[cell.type].lastSpawnTick = this.__now;
+                    this.game.controls[cell.type].dead = true;
+                }
             } else if (cell.popped) {
                 // pop the cell OR split virus
                 if (cell.type == VIRUS_TYPE) {

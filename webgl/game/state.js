@@ -52,6 +52,9 @@ module.exports = class State {
     get zoom() { return Atomics.load(this.buffer, 11); }
     set zoom(v) { Atomics.store(this.buffer, 11, v); }
 
+    get auto_respawn() { return Atomics.load(this.buffer, 12); }
+    set auto_respawn(v) { Atomics.store(this.buffer, 12, v); }
+
     exchange() {
         return {
             spectate: Atomics.exchange(this.buffer, 0, 0),

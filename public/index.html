@@ -34,12 +34,13 @@
     </div>
     <div id="render-menu-offcanvas" uk-offcanvas>
         <div id="offcanvas-menu" class="uk-offcanvas-bar">
-            <h3 class="uk-center">Render Options</h3>
+            <h3 class="uk-center">Options</h3>
             <div id="render-options" class="key-value">
                 <span>Skin</span><span id="render-skin" class="selectable"></span>
                 <span>Name</span><span id="render-name" class="selectable"></span>
                 <span>Mass</span><span id="render-mass" class="selectable"></span>
                 <span>Resolution</span><span id="render-quality" class="selectable"></span>
+                <span>Auto Respawn</span><span id="render-auto_respawn" class="selectable"></span>
                 <span>Draw Delay</span>
                 <div class="uk-inline">
                     <input id="render-delay-input" class="slider" type="range" value="0" min="50" max="300" step="10">
@@ -58,6 +59,7 @@
         <!-- <br>Cells: <span id="cells"></span>Text: <span id="text"></span> -->
     </div>
     <div id="stats2" hidden>LINE: <span id="linelock"></span>&nbsp; <span id="mycells"></span> CELLS</div>
+    <div id="stats3" hidden>SCORE: <span id="score"></span></div>
     <div id="minimap">
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet"></svg>
         <svg class="uk-position-cover" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet"></svg>
@@ -106,6 +108,14 @@
                 </div>
             </div>
         </div>
+    </div>
+    <div id="game-over" hidden>
+        <h2 class="uk-center">Game Over</h2>
+        <div>Kills: <span id="kills">0</span></div>
+        <div>Max Score: <span id="max-score">0</span></div>
+        <div>Survive Time: <span id="survive-time">0</span></div>
+        <div id="respawn-spinner" uk-spinner="ratio: 3" class="uk-margin-top"></div>
+        <h3><button id="respawn-button">Respawn</button></h3>
     </div>
     <canvas id="canvas"></canvas>
 </body>

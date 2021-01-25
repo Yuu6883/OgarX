@@ -4,7 +4,8 @@ const DEFAULT = {
     name: 1,
     mass: 1,
     draw: 120,
-    quality: 0
+    quality: 0,
+    auto_respawn: 0
 };
 const OPTION_KEYS = Object.keys(DEFAULT);
 
@@ -12,7 +13,8 @@ const MultiChoice = {
     skin: ["Disabled", "Enabled"],
     name: ["Disabled", "Enabled"],
     mass: ["Disabled", "Short", "Long"],
-    quality: ["x1.0", "x0.8", "x0.7", "x0.6", "x0.5"]
+    quality: ["x1.0", "x0.8", "x0.7", "x0.6", "x0.5"],
+    auto_respawn: ["Disabled", "Enabled"]
 }
 
 module.exports = class Options {

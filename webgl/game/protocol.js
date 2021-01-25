@@ -107,6 +107,15 @@ module.exports = class Protocol extends EventEmitter {
                 case 6:
                     this.parseMinimap(reader);
                     break;
+                // Stats
+                case 7:
+                    this.parseStats(reader);
+                    if (this.renderer.state.auto_respawn) {
+                        const RESPAWN = new ArrayBuffer(1);
+                        new Uint8Array(RESPAWN)[0] = 7;
+                        this.send(RESPAWN);
+                    }
+                    break;
                 // Chat
                 case 10:
                     const pid = reader.readUInt16();
@@ -163,15 +172,15 @@ module.exports = class Protocol extends EventEmitter {
         this.lastPacket = Date.now();
 
         const core = this.renderer.core;
-        const header = new DataView(buffer, 1, 10);
+        const header = new DataView(buffer, 1, 14);
 
         this.renderer.stats.mycells = header.getUint8(0);
         this.renderer.stats.linelocked = header.getUint8(1);
+        this.renderer.stats.score = header.getFloat32(2, true);
+        this.renderer.target.position[0] = header.getFloat32(6, true);
+        this.renderer.target.position[1] = header.getFloat32(10, true);
         
-        this.renderer.target.position[0] = header.getFloat32(2, true);
-        this.renderer.target.position[1] = header.getFloat32(6, true);
-        
-        core.HEAPU8.set(new Uint8Array(buffer, 11), this.renderer.cellTypesTableOffset);                 
+        core.HEAPU8.set(new Uint8Array(buffer, 15), this.renderer.cellTypesTableOffset);                 
         core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
     }
 
@@ -201,6 +210,14 @@ module.exports = class Protocol extends EventEmitter {
             minimap.push(player);
         }
         self.postMessage({ event: "minimap", minimap });
+    }
+
+    /** @param {Reader} reader */
+    parseStats(reader) {
+        const kills = reader.readUInt32();
+        const score = reader.readFloat32();
+        const surviveTime = reader.readFloat32();
+        self.postMessage({ event: "stats", kills, score, surviveTime });
     }
 
     /**
