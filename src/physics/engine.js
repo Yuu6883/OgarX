@@ -352,7 +352,7 @@ module.exports = class Engine {
     
                     const MULTI = Math.max(Math.log2(controller.score * (1 + this.options.PLAYER_MIN_SPLIT_INCREASE)) / 16, 1);
                     const LOSS = MULTI * MULTI * this.options.EJECT_LOSS * this.options.EJECT_LOSS;
-                    const EJECT_SIZE = this.options.EJECT_SIZE = EJECT_SIZE * MULTI;
+                    const EJECT_SIZE = this.options.EJECT_SIZE * MULTI;
                     const MIN_EJECT_SIZE = this.options.PLAYER_MIN_EJECT_SIZE * MULTI;
                     const EJECT_BOOST = this.options.EJECT_BOOST * MULTI;
 
