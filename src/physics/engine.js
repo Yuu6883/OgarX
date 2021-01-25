@@ -321,6 +321,7 @@ module.exports = class Engine {
             
             const MULTI = Math.max((1 + this.options.PLAYER_MIN_SPLIT_INCREASE) * Math.sqrt(controller.score) / 300, 1);
             const MIN_SPLIT_SIZE = MULTI * this.options.PLAYER_MIN_SPLIT_SIZE;
+            const SPLIT_BOOST = MULTI * this.options.PLAYER_SPLIT_BOOST;
 
             // Split
             let attempts = this.options.PLAYER_SPLIT_CAP;
@@ -334,7 +335,7 @@ module.exports = class Engine {
                     let d = Math.sqrt(dx * dx + dy * dy);
                     if (d < 1) dx = 1, dy = 0, d = 1;
                     else dx /= d, dy /= d;
-                    this.splitFromCell(cell, cell.r / Math.SQRT2, dx, dy, this.options.PLAYER_SPLIT_BOOST);
+                    this.splitFromCell(cell, cell.r / Math.SQRT2, dx, dy, SPLIT_BOOST);
                 }
                 controller.splitAttempts--;
             }
