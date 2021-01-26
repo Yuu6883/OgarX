@@ -44,8 +44,10 @@ const DefaultSettings = {
     VIRUS_PUSH: false,
     VIRUS_COUNT: 30,
     VIRUS_SIZE: 100,
-    VIRUS_FEED_TIMES: 7,
-    VIRUS_SPLIT_BOOST: 780,
+    VIRUS_FEED_TIMES: 20,
+    VIRUS_PUSH_BOOST: 780,
+    VIRUS_SPLIT_BOOST: 120,
+    VIRUS_MAX_BOOST: 1000,
     VIRUS_MONOTONE_POP: false,
     // MOTHER_CELL_COUNT: 0,
     // MOTHER_CELL_SIZE: 149,
@@ -577,7 +579,9 @@ module.exports = class Engine {
             this.indicesPtr, this.counters[PELLET_TYPE].size,
             this.treePtr, this.stackPtr,
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
+            this.options.EAT_OVERLAP, this.options.EAT_MULT, 
+            this.options.VIRUS_PUSH_BOOST, this.options.VIRUS_MAX_BOOST,
+            VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
     }
 
     postResolve() {

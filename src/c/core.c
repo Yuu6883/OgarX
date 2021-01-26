@@ -96,9 +96,8 @@ void update(Cell cells[], unsigned short* ptr, float dt,
             float db = cell->boost * 0.0025f * dt;
             cell->x += cell->boostX * db;
             cell->y += cell->boostY * db;
-            if (NOT_PLAYER(cell->type)) {
+            if (NOT_PLAYER(cell->type))
                 cell->flags |= UPDATE_BIT;
-            }
             cell->boost -= db;
         }
 
@@ -349,7 +348,9 @@ unsigned int resolve(Cell cells[],
     unsigned short* ptr, unsigned short pellet_count,
     QuadNode* root, QuadNode** sp, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
-    float eatOverlap, float eatMulti, float virusMaxSize, unsigned int removeTick) {
+    float eatOverlap, float eatMulti, 
+    float virusBoost, float virusMaxBoost,
+    float virusMaxSize, unsigned int removeTick) {
 
     unsigned int collisions = 0;
     unsigned short* ptr_copy = ptr;
@@ -526,10 +527,22 @@ unsigned int resolve(Cell cells[],
                         }
                         if (IS_VIRUS(other->type)) // || IS_MOTHER_CELL(other->type))
                             cell->flags |= 0x80; // Mark this cell as popped
-                        if (IS_VIRUS(type) && IS_EJECTED(other->type) && r1 >= virusMaxSize) {
-                            cell->flags |= 0x80; // Mark this as virus to be split
-                            cell->boostX = other->boostX;
-                            cell->boostY = other->boostY;
+                        if (IS_VIRUS(type) && IS_EJECTED(other->type)) {
+                            if (virusMaxSize && r1 >= virusMaxSize) {
+                                cell->flags |= 0x80; // Mark this as virus to be split
+                                cell->boostX = other->boostX;
+                                cell->boostY = other->boostY;
+                            }
+                            if (virusBoost) {
+                                float newBoost = cell->boost + virusBoost;
+                                newBoost = newBoost > virusMaxBoost ? virusMaxBoost : newBoost;
+                                cell->boostX = cell->boostX * cell->boost + other->boostX * virusBoost;
+                                cell->boostY = cell->boostY * cell->boost + other->boostY * virusBoost;
+                                float norm = sqrtf(cell->boostX * cell->boostX + cell->boostY * cell->boostY);
+                                cell->boostX /= norm;
+                                cell->boostY /= norm;
+                                cell->boost = newBoost;
+                            }
                         }
                     }
                 }
