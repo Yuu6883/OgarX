@@ -146,6 +146,7 @@ module.exports = class Protocol extends EventEmitter {
             this.renderer.clearData();
             this.renderer.clear();
 
+            this.map = null;
             this.bandwidth = 0;
             this.renderer.stats.linelocked = 0;
             this.renderer.stats.mycells = 0;

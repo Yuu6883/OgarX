@@ -8,7 +8,7 @@ const Minimap = require("./minimap");
 const Viewport = require("./viewport");
 
 const msToText = ms => {
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1000) return `${Math.round(ms)}ms`;
     const s = ms / 1000;
     if (s < 60) return `${Math.round(s)}s`;
     const m = s / 60;

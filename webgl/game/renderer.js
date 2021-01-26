@@ -14,7 +14,9 @@ const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
    NAME_VERT_SHADER_SOURCE, NAME_FRAG_PEELING_SHADER_SOURCE,
    MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE,
    QUAD_VERT_SHADER_SOURCE, 
-   BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE } = require("./shaders");
+   BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE,
+   BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE
+} = require("./shaders");
 
 const NAME_MASS_MIN = 0.03;
 const NAME_SCALE = 0.25;
@@ -202,6 +204,7 @@ class Renderer {
         const peel_prog3 = this.peel_prog3 = makeProgram(gl, MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE);
         const blend_prog = this.blend_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
         const final_prog = this.final_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
+        const border_prog = this.border_prog = makeProgram(gl, BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE);
         // this.fxaaProg = makeProgram(gl, FXAA_VERT_SHADER_SOURCE, FXAA_FRAG_SHADER_SOURCE);
     
         // Dual depth peeling uniforms
@@ -222,6 +225,10 @@ class Renderer {
         this.loadUniform(peel_prog3, "u_mass_char");
 
         this.loadUniform(blend_prog, "u_back_color");
+
+        this.loadUniform(border_prog, "u_map");
+        this.loadUniform(border_prog, "u_proj");
+        this.loadUniform(border_prog, "u_color");
 
         this.loadUniform(final_prog, "u_front_color");
         this.loadUniform(final_prog, "u_back_color");
@@ -263,6 +270,10 @@ class Renderer {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+        const c = 12 / 255;
+        gl.useProgram(border_prog);
+        gl.uniform4f(this.getUniform(border_prog, "u_color"), c, c, c, 1);
 
         this.loadPlayerData({ id: 253, name: "virus", skin: "/static/img/virus.png" });
         this.start();
@@ -885,7 +896,7 @@ class Renderer {
         if (!this.state.focused) {
             this.updateTextures();
             // Cap at 10 fps when window not focused
-            if (this.lastDraw - now < 100) return;
+            if (now - this.lastDraw < 100) return;
         }
 
         const gl = this.gl;
@@ -925,14 +936,24 @@ class Renderer {
         this.stats.cells = cell_count;
         this.stats.text  = text_count;
         
-        // Final prog
+        // Background and final prog
         this.clear();
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.bindVertexArray(this.quadVAO);
+
+        if (this.protocol.map) {
+            gl.useProgram(this.border_prog);
+            gl.uniform2f(this.getUniform(this.border_prog, "u_map"), this.protocol.map.hw, this.protocol.map.hh);
+            gl.uniformMatrix4fv(this.getUniform(this.border_prog, "u_proj"), false, this.proj);
+
+            // Draw background
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
         gl.useProgram(this.final_prog);
         gl.uniform1i(this.getUniform(this.final_prog, "u_front_color"), offsetBack + 1);
 
-        // Draw to screen
-        gl.bindVertexArray(this.quadVAO);
+        // Blend back
         gl.drawArrays(gl.TRIANGLES, 0, 6);
         
         // FXAA prog

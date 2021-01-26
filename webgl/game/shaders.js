@@ -308,3 +308,27 @@ void main() {
         frontColor.a + backColor.a
     );
 }`;
+
+module.exports.BORDER_VERT_SHADER_SOURCE = 
+`#version 300 es
+precision highp float;
+
+layout(location=0) in vec2 a_position;
+uniform mat4 u_proj;
+uniform vec2 u_map;
+void main() {
+    vec4 world_pos = vec4(a_position * u_map, 0.0, 1.0);
+    gl_Position = u_proj * world_pos;
+}
+`;
+
+module.exports.BORDER_FRAG_SHADER_SOURCE =
+`#version 300 es
+precision highp float;
+
+uniform vec4 u_color;
+out vec4 color;
+void main() {
+    color = u_color;
+}
+`;
