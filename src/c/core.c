@@ -31,7 +31,7 @@ typedef struct {
 #define NOT_PLAYER(type) type > 250
 #define IS_DEAD(type) type == 251
 #define IS_ALIVE(type) type != 251
-#define IS_MOTHER_CELL(type) type == 252
+// #define IS_MOTHER_CELL(type) type == 252
 #define IS_VIRUS(type) type == 253
 #define IS_PELLET(type) type == 254
 #define NOT_PELLET(type) type != 254
@@ -241,29 +241,33 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
     }
 }
 
-int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_stack_pointer) {
-    unsigned int stack_counter = 1;
-    node_stack_pointer[0] = root;
-    QuadNode* curr = root;
+int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, QuadNode** sp) {
+    
+    QuadNode** node_stack_pointer = sp;
+    *node_stack_pointer++ = root;
+
+    QuadNode* curr;
 
     int counter = 0;
     float dx;
     float dy;
 
-    while (stack_counter > 0) {
-        // Has leaves, push leaves, if they intersect, to stack
+    while (node_stack_pointer > sp) {
+        // Pop from the stack
+        curr = (QuadNode*) *--node_stack_pointer;
+
         if (curr->tl) {
             if (y - r < curr->y) {
                 if (x + r > curr->x)
-                    node_stack_pointer[stack_counter++] = curr->br;
+                    *node_stack_pointer++ = curr->br;
                 if (x - r < curr->x)
-                    node_stack_pointer[stack_counter++] = curr->bl;
+                    *node_stack_pointer++ = curr->bl;
             }
             if (y + r > curr->y) {
                 if (x + r > curr->x)
-                    node_stack_pointer[stack_counter++] = curr->tr;
+                    *node_stack_pointer++ = curr->tr;
                 if (x - r < curr->x)
-                    node_stack_pointer[stack_counter++] = curr->tl;
+                    *node_stack_pointer++ = curr->tl;
             }
         }
         
@@ -275,9 +279,6 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, void** node_
             counter++;
             if (dx * dx + dy * dy < (r + cell->r) * (r + cell->r)) return -counter;
         }
-
-        // Pop from the stack
-        curr = (QuadNode*) node_stack_pointer[--stack_counter];
     }
     return counter;
 }
@@ -333,8 +334,6 @@ void sort_indices(Cell cells[], unsigned short indices[], int n) {
         } while (index < i); 
     }
 }
-
-extern void log_magic();
 
 #define PHYSICS_NON 0
 #define PHYSICS_EAT 1
@@ -447,10 +446,11 @@ unsigned int resolve(Cell cells[],
                 } else if (IS_DEAD(type)) {
                     // Dead cell can only collide with others
                     if (IS_DEAD(other->type)) action = PHYSICS_COL;
-                } else if (IS_MOTHER_CELL(type)) {
-                    // Mother cell eats everything?
-                    action = PHYSICS_EAT;
                 }
+                // else if (IS_MOTHER_CELL(type)) {
+                //     // Mother cell eats everything?
+                //     action = PHYSICS_EAT;
+                // }
 
                 if (action == PHYSICS_NON) continue;
 
@@ -508,11 +508,12 @@ unsigned int resolve(Cell cells[],
                         a = r1 * r1 + r2 * r2;
                         r1 = sqrtf(a);
 
-                        if (IS_VIRUS(other->type) || IS_MOTHER_CELL(other->type)) {
+                        if (IS_VIRUS(other->type)) { // || IS_MOTHER_CELL(other->type)) {
                             other->eatenBy = 0;
                         } else {
-                            other->eatenBy = ((unsigned int) cell) >> 5;
+                            other->eatenBy = cell - cells;
                         }
+
                         other->flags |= REMOVE_BIT;
                         if (IS_PLAYER(type) && IS_EJECTED(other->type)) {
                             float ratio = other->r / (r1 + 100.f);
@@ -523,7 +524,7 @@ unsigned int resolve(Cell cells[],
                             cell->boostX = bx / norm;
                             cell->boostY = by / norm;
                         }
-                        if (IS_VIRUS(other->type) || IS_MOTHER_CELL(other->type))
+                        if (IS_VIRUS(other->type)) // || IS_MOTHER_CELL(other->type))
                             cell->flags |= 0x80; // Mark this cell as popped
                         if (IS_VIRUS(type) && IS_EJECTED(other->type) && r1 >= virusMaxSize) {
                             cell->flags |= 0x80; // Mark this as virus to be split

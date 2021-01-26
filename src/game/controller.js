@@ -114,7 +114,10 @@ module.exports = class Controller {
         this.lastEjectTick = 0;
         this.updated = false; // reset updated field after spawning
         this.lockDir = false; // reset line lock
+        this.maxScore = 0;
+        this.kills = 0;
         this.dead = false;
+        this.spawn = false;
         this.autoRespawn = false;
         this.surviveTime = 0;
     }

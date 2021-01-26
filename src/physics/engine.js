@@ -24,19 +24,21 @@ const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
 const Bot = require("../bot");
 
+const CELL_LIMIT = 65536;
+
 const DefaultSettings = {
     TIME_SCALE: 1,
     PHYSICS_TPS: 20,
     MINIMAP_TPS: 5,
     LEADERBOARD_TPS: 2,
     MAX_CELL_PER_TICK: 50,
-    CELL_LIMIT: 65536,
     QUADTREE_MAX_ITEMS: 24,
     QUADTREE_MAX_LEVEL: 16,
-    MAP_HW: 32767, // MAX signed short
-    MAP_HH: 32767, // MAX signed short,
+    MAP_HW: 20000, // MAX signed short = 32767
+    MAP_HH: 20000,
     SAFE_SPAWN_TRIES: 64,
-    SAFE_SPAWN_RADIUS: 1.5,
+    PLAYER_SAFE_SPAWN_RADIUS: 1.5,
+    VIRUS_SAFE_SPAWN_RADIUS: 3,
     PELLET_COUNT: 1000,
     PELLET_SIZE: 10,
     VIRUS_PUSH: false,
@@ -45,8 +47,8 @@ const DefaultSettings = {
     VIRUS_FEED_TIMES: 7,
     VIRUS_SPLIT_BOOST: 780,
     VIRUS_MONOTONE_POP: false,
-    MOTHER_CELL_COUNT: 0,
-    MOTHER_CELL_SIZE: 149,
+    // MOTHER_CELL_COUNT: 0,
+    // MOTHER_CELL_SIZE: 149,
     PLAYER_SPEED: 1.5,
     PLAYER_SPAWN_DELAY: 3000,
     PLAYER_AUTOSPLIT_SIZE: 1500,
@@ -90,7 +92,7 @@ const DefaultSettings = {
 }
 
 const DEAD_CELL_TYPE = 251;
-const MOTHER_CELL_TYPE = 252;
+// const MOTHER_CELL_TYPE = 252;
 const VIRUS_TYPE = 253;
 const PELLET_TYPE = 254;
 const EJECTED_TYPE = 255;
@@ -164,7 +166,7 @@ module.exports = class Engine {
         new Uint32Array(this.memory.buffer).fill(0);
 
         // Default CELL_LIMIT uses 2mb ram
-        this.cells = Array.from({ length: this.options.CELL_LIMIT }, (_, i) =>
+        this.cells = Array.from({ length: CELL_LIMIT }, (_, i) =>
             new Cell(new DataView(this.memory.buffer, i * this.BYTES_PER_CELL, this.BYTES_PER_CELL), i));
         this.cellCount = 0;
         
@@ -174,7 +176,7 @@ module.exports = class Engine {
             this.options.QUADTREE_MAX_ITEMS);
 
         this.indices = 0;
-        this.indicesPtr = this.BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.indicesPtr = this.BYTES_PER_CELL * CELL_LIMIT;
         this.resolveIndices = new DataView(this.memory.buffer, this.indicesPtr);
 
         // Not defined here since it's dynamically changed (after indices)
@@ -255,7 +257,7 @@ module.exports = class Engine {
         this.alivePlayers = this.game.controls.filter(c => c.alive && !(c.handle instanceof Bot));
 
         // No need to reserve space for indices now since we are only going to query it
-        this.treePtr = this.BYTES_PER_CELL * this.options.CELL_LIMIT;
+        this.treePtr = this.BYTES_PER_CELL * CELL_LIMIT;
         this.treeBuffer = new DataView(this.memory.buffer, this.treePtr);
         // Serialize again so client can query viewport
         this.serialize();
@@ -281,43 +283,46 @@ module.exports = class Engine {
     }
 
     spawnCells() {
-        // Spawn "some" new cells
+        // Spawn new cells
         for (let i = 0; i < this.options.MAX_CELL_PER_TICK; i++) {
             if (this.counters[PELLET_TYPE].size < this.options.PELLET_COUNT) {
-                const point = this.getSafeSpawnPoint(this.options.PELLET_SIZE);
-                this.newCell(point[0], point[1], this.options.PELLET_SIZE, PELLET_TYPE);
+                const [x, y] = this.randomPoint(this.options.PELLET_SIZE);
+                this.newCell(x, y, this.options.PELLET_SIZE, PELLET_TYPE);
             } else break;
         }
 
         for (let i = 0; i < this.options.MAX_CELL_PER_TICK; i++) {
             if (this.counters[VIRUS_TYPE].size < this.options.VIRUS_COUNT) {
-                const point = this.getSafeSpawnPoint(this.options.VIRUS_SIZE);
-                this.newCell(point[0], point[1], this.options.VIRUS_SIZE, VIRUS_TYPE);
+                const [x, y, success] = this.getSafeSpawnPoint(this.options.VIRUS_SIZE * this.options.VIRUS_SAFE_SPAWN_RADIUS);
+                success && this.newCell(x, y, this.options.VIRUS_SIZE, VIRUS_TYPE);
             } else break;
         }
 
-        for (let i = 0; i < this.options.MAX_CELL_PER_TICK; i++) {
-            if (this.counters[MOTHER_CELL_TYPE].size < this.options.MOTHER_CELL_COUNT) {
-                const point = this.getSafeSpawnPoint(this.options.MOTHER_CELL_SIZE);
-                this.newCell(point[0], point[1], this.options.MOTHER_CELL_SIZE, MOTHER_CELL_TYPE);
-            } else break;
-        }
-
-        for (const id of this.spawnArray) {
+        this.spawnArray = this.spawnArray.filter(id => {
             const c = this.game.controls[id];
+            // Somehow still alive
+            if (c.alive) return false;
 
+            // Success varaible
+            let s;
             if (c.handle instanceof Bot) {
-                const [x, y] = this.getSafeSpawnPoint(this.options.BOT_SPAWN_SIZE);
-                this.newCell(x, y, this.options.BOT_SPAWN_SIZE, id);
+                const [x, y, success] = this.getSafeSpawnPoint(this.options.BOT_SPAWN_SIZE * this.options.PLAYER_SAFE_SPAWN_RADIUS);
+                success && this.newCell(x, y, this.options.BOT_SPAWN_SIZE, id);
+                s = success;
             } else {
-                const [x, y] = this.getPlayerSpawnPoint();
-                this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+                const [x, y, success] = this.getPlayerSpawnPoint();
+                success && this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+                s = success;
             }
 
-            this.game.emit("spawn", c);
-            c.afterSpawn();
-        }
-        this.spawnArray = [];
+            if (s) {
+                this.game.emit("spawn", c);
+                c.afterSpawn();
+                c.lastSpawnTick = this.__now;
+            }
+
+            return !s;
+        });
     }
 
     handleInputs(dt) {
@@ -446,13 +451,9 @@ module.exports = class Engine {
 
             // Spawn
             if (controller.canSpawn) {
-                controller.spawn = false;
-                controller.lastSpawnTick = this.__now;
-
                 this.delayKill(controller.id, true);
                 this.delaySpawn(controller.id);
-
-            } else controller.spawn = false;
+            }
         }
     }
 
@@ -679,14 +680,14 @@ module.exports = class Engine {
      */
     newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0, insert = true) {
         
-        if (this.cellCount >= this.options.CELL_LIMIT - 1) {
+        if (this.cellCount >= CELL_LIMIT - 1) {
             this.stop();
             return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
         }
 
         let tries = 0;
         while (this.cells[this.__next_cell_id].exists) {
-            this.__next_cell_id = ((this.__next_cell_id + 1) % this.options.CELL_LIMIT) || 1;
+            this.__next_cell_id = ((this.__next_cell_id + 1) % CELL_LIMIT) || 1;
             tries++;
             if (tries >= 65536) {
                 console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
@@ -726,10 +727,12 @@ module.exports = class Engine {
         return [range(xmin, xmax), range(ymin, ymax)];
     }
 
+    /** @returns {[number, number, boolean]} */
     getPlayerSpawnPoint() {
+        const s = this.options.PLAYER_SPAWN_SIZE;
+        const safeRadius = s * this.options.PLAYER_SAFE_SPAWN_RADIUS;
+
         if (this.alivePlayers.length) {
-            const s = this.options.PLAYER_SPAWN_SIZE;
-            const safeRadius = s * this.options.SAFE_SPAWN_RADIUS;
 
             const target = pick(this.alivePlayers);
 
@@ -740,29 +743,29 @@ module.exports = class Engine {
             
             let tries = this.options.SAFE_SPAWN_TRIES;
             while (--tries) {
-                const point = this.randomPoint(s, xmin, xmax, ymin, ymax);
-                if (this.wasm.is_safe(0, point[0], point[1], safeRadius,
-                    this.treePtr, this.stackPtr) > 0)
-                    return point;
+                const [x, y] = this.randomPoint(s, xmin, xmax, ymin, ymax);
+                if (this.wasm.is_safe(0, x, y, safeRadius, this.treePtr, this.stackPtr) > 0)
+                    return [x, y, true];
             }
         }
 
-        return this.getSafeSpawnPoint(this.options.PLAYER_SPAWN_SIZE);
+        return this.getSafeSpawnPoint(safeRadius);
     }
 
-    /** @param {number} size */
+    /** 
+     * @param {number} size 
+     * @returns {[number, number, boolean]}
+     */
     getSafeSpawnPoint(size) {
-        if (!this.treePtr) return this.randomPoint(size);
+        if (!this.treePtr) return [null, null, false];
 
         let tries = this.options.SAFE_SPAWN_TRIES;
         while (--tries) {
-            const point = this.randomPoint(size);
-            if (this.wasm.is_safe(0, point[0], point[1],
-                size * this.options.SAFE_SPAWN_RADIUS,
-                this.treePtr, this.stackPtr) > 0)
-                return point;
+            const [x, y] = this.randomPoint(size);
+            const res = this.wasm.is_safe(0, x, y, size, this.treePtr, this.stackPtr);
+            if (res >= 0) return [x, y, true];
         }
-        return this.randomPoint(size);
+        return [null, null, false];
     }
 
     // Sort all the cell indices according to their size (to make solotrick work)
