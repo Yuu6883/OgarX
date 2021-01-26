@@ -301,7 +301,9 @@ module.exports = class Engine {
         this.spawnArray = this.spawnArray.filter(id => {
             const c = this.game.controls[id];
             // Somehow still alive
-            if (c.alive) return false;
+            if (c.alive) {
+                return false;
+            }
 
             // Success varaible
             let s;
@@ -450,10 +452,7 @@ module.exports = class Engine {
             }
 
             // Spawn
-            if (controller.canSpawn) {
-                this.delayKill(controller.id, true);
-                this.delaySpawn(controller.id);
-            }
+            if (controller.canSpawn) this.delaySpawn(controller.id);
         }
     }
 

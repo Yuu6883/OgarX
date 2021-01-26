@@ -91,6 +91,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.name = reader.readUTF16String();
                 controller.skin = reader.readUTF16String();
                 controller.spawn = true;
+                if (controller.alive) this.game.engine.delayKill(controller.id, true);
                 break;
             case 2:
                 if (controller.alive) return;
