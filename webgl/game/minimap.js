@@ -56,6 +56,8 @@ module.exports = class Minimap {
             circle.setAttribute("cy", (1 - p.y) * this.dim);
         }
     }
+
+    clear() { this.onData([]); }
 }
 
 /** @typedef {{ x: number, y: number, score: number, name: string, skin: string, id: number }} Player */

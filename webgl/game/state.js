@@ -55,6 +55,24 @@ module.exports = class State {
     get auto_respawn() { return Atomics.load(this.buffer, 12); }
     set auto_respawn(v) { Atomics.store(this.buffer, 12, v); }
 
+    get clip() { return Atomics.load(this.buffer, 13); }
+    set clip(v) { Atomics.store(this.buffer, 13, v); }
+    
+    get skin_quality() { return Atomics.load(this.buffer, 14); }
+    set skin_quality(v) { Atomics.store(this.buffer, 14, v); }
+    
+    get text_quality() { return Atomics.load(this.buffer, 15); }
+    set text_quality(v) { Atomics.store(this.buffer, 15, v); }
+    
+    get circle_quality() { return Atomics.load(this.buffer, 16); }
+    set circle_quality(v) { Atomics.store(this.buffer, 16, v); }
+
+    get circle_radius() { return [1024, 512, 256, 128][this.circle_quality]; }
+    get skin_dim() { return [1024, 512, 256, 128][this.skin_quality]; }
+    
+    get ignore_skin() { return Atomics.load(this.buffer, 17); }
+    set ignore_skin(v) { Atomics.store(this.buffer, 17, v); }
+
     exchange() {
         return {
             spectate: Atomics.exchange(this.buffer, 0, 0),
@@ -62,7 +80,8 @@ module.exports = class State {
             ejects: Atomics.exchange(this.buffer, 2, 0),
             macro: this.macro,
             respawn: Atomics.exchange(this.buffer, 4, 0),
-            lineLock: Atomics.exchange(this.buffer, 6, 0)
+            lineLock: Atomics.exchange(this.buffer, 6, 0),
+            clip: Atomics.exchange(this.buffer, 13, 0)
         }
     }
 }

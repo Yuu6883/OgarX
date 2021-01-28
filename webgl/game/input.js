@@ -1,5 +1,5 @@
-const events = ["Feed", "Split", "Double Split", "Triple Split", "Quad Split", "Line Lock", "Respawn"];
-
+const events = ["Feed", "Split", "Double Split", "Triple Split", "Quad Split", "Line Lock", "Respawn", "Clip"];
+const defaultKeys = ["w", " ", "g", "z", "q", "f", "n", "r"];
 const KeyNameMap = { " ": "SPACE" };
 
 module.exports = class Keyboard {
@@ -9,14 +9,16 @@ module.exports = class Keyboard {
 
         try {
             /** @type {string[]} */
-            const keys = JSON.parse(localStorage.getItem("ogarx-keys"));
-            if (!Array.isArray(keys) || keys.length != events.length || 
+            let keys = JSON.parse(localStorage.getItem("ogarx-keys"));
+            if (!Array.isArray(keys) || 
                 !keys.every(k => typeof k == "string"))
                 throw new Error("Error parsing keybinds, resetting");
+            if (keys.length > events.length) keys = keys.slice(0, events.length);
+            else if (keys.length < events.length) keys = keys.concat(defaultKeys.slice(keys.length));
             this.keys = keys;
         } catch (e) {
             console.error(e);
-            this.keys = ["w", " ", "g", "z", "q", "f", "n"];
+            this.keys = defaultKeys.concat([]);
         }
 
         this.menuElem = document.getElementById("key-menu");
@@ -97,6 +99,7 @@ module.exports = class Keyboard {
             case "Quad Split":   state.splits   = 4; break;
             case "Line Lock":    state.lineLock = 1; break;
             case "Respawn":      state.respawn  = 1; break;
+            case "Clip":         state.clip     = 1; break;
         }
     }
 

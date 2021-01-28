@@ -34,6 +34,10 @@ module.exports = class HUD {
         this.viewport = new Viewport();
         this.server = "";
         
+        this.registerEvents();
+        this.resize();
+        this.initUIComponents();
+        
         if (navigator.userAgent.includes("Chrome")) {
 
             this.worker = new Worker("js/renderer.min.js");
@@ -58,10 +62,6 @@ module.exports = class HUD {
                 if (data.event === "minimap") this.minimap.onData(data.minimap);
                 if (data.event === "stats") this.onStats(data.kills, data.score, data.surviveTime);
             }
-
-            this.registerEvents();
-            this.resize();
-            this.initUIComponents();
         } else if (navigator.userAgent.includes("Firefox")) {
             fetch("js/renderer.min.js")
                 .then(res => res.text())
@@ -75,12 +75,7 @@ module.exports = class HUD {
                     this.renderer.state = this.state;
                     this.renderer.viewport = this.viewport;
                 })
-                .then(() => this.renderer.initEngine())
-                .then(() => {
-                    this.registerEvents();
-                    this.resize();
-                    this.initUIComponents();
-                });
+                .then(() => this.renderer.initEngine());
         }
     }
 
@@ -375,10 +370,12 @@ module.exports = class HUD {
         this.show();
         this.onError("Disconnected");
         
+        this.hide(this.gameoverElem);
         this.hide(document.getElementById("stats1"));
         this.hide(document.getElementById("stats2"));
         this.hide(document.getElementById("stats3"));
         this.hide(document.getElementById("leaderboard"));
+        this.minimap.clear();
         document.getElementById("server-name").innerText = "";
         this.serverAccordion.toggle(0, true);
     }

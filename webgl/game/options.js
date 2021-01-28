@@ -5,7 +5,11 @@ const DEFAULT = {
     mass: 1,
     draw: 120,
     quality: 0,
-    auto_respawn: 0
+    auto_respawn: 0,
+    skin_quality: 0,
+    text_quality: 0,
+    circle_quality: 0,
+    ignore_skin: 0
 };
 const OPTION_KEYS = Object.keys(DEFAULT);
 
@@ -14,7 +18,11 @@ const MultiChoice = {
     name: ["Disabled", "Enabled"],
     mass: ["Disabled", "Short", "Long"],
     quality: ["x1.0", "x0.8", "x0.7", "x0.6", "x0.5"],
-    auto_respawn: ["Disabled", "Enabled"]
+    auto_respawn: ["Disabled", "Enabled"],
+    skin_quality: ["High", "Medium", "Low", "Laptop"],
+    text_quality: ["High", "Medium", "Low", "Laptop"],
+    circle_quality: ["High", "Medium", "Low", "Laptop"],
+    ignore_skin: ["Disabled", "Enabled"]
 }
 
 module.exports = class Options {

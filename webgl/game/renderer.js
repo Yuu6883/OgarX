@@ -58,7 +58,6 @@ class Renderer {
 
         /** @type {Map<number, [ImageBitmap, ImageBitmap]>} */
         this.updates = new Map();
-
         this.stats = new Stats();
         this.mouse = new Mouse();
         this.state = new State();
@@ -103,8 +102,9 @@ class Renderer {
 
     /** @param {{ id: number, skin: string, name: string }} data */
     loadPlayerData(data) {
+        if (this.IGNORE_SKIN && data.id <= 250) delete data.skin;
         this.loader.postMessage(data);
-        this.playerData.set(data.id, { skin: data.skin, name: data.name });
+        this.playerData.set(data.id, { skin: data.skin, name: data.name, skin_dim: this.SKIN_DIM });
     }
 
     initLoader() {
@@ -131,7 +131,11 @@ class Renderer {
     }
 
     async initEngine() {
-        const gl = this.gl = this.canvas.getContext("webgl2", { premultipliedAlpha: false, powerPreference: "high-performance" });
+        const gl = this.gl = this.canvas.getContext("webgl2", { 
+            premultipliedAlpha: false, 
+            powerPreference: "high-performance",
+            preserveDrawingBuffer: true
+        });
         if (!gl) return console.error("WebGL2 Not Supported");
 
         console.log("Loading WASM...");
@@ -158,15 +162,18 @@ class Renderer {
         this.camera = { position: vec3.create(), scale: 10 };
         this.proj = mat4.create();
         
-        console.log("Loading bot skins & names");
-        const res = await fetch("/static/data/bots.json");
+        // console.log("Loading bot skins & names");
+        // const res = await fetch("/static/data/bots.json");
         /** @type {{ names: string[], skins: string[] }} */
-        this.bots = await res.json();
+        this.bots = { names: [], skins: [] }; // await res.json();
+
+        this.IGNORE_SKIN = this.state.ignore_skin;
+        this.SKIN_DIM = this.state.skin_dim;
 
         this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
 
-        this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
+        this.cellDataBufferLength = this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
         console.log(`Table offset: ${this.cellTypesTableOffset}`);
         this.cellBufferOffset = this.cellTypesTableOffset + CELL_TYPES * 2; // Offset table
         console.log(`Render buffers offset: ${this.cellBufferOffset}`);
@@ -279,6 +286,7 @@ class Renderer {
         this.start();
 
         this.protocol = new Protocol(this);
+        await this.protocol.replay.init();
     }
 
     clearCells() {
@@ -332,6 +340,14 @@ class Renderer {
             view.setFloat32(32 + o, y, true);  // netY
             view.setFloat32(36 + o, size, true); // netSize
         }
+    }
+
+    get RGBABytes() { return this.gl.drawingBufferWidth * this.gl.drawingBufferHeight * 4; }
+
+    /** @param {Uint8Array} pixels */
+    screenshot(pixels) {
+        const gl = this.gl;
+        gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     }
 
     /** @param {string} name */
@@ -545,14 +561,13 @@ class Renderer {
         gl.bindTexture(gl.TEXTURE_2D, circle_texture);
         // Generating circle
         {
-            const CIRCLE_RADIUS = 2048;
-            const MARGIN = 10;
-            console.log(`Generating ${CIRCLE_RADIUS * 2}x${CIRCLE_RADIUS << 1} circle texture`);
+            const CIRCLE_RADIUS = this.state.circle_radius;
+            console.log(`Generating ${CIRCLE_RADIUS << 1}x${CIRCLE_RADIUS << 1} circle texture`);
             const temp = self.window ? document.createElement("canvas") : new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
             if (self.window) temp.width = temp.height = CIRCLE_RADIUS << 1;
             const temp_ctx = temp.getContext("2d");
             temp_ctx.fillStyle = "white";
-            temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS - MARGIN, 0, 2 * Math.PI, false);
+            temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
             temp_ctx.fill();
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
                 

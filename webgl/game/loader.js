@@ -1,4 +1,3 @@
-const IMG_DIM = 512;
 let loaded = false;
 
 (async() => {
@@ -15,9 +14,9 @@ onmessage = async evt => {
 
     if (!loaded) return setTimeout(() => onmessage(evt), 3000);
 
-    /** @type {{ data: { id: number, skin: string, name: string }}} */
+    /** @type {{ data: { id: number, skin: string, name: string, skin_dim: number }}} */
     const { data } = evt;
-    if (!data) return;
+    if (!data || !data.id) return;
 
     let name_bitmap;
 
@@ -58,13 +57,13 @@ onmessage = async evt => {
         const skin_bitmap = await createImageBitmap(blob, {
             premultiplyAlpha: "none",
             resizeQuality: "high",
-            resizeWidth: IMG_DIM,
-            resizeHeight: IMG_DIM
+            resizeWidth: data.skin_dim,
+            resizeHeight: data.skin_dim
         });
         postMessage({ id: data.id, skin: skin_bitmap, name: name_bitmap }, 
             name_bitmap ? [skin_bitmap, name_bitmap] : [skin_bitmap]);    
     } catch (e) {
-        console.log(`Failed to load skin: "${data.skin}" (pid: ${data.id})`);
+        if (data.skin) console.log(`Failed to load skin: "${data.skin}" (pid: ${data.id})`);
         postMessage({ id: data.id, skin: null, name: name_bitmap });
     }
 };

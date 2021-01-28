@@ -3,6 +3,151 @@ const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
 const FakeSocket = require("./fake-socket");
 
+class ReplaySnapshot {
+    constructor(length = 0) {
+        this.score = 0;
+        this.state = new ArrayBuffer(length);
+        this.view = new Uint8Array(this.state);
+
+        /** @type {number[]} */
+        this.packetTimestamps = [];
+        /** @type {ArrayBuffer[]} */
+        this.packets = [];
+        /** @type {[number, { name: string, skin: string }][]} */
+        this.players = [];
+    }
+}
+
+const REPLAY_LENGTH = 10;
+
+class ReplaySystem {
+    /**
+     * @param {import("./renderer")} renderer
+     * @param {number} length 
+     */
+    constructor(renderer, length) {
+        // 1.9MB imagebitmap
+        const w = this.THUMBNAIL_WIDTH = 960;
+        const h = this.THUMBNAIL_HEIGHT = 720;
+        
+        this.encoder = new OffscreenCanvas(w, h);
+        this.encoderCTX = this.encoder.getContext("bitmaprenderer");
+
+        this.thumbnail = new ArrayBuffer(0); // Placeholder
+        this.thumbnailUint8View = new Uint8Array(this.thumbnail);
+        this.thumbnailUint8ClampedView = new Uint8ClampedArray(this.thumbnail);
+
+        this.renderer = renderer;
+        this.source = new Uint8Array(renderer.core.buffer, 0, renderer.cellDataBufferLength);
+        this.snapshots = Array.from({ length }, _ => new ReplaySnapshot(this.source.byteLength));
+    }
+
+    async init() {
+        /** @type {IDBDatabase} */
+        this.db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open("ogar69-replay");
+            req.onupgradeneeded = e => {
+                console.log("Creating replay object store");
+                /** @type {IDBDatabase} */
+                const db = e.target.result;
+                this.objStore = db.createObjectStore("replays", { keyPath: "id", autoIncrement: true });
+                this.objStore.createIndex("meta", "meta", { unique: false });
+                this.objStore.createIndex("data", "data", { unique: false });
+            }
+            req.onsuccess = _ => resolve(req.result);
+            req.onerror = reject;
+        });
+        console.log("Connected to replay database");
+    }
+
+    resizeBuffer() {
+        if (this.renderer.RGBABytes > this.thumbnail.byteLength) {
+            console.log(`Resizing thumbnail buffer to ${this.renderer.RGBABytes} bytes`);
+            this.thumbnail = new ArrayBuffer(this.renderer.RGBABytes);
+            this.thumbnailUint8View = new Uint8Array(this.thumbnail);
+            this.thumbnailUint8ClampedView = new Uint8ClampedArray(this.thumbnail);
+
+            this.__tw = this.renderer.gl.drawingBufferWidth;
+            this.__th = this.renderer.gl.drawingBufferHeight;
+        }
+    }
+
+    async save() {
+        await new Promise(async (resolve, reject) => {
+            const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s);
+            /** @type {ArrayBuffer[]} */
+            const buffers = snapshots.reduceRight((prev, curr) => prev.concat(curr.packets), []);
+            /** @type {number[]} */
+            let timestamps = snapshots.reduceRight((prev, curr) => prev.concat(curr.packetTimestamps), []);
+            const minTimestamp = Math.min(...timestamps);
+            timestamps = timestamps.map(t => t - minTimestamp);
+
+            const initial = snapshots[snapshots.length - 1].state;
+
+            this.encoderCTX.transferFromImageBitmap(await createImageBitmap(
+                new ImageData(this.thumbnailUint8ClampedView, this.__tw, this.__th)));
+            const blob = await this.encoder.convertToBlob({ type: "image/jpeg", quality: 1 });
+
+            const tx = this.db.transaction(["replays"], "readwrite");
+            const objStore = tx.objectStore("replays");
+
+            const req = objStore.add({
+                meta: {
+                    date: Date.now(), 
+                    thumbnail: { w: this.THUMBNAIL_WIDTH, h: this.THUMBNAIL_HEIGHT, blob },
+                    size: initial.byteLength + blob.size + buffers.reduce((prev, curr) => prev + curr.byteLength, 0),
+                },
+                data: { initial, buffers, timestamps }
+            });
+            req.onsuccess = () => self.postMessage({ event: "replay" });
+            tx.oncomplete = resolve;
+            tx.onerror = reject;
+        });
+    }
+
+    set score(v) {
+        if (v > this.maxScore) {
+            this.resizeBuffer();
+            this.renderer.screenshot(this.thumbnailUint8View);
+        }
+        this.snapshots[0].score = Math.max(v, this.snapshots[0].score);
+    }
+
+    get maxScore() { return Math.max(...this.snapshots.map(s => s.score)); }
+
+    // Record current state
+    recordState() {
+        const tail = this.snapshots.pop();
+        this.free(tail);
+        this.snapshots.unshift(tail);
+        tail.view.set(this.source);
+        tail.players = [...this.renderer.playerData.entries()];
+        
+        this.score = this.renderer.stats.score;
+    }
+
+    /** @param {ArrayBuffer} packet */
+    recordPacket(packet, time = performance.now()) {
+        this.snapshots[0].packets.push(packet);
+        this.snapshots[0].packetTimestamps.push(time);
+    }
+
+    /** @param {ReplaySnapshot} snapshot */
+    free(snapshot) {
+        this.renderer.loader.postMessage(snapshot.packets, snapshot.packets);
+        snapshot.score = 0;
+        snapshot.view.fill(0);
+        snapshot.packets = [];
+        snapshot.players = [];
+    }
+
+    reset() {
+        this.snapshots.forEach(s => this.free(s));
+    }
+}
+
+const RecordOPs = [2, 3, 4];
+
 module.exports = class Protocol extends EventEmitter {
     
     /** @param {import("./renderer")} renderer */
@@ -11,6 +156,7 @@ module.exports = class Protocol extends EventEmitter {
         this.pid = 0;
         this.bandwidth = 0;
         this.renderer = renderer;
+        this.replay = new ReplaySystem(renderer, REPLAY_LENGTH);
         
         this.pingInterval = self.setInterval(() => {
 
@@ -24,6 +170,7 @@ module.exports = class Protocol extends EventEmitter {
             this.send(PING);
             this.ping = Date.now();
 
+            this.replay.recordState();
         }, 1000);
 
         const state = this.renderer.state;
@@ -48,7 +195,8 @@ module.exports = class Protocol extends EventEmitter {
             this.send(writer.finalize());
 
             if (currState.respawn) this.spawn();
-        }, 1000 / 30); // TODO?
+            if (currState.clip) this.replay.save();
+        }, 1000 / 33); // TODO?
     }
 
     connect(urlOrPort, name = "", skin = "") {
@@ -75,6 +223,9 @@ module.exports = class Protocol extends EventEmitter {
             const reader = new Reader(new DataView(e.data));
             const OP = reader.readUInt8();
             this.bandwidth += e.data.byteLength;
+            
+            if (RecordOPs.includes(OP)) this.replay.recordPacket(e.data);
+
             switch (OP) {
                 case 1:
                     this.pid = reader.readUInt16();
