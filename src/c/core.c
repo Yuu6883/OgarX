@@ -240,7 +240,7 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
     }
 }
 
-int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, QuadNode** sp) {
+int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, QuadNode** sp, unsigned char ignoreType) {
     
     QuadNode** node_stack_pointer = sp;
     *node_stack_pointer++ = root;
@@ -272,7 +272,7 @@ int is_safe(Cell* cells, float x, float y, float r, QuadNode* root, QuadNode** s
         
         for (unsigned int i = 0; i < curr->count; i++) {
             Cell* cell = &cells[*(&curr->indices + i)];
-            if (cell->type > 253) continue;
+            if (cell->type > ignoreType) continue;
             dx = cell->x - x;
             dy = cell->y - y;
             counter++;

@@ -90,7 +90,8 @@ const DefaultSettings = {
     WORLD_OVERSIZE_MESSAGE: "${c.name} died from oversize",
     EAT_OVERLAP: 3,
     EAT_MULT: 1.140175425099138,
-    SOCKET_WATERMARK: 1024 * 512 // 500kb
+    SOCKET_WATERMARK: 1024 * 512, // 500kb
+    IGNORE_TYPE: 253
 }
 
 const DEAD_CELL_TYPE = 251;
@@ -747,7 +748,7 @@ module.exports = class Engine {
             let tries = this.options.SAFE_SPAWN_TRIES;
             while (--tries) {
                 const [x, y] = this.randomPoint(s, xmin, xmax, ymin, ymax);
-                if (this.wasm.is_safe(0, x, y, safeRadius, this.treePtr, this.stackPtr) > 0)
+                if (this.wasm.is_safe(0, x, y, safeRadius, this.treePtr, this.stackPtr, this.options.IGNORE_TYPE) > 0)
                     return [x, y, true];
             }
         }
@@ -765,7 +766,7 @@ module.exports = class Engine {
         let tries = this.options.SAFE_SPAWN_TRIES;
         while (--tries) {
             const [x, y] = this.randomPoint(size);
-            const res = this.wasm.is_safe(0, x, y, size, this.treePtr, this.stackPtr);
+            const res = this.wasm.is_safe(0, x, y, size, this.treePtr, this.stackPtr, this.options.IGNORE_TYPE);
             if (res >= 0) return [x, y, true];
         }
         return [null, null, false];
