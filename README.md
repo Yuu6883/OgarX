@@ -8,8 +8,28 @@ Client is mostly finished as well but need optimization since it runs poorly on 
 * JS (instead of c++, core is mostly in c and compiled to WebAssembly)
 * Raw WebGL client
 
+## Features
+* Render borders/map
+* Auto respawn
+* Custom resolution
+* Minimap
+* Mouse keybinds
+* Customizable render options
+* Main menu UI
+* Game chat
+* Leaderboard
+* Display stats (FPS, net delay, etc)
+
+## Todo
+* Replay System (in progress)
+* Server commands (chat/web-console/terminal)
+* Configurable local server
+* Peer-to-peer connection
+* Public server list
+* Rewrite shader so overlapping cells with exact same mass renders correctly
+
 ## Demo
-**IMPORTANT: only works with latest Chrome**<br>
+**WARNING: only works with latest Chrome** and laptops will have low fps<br>
 https://ogar69.yuu.dev<br>
 (Local server is implemented with SharedWorker)
 
