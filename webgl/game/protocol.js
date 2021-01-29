@@ -3,6 +3,9 @@ const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
 const FakeSocket = require("./fake-socket");
 
+const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+
 class ReplaySnapshot {
     constructor(length = 0) {
         this.score = 0;
@@ -25,12 +28,8 @@ class ReplaySystem {
      * @param {import("./renderer")} renderer
      * @param {number} length 
      */
-    constructor(renderer, length) {
-        // 1.9MB imagebitmap
-        const w = this.THUMBNAIL_WIDTH = 960;
-        const h = this.THUMBNAIL_HEIGHT = 720;
-        
-        this.encoder = new OffscreenCanvas(w, h);
+    constructor(renderer, length) {        
+        this.encoder = new OffscreenCanvas(0, 0);
         this.encoderCTX = this.encoder.getContext("bitmaprenderer");
 
         this.thumbnail = new ArrayBuffer(0); // Placeholder
@@ -38,6 +37,7 @@ class ReplaySystem {
         this.thumbnailUint8ClampedView = new Uint8ClampedArray(this.thumbnail);
 
         this.renderer = renderer;
+        // 2.6mb view
         this.source = new Uint8Array(renderer.core.buffer, 0, renderer.cellDataBufferLength);
         this.snapshots = Array.from({ length }, _ => new ReplaySnapshot(this.source.byteLength));
     }
@@ -50,9 +50,8 @@ class ReplaySystem {
                 console.log("Creating replay object store");
                 /** @type {IDBDatabase} */
                 const db = e.target.result;
-                this.objStore = db.createObjectStore("replays", { keyPath: "id", autoIncrement: true });
-                this.objStore.createIndex("meta", "meta", { unique: false });
-                this.objStore.createIndex("data", "data", { unique: false });
+                db.createObjectStore("replay-meta");
+                db.createObjectStore("replay-data");
             }
             req.onsuccess = _ => resolve(req.result);
             req.onerror = reject;
@@ -62,13 +61,11 @@ class ReplaySystem {
 
     resizeBuffer() {
         if (this.renderer.RGBABytes > this.thumbnail.byteLength) {
-            console.log(`Resizing thumbnail buffer to ${this.renderer.RGBABytes} bytes`);
             this.thumbnail = new ArrayBuffer(this.renderer.RGBABytes);
             this.thumbnailUint8View = new Uint8Array(this.thumbnail);
             this.thumbnailUint8ClampedView = new Uint8ClampedArray(this.thumbnail);
-
-            this.__tw = this.renderer.gl.drawingBufferWidth;
-            this.__th = this.renderer.gl.drawingBufferHeight;
+            this.thumbnailData = new ImageData(new Uint8ClampedArray(this.thumbnail), 
+                this.renderer.gl.drawingBufferWidth, this.renderer.gl.drawingBufferHeight);
         }
     }
 
@@ -84,23 +81,34 @@ class ReplaySystem {
 
             const initial = snapshots[snapshots.length - 1].state;
 
-            this.encoderCTX.transferFromImageBitmap(await createImageBitmap(
-                new ImageData(this.thumbnailUint8ClampedView, this.__tw, this.__th)));
+            console.log(this.thumbnailData.width, this.thumbnailData.height);
+            this.encoder.width = this.thumbnailData.width >> 2;
+            this.encoder.height = this.thumbnailData.height >> 2;
+            this.encoderCTX.transferFromImageBitmap(await createImageBitmap(this.thumbnailData, {
+                imageOrientation: "flipY", 
+                resizeWidth: this.encoder.width, 
+                resizeHeight: this.encoder.height,
+                resizeQuality: "high"
+            }));
             const blob = await this.encoder.convertToBlob({ type: "image/jpeg", quality: 1 });
 
-            const tx = this.db.transaction(["replays"], "readwrite");
-            const objStore = tx.objectStore("replays");
+            const tx = this.db.transaction(["replay-meta", "replay-data"], "readwrite");
+            const metaStore = tx.objectStore("replay-meta");
+            const dataStore = tx.objectStore("replay-data");
+            const uid = uuidv4();
 
-            const req = objStore.add({
-                meta: {
-                    date: Date.now(), 
-                    thumbnail: { w: this.THUMBNAIL_WIDTH, h: this.THUMBNAIL_HEIGHT, blob },
-                    size: initial.byteLength + blob.size + buffers.reduce((prev, curr) => prev + curr.byteLength, 0),
-                },
-                data: { initial, buffers, timestamps }
-            });
-            req.onsuccess = () => self.postMessage({ event: "replay" });
-            tx.oncomplete = resolve;
+            metaStore.add({
+                date: Date.now(),
+                thumbnail: blob,
+                size: initial.byteLength + blob.size + buffers.reduce((prev, curr) => prev + curr.byteLength, 0),
+            }, uid);
+
+            dataStore.add({ initial, buffers, timestamps }, uid);
+
+            tx.oncomplete = () => {
+                self.postMessage({ event: "replay" });
+                resolve()
+            };
             tx.onerror = reject;
         });
     }

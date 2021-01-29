@@ -6,6 +6,7 @@ const Skins = require("./skins");
 const Options = require("./options");
 const Minimap = require("./minimap");
 const Viewport = require("./viewport");
+const ReplayMenu = require("./replay");
 
 const msToText = ms => {
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -163,6 +164,9 @@ module.exports = class HUD {
         this.serverInput = document.getElementById("server-input");
         this.nameInput = document.getElementById("name-input");
 
+        this.replays = new ReplayMenu(this);
+        this.replays.init();
+        
         this.minimap = new Minimap(this);
         this.skins = new Skins(this);
         this.skinInput.value = this.skins.current;
