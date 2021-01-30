@@ -1,11 +1,13 @@
 # <strong> OgarX </strong>
-Server is mostly finished and optimized to the point where it can't be optimized anymore.
-Client is mostly finished as well but need optimization since it runs poorly on laptops (OIT shader eats too much GPU power), and it needs a simpler rewrite.
+This project is an optimized rewrite of [OgarII](https://github.com/Luka967/OgarII). A lot of features from the original project are not implemented (while I focused on other features that serve my interests the best).
+
+## Disclaimer
+You can not use this server as a substiture for OgarII or any clones since I've only implemented its own protocol. The only client that works with the server is the WebGL client which runs poorly on laptop. The physics are not idententical even though most formula and calculations are the same. The differences & optimization will be further discussed.
 
 ## Technology
-* New buffer protocol 
+* Efficient protocol
 * Specialized & optimized quadtree
-* JS (instead of c++, core is mostly in c and compiled to WebAssembly)
+* WebAssembly core (written in C)
 * Raw WebGL client
 
 ## Features
@@ -13,7 +15,7 @@ Client is mostly finished as well but need optimization since it runs poorly on 
 * Auto respawn
 * Custom resolution
 * Minimap
-* Mouse keybinds
+* Custom keybinds
 * Customizable render options
 * Main menu UI
 * Game chat
@@ -34,4 +36,4 @@ https://ogar69.yuu.dev<br>
 (Local server is implemented with SharedWorker)
 
 ## Notes
-I will write a long post about how I over-engineered everything and made it so optimized compared to other Ogar projects (self-proclaimed). Stay toned!
+SoonTM
