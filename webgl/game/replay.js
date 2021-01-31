@@ -1,3 +1,4 @@
+const ReplayDB = require("./replay-db");
 const CLIPS_PER_PAGE = 20;
 
 /** 
@@ -45,20 +46,7 @@ module.exports = class ReplayMenu {
     }
 
     async init() {
-        /** @type {IDBDatabase} */
-        this.db = await new Promise((resolve, reject) => {
-            const req = indexedDB.open("ogar69-replay");
-            req.onupgradeneeded = e => {
-                console.log("Creating replay object store");
-                /** @type {IDBDatabase} */
-                const db = e.target.result;
-                db.createObjectStore("replay-meta");
-                db.createObjectStore("replay-data");
-            }
-            req.onsuccess = _ => resolve(req.result);
-            req.onerror = reject;
-        });
-
+        this.db = await ReplayDB();
         this.registerEvents();
     }
 

@@ -1003,6 +1003,11 @@ class Renderer {
         this.lastDraw = now;
     }
 
+    serializeState() {
+        return this.core.buffer.slice(this.cellBufferOffset, 
+            this.core.instance.exports.serialize_state(0, this.cellDataBufferLength, this.cellBufferOffset));
+    }
+
     updateTextures() {
         const gl = this.gl;
         if (this.updates.length) {

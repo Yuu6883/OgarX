@@ -1,9 +1,14 @@
 let loaded = false;
+/** @type {IDBDatabase} */
+let db;
+const ReplayDB = require("./replay-db");
+const { serialize } = require("./custom-bson");
 
 (async() => {
     const font = new FontFace("Lato", "url(/static/font/Lato-Bold.ttf)");
     fonts.add(font);
     await font.load();
+    db = await ReplayDB();
     loaded = true;
 })();
 
@@ -13,7 +18,7 @@ onmessage = async evt => {
 
     /** @type {{ data: { id: number, skin: string, name: string, skin_dim: number }}} */
     const { data } = evt;
-    if (!data || !data.id) return;
+    if (!data) return;
 
     if (data.name) {
         try {
@@ -66,5 +71,17 @@ onmessage = async evt => {
         } catch (e) {
             console.log(`Failed to load skin: "${data.skin}" (pid: ${data.id})`, e);
         }
+    }
+
+    if (data.replay) {
+        const tx = db.transaction(["replay-meta", "replay-data"], "readwrite");
+        const metaStore = tx.objectStore("replay-meta");
+        const dataStore = tx.objectStore("replay-data");
+
+        const id = Date.now();
+        metaStore.add(data.replay.meta, id);
+        dataStore.add(serialize(data.replay.data), id);
+        tx.oncomplete = () => self.postMessage({ event: "replay-saved", id });
+        tx.onerror = () => self.postMessage({ event: "replay-failed" });
     }
 };

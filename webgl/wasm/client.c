@@ -56,13 +56,6 @@ unsigned int bytes_per_cell_data() { return sizeof(CellData); }
 unsigned int bytes_per_render_cell() { return sizeof(RenderCell); }
 unsigned int bytes_per_render_mass() { return sizeof(RenderMass); }
 
-// extern void log_add_packet(
-//     unsigned short id,
-//     unsigned short type,
-//     short x,
-//     short y,
-//     unsigned short size);
-
 void deserialize(CellData data[], unsigned short* packet) {
     AddPacket* add_data = (AddPacket*) packet;
 
@@ -254,4 +247,31 @@ unsigned int draw_text(CellData data_begin[],
     end[1] = 0;
 
     return count;
+}
+
+// extern void debug();
+
+void* serialize_state(CellData data_begin[], CellData data_end[],
+    AddPacket* packet) {
+
+    CellData* ptr = data_begin;
+    while (ptr < data_end) {
+        if (ptr->type && ptr->netSize) {
+            packet->id = ptr - data_begin;
+            packet->type = ptr->type;
+            packet->x = ptr->currX;
+            packet->y = ptr->currY;
+            packet->size = ptr->currSize;
+            packet++;
+        }
+        ptr++;
+    }
+
+    unsigned short* end = (unsigned short*) packet;
+    *end++ = 0;
+    *end++ = 0;
+    *end++ = 0;
+    *end++ = 0;
+    
+    return end;
 }

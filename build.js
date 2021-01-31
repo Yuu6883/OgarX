@@ -41,5 +41,6 @@ const streamToString = stream => {
     code = await streamToString(browserify(CONTROL_IN).bundle());
     fs.writeFileSync(CONTROL_OUT, minifier(code).code);
 
-    fs.writeFileSync(LOADER_OUT, minifier(fs.readFileSync(LOADER_IN)).code);
+    code = await streamToString(browserify(LOADER_IN).bundle());
+    fs.writeFileSync(LOADER_OUT, minifier(code).code);
 })();

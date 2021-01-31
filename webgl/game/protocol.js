@@ -1,7 +1,8 @@
 const { EventEmitter } = require("events");
-// const BSON = require("bson/dist/bson.browser.umd");
 const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
+const ReplayDB = require("./replay-db");
+const { deserialize } = require("./custom-bson");
 const FakeSocket = require("./fake-socket");
 
 // const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -48,20 +49,7 @@ class ReplaySystem {
     }
 
     async init() {
-        /** @type {IDBDatabase} */
-        this.db = await new Promise((resolve, reject) => {
-            const req = indexedDB.open("ogar69-replay");
-            req.onupgradeneeded = e => {
-                console.log("Creating replay object store");
-                /** @type {IDBDatabase} */
-                const db = e.target.result;
-                db.createObjectStore("replay-meta");
-                db.createObjectStore("replay-data");
-            }
-            req.onsuccess = _ => resolve(req.result);
-            req.onerror = reject;
-        });
-        console.log("Connected to replay database");
+        this.db = await ReplayDB();
     }
 
     resizeBuffer() {
@@ -91,58 +79,51 @@ class ReplaySystem {
         return writer.finalize();
     }
 
+    /** @param {ArrayBuffer} state */
+    encodeState(state) {
+        const oldState = this.source.slice();
+        this.source.set(new Uint8Array(state));
+        const buffer = this.renderer.serializeState();
+        this.source.set(oldState);
+        return buffer;
+    }
+
     async save() {
-        await new Promise(async (resolve, reject) => {
-            const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s);
+        const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s);
 
-            /** @type {ArrayBuffer[]} */
-            const buffers = snapshots.reduceRight((prev, curr) => prev.concat(curr.packets), []);
+        /** @type {ArrayBuffer[]} */
+        const buffers = snapshots.reduceRight((prev, curr) => prev.concat(curr.packets), []);
 
-            /** @type {number[]} */
-            let tArray = snapshots.reduceRight((prev, curr) => prev.concat(curr.packetTimestamps), []);
-            const minTimestamp = Math.min(...tArray);
-            tArray = tArray.map(t => t - minTimestamp);
-            const packetSizeTotal = buffers.reduce((prev, curr) => prev + curr.byteLength, 0);
-            const players = this.encodePlayerData();
+        /** @type {number[]} */
+        let tArray = snapshots.reduceRight((prev, curr) => prev.concat(curr.packetTimestamps), []);
+        const minTimestamp = Math.min(...tArray);
+        tArray = tArray.map(t => t - minTimestamp);
+        const packetSizeTotal = buffers.reduce((prev, curr) => prev + curr.byteLength, 0);
+        const players = this.encodePlayerData();
 
-            const timestamps = new Float32Array(tArray).buffer;
+        const timestamps = new Float32Array(tArray).buffer;
 
-            const initial = snapshots[snapshots.length - 1].state;
+        const initial = this.encodeState(snapshots[snapshots.length - 1].state);
 
-            this.encoder.width = this.thumbnailData.width >> 2;
-            this.encoder.height = this.thumbnailData.height >> 2;
-            this.encoderCTX.transferFromImageBitmap(await createImageBitmap(this.thumbnailData, {
-                imageOrientation: "flipY", 
-                resizeWidth: this.encoder.width, 
-                resizeHeight: this.encoder.height,
-                resizeQuality: "high"
-            }));
-            const blob = await this.encoder.convertToBlob({ type: "image/jpeg", quality: 1 });
-            // Bytes to store
-            const size = initial.byteLength + blob.size + players.byteLength +
-                timestamps.byteLength + packetSizeTotal;
+        this.encoder.width = this.thumbnailData.width >> 2;
+        this.encoder.height = this.thumbnailData.height >> 2;
+        this.encoderCTX.transferFromImageBitmap(await createImageBitmap(this.thumbnailData, {
+            imageOrientation: "flipY", 
+            resizeWidth: this.encoder.width, 
+            resizeHeight: this.encoder.height,
+            resizeQuality: "high"
+        }));
+        const thumbnail = await this.encoder.convertToBlob({ type: "image/jpeg", quality: 1 });
+        // Bytes to store
+        const size = initial.byteLength + thumbnail.size + players.byteLength +
+            timestamps.byteLength + packetSizeTotal;
 
-            const tx = this.db.transaction(["replay-meta", "replay-data"], "readwrite");
-            const metaStore = tx.objectStore("replay-meta");
-            const dataStore = tx.objectStore("replay-data");
-            const uid = Date.now();
-
-            metaStore.add({
-                date: Date.now(),
-                thumbnail: blob,
-                size,
-            }, uid);
-
-            const toStore = { initial, buffers, timestamps, players };
-            dataStore.add(toStore, uid);
-            // console.log(BSON.deserialize(BSON.serialize(toStore)));
-
-            tx.oncomplete = () => {
-                self.postMessage({ event: "replay" });
-                resolve()
-            };
-            tx.onerror = reject;
-        });
+        const replay = {
+            meta: { thumbnail, size },
+            data: { initial, buffers, timestamps, players }
+        };
+        this.renderer.loader.postMessage({ replay });
+        self.postMessage({ event: "replay" });
     }
 
     set score(v) {
@@ -190,7 +171,7 @@ class ReplaySystem {
             const tx = this.db.transaction(["replay-data"], "readonly");
             const dataStore = tx.objectStore("replay-data");
             const req = dataStore.get(id);
-            tx.oncomplete = () => resolve(req.result);
+            tx.oncomplete = () => resolve(deserialize(req.result));
             tx.onerror = reject;
         });
 
@@ -200,13 +181,19 @@ class ReplaySystem {
 
         console.assert(this.curr.timestamps.length === this.curr.packets.length,
             "Packet and timestamp length MUST match");
+
         this.protocol.parsePlayers(data.players);
     }
 
     update(dt = 0) {
         if (!this.curr) return;
         // Overwrite state
-        if (!this.t) this.source.set(this.curr.initial);
+        if (!this.t) {
+            this.source.fill(0);
+            const core = this.renderer.core;
+            core.HEAPU8.set(this.curr.initial, this.renderer.cellBufferOffset);                 
+            core.instance.exports.deserialize(0, this.renderer.cellBufferOffset);
+        }
         // "Receive" packet
         while (this.curr.timestamps[this.i] < this.t) 
             this.protocol.onMessage({ data: this.curr.packets[this.i++] });
@@ -428,7 +415,7 @@ module.exports = class Protocol extends EventEmitter {
 
         const prev = this.renderer.stats.mycells;
         const curr = header.getUint16(0, true);
-        if (!prev && curr) this.renderer.shouldTP = true;
+        if (this.replaying && !prev && curr) this.renderer.shouldTP = true;
         this.renderer.stats.mycells = curr;
         this.renderer.stats.linelocked = header.getUint8(2);
         this.renderer.stats.score = header.getFloat32(3, true);
