@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Ogar69 BRRRRRRRRRRRRRRR">
     <title>OgarX Demo</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.6.10/dist/css/uikit.min.css" />
     <link rel="stylesheet" href="css/index.css">
@@ -14,15 +15,15 @@
     <div id="chat"></div>
     <input id="chat-input" type="text" placeholder="Chat" hidden />
     <div id="settings-bar" class="uk-inline">
+        <span class="settings-icon" uk-tooltip="Clips"   uk-toggle="target: #replay-modal" uk-icon="video-camera"></span>
         <span class="settings-icon" uk-tooltip="Options" uk-toggle="target: #render-menu-offcanvas" uk-icon="settings"></span>
         <span class="settings-icon" uk-tooltip="Hotkeys" uk-toggle="target: #key-menu-offcanvas"><svg height="512" viewBox="0 0 512 512" width="512" xmlns="http://www.w3.org/2000/svg"><g><path d="m482 201h-181.732c17.597-18.112 34.732-44.991 34.732-81 0-35.445 8.214-46.562 15.371-52.287 10.99-8.792 31.231-12.713 65.629-12.713 8.284 0 15-6.716 15-15s-6.716-15-15-15c-42.803 0-67.247 5.588-84.371 19.287-23.602 18.882-26.629 50.381-26.629 75.713 0 46.583-41.523 74.289-52.895 81h-222.105c-16.542 0-30 13.458-30 30v226c0 16.542 13.458 30 30 30h452c16.542 0 30-13.458 30-30v-226c0-16.542-13.458-30-30-30zm0 256h-452v-226h452c.019 231.146.1 226 0 226z"/><path d="m96 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m151 344c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m185 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m265 344c0 8.284 6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15z"/><path d="m376 329h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m431 280c0-8.284-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15z"/><path d="m320 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m240 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m160 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m80 295h16c8.284 0 15-6.716 15-15s-6.716-15-15-15h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15z"/><path d="m432 393h-16c-8.284 0-15 6.716-15 15s6.716 15 15 15h16c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/><path d="m352 393h-192c-8.284 0-15 6.716-15 15s6.716 15 15 15h192c8.284 0 15-6.716 15-15s-6.716-15-15-15z"/></g></svg></span>
-        <span class="settings-icon" uk-tooltip="Clips"   uk-toggle="target: #replay-modal" uk-icon="video-camera"></span>
     </div>
     <div id="key-menu-offcanvas" uk-offcanvas>
         <div id="offcanvas-menu" class="uk-offcanvas-bar">
             <h3 class="uk-center">Hotkeys</h3>
             <div id="keys" class="key-value"></div>
-            <a class="uk-offcanvas-close" type="button" uk-close></a>
+            <a class="uk-offcanvas-close" type="button" href="#" uk-close></a>
         </div>
     </div>
     <div id="skin-menu-offcanvas" uk-offcanvas="flip: true; bg-close: false;">
@@ -30,7 +31,7 @@
             <h3><button id="add-skin">Add Skin</button></h3>
             <div id="skins">
             </div>
-            <a class="uk-offcanvas-close" type="button" uk-close></a>
+            <a class="uk-offcanvas-close" type="button" href="#" uk-close></a>
         </div>
     </div>
     <div id="render-menu-offcanvas" uk-offcanvas>
@@ -53,7 +54,7 @@
                     <span id="render-delay-display" class="uk-overlay uk-position-center">69</span>
                 </div>
             </div>
-            <a class="uk-offcanvas-close" type="button" uk-close></a>
+            <a class="uk-offcanvas-close" type="button" href="#" uk-close></a>
         </div>
     </div>
     <div id="leaderboard" hidden>
@@ -72,7 +73,7 @@
     </div>
     <div id="hud" class="fade-in">
         <div id="skin-tab" class="uk-margin-auto uk-inline-clip uk-transition-toggle" tabindex="0">
-            <img id="skin" src="/static/img/skin.png" />
+            <img id="skin" src="/static/img/skin.png" alt="Skin" />
             <div class="uk-position-cover uk-transition-fade uk-margin-medium-bottom uk-overlay uk-overlay-default uk-padding-remove uk-margin-remove-left uk-margin-remove-right">
                 <input class="uk-inline uk-position-bottom" id="skin-input" type="text" placeholder="Skin" />
             </div>
@@ -125,9 +126,9 @@
     </div>
     <div id="replay-modal" uk-modal="bg-close: false;">
         <div class="uk-modal-dialog uk-modal-body uk-width-4-5 uk-margin-auto-vertical">
-            <a class="uk-modal-close-default" type="button" uk-close></a>
+            <a class="uk-modal-close-default" type="button" href="#" uk-close></a>
             <h3 class="uk-text-center">Clips</h3>
-            <div id="replay-list" class="uk-flex uk-flex-wrap"></div>
+            <div id="replay-list" class="uk-flex uk-flex-wrap uk-text-center"></div>
         </div>
     </div>
     <canvas id="canvas"></canvas>
