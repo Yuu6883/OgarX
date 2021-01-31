@@ -311,6 +311,7 @@ class Renderer {
     }
 
     teleportCamera() {
+        console.log("TELEPORTING CAMERA");
         this.camera.scale = this.target.scale;
         this.camera.position.set(this.target.position);
         this.shouldTP = false;

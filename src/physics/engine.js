@@ -601,6 +601,7 @@ module.exports = class Engine {
                     this.game.controls[cell.type].surviveTime = this.__now - this.game.controls[cell.type].lastSpawnTick;
                     this.game.controls[cell.type].lastSpawnTick = this.__now;
                     this.game.controls[cell.type].dead = true;
+                    this.game.controls[cell.type].score = 0;
                 }
             } else if (cell.popped) {
                 // pop the cell OR split virus

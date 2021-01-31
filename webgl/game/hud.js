@@ -360,16 +360,25 @@ module.exports = class HUD {
         }
     }
 
+    showStats() {
+        this.show(document.getElementById("stats1"));
+        this.show(document.getElementById("stats2"));
+        this.show(document.getElementById("stats3"));
+    }
+
+    hideStats() {
+        this.hide(document.getElementById("stats1"));
+        this.hide(document.getElementById("stats2"));
+        this.hide(document.getElementById("stats3"));
+    }
+
     onConnect(serverName = "Server") {
         this.serverInput.value = this.server;
         this.show(this.playButton);
         this.show(this.spectateButton);
         this.chatElem.innerHTML = "";
         this.onChat(0, null, "Connected");
-
-        this.show(document.getElementById("stats1"));
-        this.show(document.getElementById("stats2"));
-        this.show(document.getElementById("stats3"));
+        this.showStats();
         this.show(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = serverName;
         this.serverAccordion.toggle(0, true);
@@ -385,9 +394,7 @@ module.exports = class HUD {
         this.onError("Disconnected");
         
         this.hide(this.gameoverElem);
-        this.hide(document.getElementById("stats1"));
-        this.hide(document.getElementById("stats2"));
-        this.hide(document.getElementById("stats3"));
+        this.hideStats();
         this.hide(document.getElementById("leaderboard"));
         this.minimap.clear();
         document.getElementById("server-name").innerText = "";

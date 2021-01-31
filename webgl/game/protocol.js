@@ -93,6 +93,9 @@ class ReplaySystem {
     async save() {
         await new Promise(async (resolve, reject) => {
             const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s);
+            // Remove heading snapshot when player is not alive
+            while (!snapshots[0].score) snapshots.shift();
+
             /** @type {ArrayBuffer[]} */
             const buffers = snapshots.reduceRight((prev, curr) => prev.concat(curr.packets), []);
             /** @type {number[]} */
@@ -208,8 +211,6 @@ class ReplaySystem {
         // "Receive" packet
         while (this.curr.timestamps[this.i] < this.t) 
             this.protocol.onMessage({ data: this.curr.packets[this.i++] });
-
-        if (!this.t) this.renderer.teleportCamera();
 
         // Loop
         if (this.i >= this.curr.timestamps.length) {
@@ -350,7 +351,6 @@ module.exports = class Protocol extends EventEmitter {
                 self.postMessage({ event: "connect", server });
                 break;
             case 2:
-                this.renderer.shouldTP = true;
                 this.renderer.clearCells();
                 break;
             case 3:
@@ -420,7 +420,10 @@ module.exports = class Protocol extends EventEmitter {
         const core = this.renderer.core;
         const header = new DataView(buffer, 1, 14);
 
-        this.renderer.stats.mycells = header.getUint8(0);
+        const prev = this.renderer.stats.mycells;
+        const curr = header.getUint8(0);
+        if (!prev && curr) this.renderer.shouldTP = true;
+        this.renderer.stats.mycells = curr;
         this.renderer.stats.linelocked = header.getUint8(1);
         this.renderer.stats.score = header.getFloat32(2, true);
         this.renderer.target.position[0] = header.getFloat32(6, true);
