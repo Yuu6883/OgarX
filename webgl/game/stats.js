@@ -36,4 +36,6 @@ module.exports = class Mouse {
 
     get score() { return Atomics.load(this.buffer, 7); }
     set score(v) { Atomics.store(this.buffer, 7, v); }
+
+    reset() { this.buffer.fill(0); }
 }

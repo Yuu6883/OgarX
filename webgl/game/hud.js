@@ -23,7 +23,7 @@ const scoreToText = s => s > 1000000 ? `${(s / 1000000).toFixed(2)}M` : s > 1000
 module.exports = class HUD {
 
     constructor() {
-
+        /** @type {HTMLCanvasElement} */
         this.canvas = document.getElementById("canvas");
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
@@ -62,6 +62,7 @@ module.exports = class HUD {
                 if (data.event === "error") this.onError(data.message || "");
                 if (data.event === "minimap") this.minimap.onData(data.minimap);
                 if (data.event === "stats") this.onStats(data.kills, data.score, data.surviveTime);
+                if (data.event === "replay") this.onSuccess("Clip Saved");
             }
         } else if (navigator.userAgent.includes("Firefox")) {
             fetch("js/renderer.min.js")
@@ -144,7 +145,7 @@ module.exports = class HUD {
         if (!this.skin) {
             this.skinElem.src = "/static/img/skin.png";
             return;
-        } else console.log(`Loading skin from ${this.skin}`);
+        } // else console.log(`Loading skin from ${this.skin}`);
 
         const img = new Image();
         img.onload = () => {
@@ -166,7 +167,7 @@ module.exports = class HUD {
 
         this.replays = new ReplayMenu(this);
         this.replays.init();
-        
+
         this.minimap = new Minimap(this);
         this.skins = new Skins(this);
         this.skinInput.value = this.skins.current;
@@ -272,6 +273,11 @@ module.exports = class HUD {
         }, 50);
     }
 
+    replay(replay = 0) {
+        this.hide();
+        if (this.worker) this.worker.postMessage({ replay });
+    }
+
     sendChat(chat) {
         if (this.worker) this.worker.postMessage({ chat });
     }
@@ -321,6 +327,10 @@ module.exports = class HUD {
         server = server.trim();
         server == "local" ? this.connectToLocal() : this.connectToURL(
             `${window.location.protocol.replace("http", "ws")}//${server}`);
+    }
+
+    onSuccess(message) {
+        UIkit.notification({ message, status: "success", timeout: 3000 });
     }
 
     onError(message) {

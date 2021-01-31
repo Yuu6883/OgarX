@@ -39,7 +39,15 @@ body {
     transition: fill 0.25s linear, color 0.25s linear;
     cursor: pointer;
 }
-.settings-icon svg:hover {
+.play-icon {
+    border-radius: 50%;
+    background-color: #00000044;
+}
+.play-icon svg {
+    color: rgba(238, 238, 238, 0.5)!important;
+    fill: rgba(238, 238, 238, 0.5)!important;
+}
+.settings-icon svg:hover, .play-icon svg:hover {
     color: rgba(238, 238, 238, 0.9)!important;
     fill: rgba(238, 238, 238, 0.9)!important;
 }
@@ -92,7 +100,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .replay-thumbnail {
     width: 100%;
-    height: 100%;
+    aspect-ratio: 16/9;
     object-fit: cover;
     transition: box-shadow 0.25s linear;
     box-shadow: 0px 0px 2px #93a7e1;
@@ -196,7 +204,7 @@ h1, h2, h3, h4, h5, h6 {
 #stats3 {
     position: absolute;
     top: 10px;
-    left: 120px;
+    left: 160px;
     z-index: 1;
     color: #eee;
     background-color: #00000044;

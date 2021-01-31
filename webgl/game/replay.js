@@ -1,17 +1,29 @@
 const CLIPS_PER_PAGE = 20;
 
-/** @param {Promise<ReplayMeta>} metaPromise */
-const ReplayComponent = (id = "", metaPromise) => {
+/** 
+ * @param {Promise<ReplayMeta>} metaPromise 
+ * @param {(id: number) => void} onPlay
+ */
+const ReplayComponent = (id = "", metaPromise, onPlay) => {
     const div = document.createElement("div");
-    div.classList.add("replay-item", "uk-width-1-5@l", "uk-width-1-3@m", "uk-width-1-2@s");
+    div.classList.add("replay-item", "uk-inline", "uk-width-1-5@l", "uk-width-1-3@m", "uk-width-1-2@s");
     div.setAttribute("replay-id", id);
     metaPromise.then(meta => {
-        const img = document.createElement("img");
+        const img = new Image;
         img.classList.add("replay-thumbnail");
-        img.onload = () => URL.revokeObjectURL(this.url);
-        img.src = URL.createObjectURL(meta.thumbnail);
+        const url = URL.createObjectURL(meta.thumbnail);
+        img.onload = () => URL.revokeObjectURL(url);
+        img.src = url;
         div.appendChild(img);
     });
+    const div2 = document.createElement("div");
+    div2.classList.add("uk-position-center");
+    const a = document.createElement("a");
+    a.classList.add("play-icon");
+    a.setAttribute("uk-icon", "icon: play; ratio: 3;");
+    div.addEventListener("click", () => onPlay(id));
+    div.appendChild(div2);
+    div2.appendChild(a);
     return div;
 }
 
@@ -20,6 +32,7 @@ module.exports = class ReplayMenu {
     /** @param {import("./hud")} hud */
     constructor(hud) {
         this.hud = hud;
+        this.modal = UIkit.modal("#replay-modal");
         this.elem = document.getElementById("replay-list");
         UIkit.util.on("#replay-modal", "beforeshow", () => this.sync());
 
@@ -65,6 +78,7 @@ module.exports = class ReplayMenu {
         if (!this.count) {
             this.elem.innerText = "You don't have any clips";
         } else {
+            this.elem.innerText = "";
             this.keys = await this.getAllKeys();
             const keysToRender = this.keys.slice(this.page * CLIPS_PER_PAGE, (this.page + 1) * CLIPS_PER_PAGE);
             
@@ -79,12 +93,19 @@ module.exports = class ReplayMenu {
             for (const k of keysToRender) {
                 if (!this.components.some(c => c.getAttribute("replay-id") == k)) {
                     const metaPromise = this.getReplayMeta(k);
-                    const comp = ReplayComponent(k, metaPromise);
-                    this.elem.appendChild(comp);
+                    const comp = ReplayComponent(k, metaPromise, this.play.bind(this));
+                    const c = this.components.find(c => ~~c.getAttribute("replay-id") < ~~k);
+                    if (c) this.elem.insertBefore(comp, c);
+                    else this.elem.prepend(comp);
                     this.components.push(comp);
                 }
             }
         }
+    }
+
+    play(id = 0) {
+        this.modal.hide();
+        this.hud.replay(id);
     }
 
     /** @returns {Promise<ReplayMeta>} */
@@ -102,7 +123,7 @@ module.exports = class ReplayMenu {
         return new Promise((resolve, reject) => {
             const objStore = this.db.transaction(["replay-meta"], "readonly").objectStore("replay-meta");
             const req = objStore.getAllKeys();
-            req.onsuccess = _ => resolve(req.result);
+            req.onsuccess = _ => resolve(req.result.reverse());
             req.onerror = reject;
         });
     }

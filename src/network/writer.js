@@ -69,6 +69,10 @@ module.exports = class Writer {
             this.writeUInt16(a.charCodeAt(i));
         this.writeUInt16(0);
     }
+
+    skip(v = 0) {
+        this.offset += v;
+    }
     
     finalize() {
         return BufferPool.buffer.slice(0, this.offset);

@@ -257,6 +257,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onSpawn(controller, bypass = false) {
+        if (this.controller == controller) this.clear();
 
         if (!bypass && !controller.updated) return;
         if (!controller.name && !controller.skin) return;
@@ -267,8 +268,6 @@ module.exports = class OgarXProtocol extends Protocol {
         writer.writeUTF16String(controller.name);
         writer.writeUTF16String(controller.skin);
         this.ws.send(writer.finalize(), true);
-        
-        if (this.controller == controller) this.clear();
     }
 
     /** 

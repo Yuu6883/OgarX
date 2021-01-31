@@ -8,6 +8,7 @@ const State = require("./state");
 const Viewport = require("./viewport");
 const Protocol = require("./protocol");
 const WasmCore = require("./wasm-core");
+const TextureStore = require("./texture-store");
 
 const { makeProgram, pick, getColor } = require("./util");
 const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
@@ -52,12 +53,12 @@ class Renderer {
         /** @type {Map<WebGLProgram, Map<string, WebGLUniformLocation>} */
         this.uniforms = new Map();
 
-        /** @type {Map<number, { skin: WebGLTexture, name: WebGLTexture, name_dim: [width: number, height: number] }>} player textures */
-        this.playerTextures = new Map();
-        this.playerData = new Map([[0, { name: "Server", skin: "" }]]);
+        /** @type {{ skin: string, name: string }[]} */
+        this.playerData = Array.from({ length: 256 });
+        this.playerData[0] = { name: "Server" };
 
-        /** @type {Map<number, [ImageBitmap, ImageBitmap]>} */
-        this.updates = new Map();
+        /** @type {{ id: number, skin?: ImageBitmap, name?: ImageBitmap }[]} */
+        this.updates = [];
         this.stats = new Stats();
         this.mouse = new Mouse();
         this.state = new State();
@@ -72,7 +73,6 @@ class Renderer {
         this.drawMass  = this.drawMass.bind(this);
 
         this.fps = 0;
-
         this.fpsInterval = setInterval(() => {
             this.stats.fps = this.fps;
             this.fps = 0;
@@ -100,17 +100,25 @@ class Renderer {
         return true;
     }
 
-    /** @param {{ id: number, skin: string, name: string }} data */
-    loadPlayerData(data) {
-        if (this.IGNORE_SKIN && data.id <= 250) delete data.skin;
-        this.loader.postMessage(data);
-        this.playerData.set(data.id, { skin: data.skin, name: data.name, skin_dim: this.SKIN_DIM });
+    /** @param {{ id: number, skin: string, name: string, persist: boolean }} arg0 */
+    loadPlayerData({ id, skin, name, persist }) {
+        if (this.IGNORE_SKIN && id <= 250) skin = "";
+
+        const old = this.playerData[id];
+        if (old) {
+            if (this.store.replace(old.name, name)) this.loader.postMessage({ id, name });
+            if (this.store.replace(old.skin, skin)) this.loader.postMessage({ id, skin });
+        } else {
+            if (this.store.add(name, persist)) this.loader.postMessage({ id, name });
+            if (this.store.add(skin, persist)) this.loader.postMessage({ id, skin });
+        }
+        this.playerData[id] = { skin, name };
     }
 
     initLoader() {
         this.loader = new Worker(self.window ? "js/loader.min.js" : "loader.min.js");
-        /** @param {{ data: { id: number, skin: ImageBitmap, name: ImageBitmap }}} e */
-        this.loader.onmessage = e => this.updates.set(e.data.id, [e.data.skin, e.data.name]);
+        /** @param {{ data: { id: number, skin?: ImageBitmap, name?: ImageBitmap }}} e */
+        this.loader.onmessage = e => this.updates.unshift(e.data);
     }
 
     /**
@@ -160,6 +168,7 @@ class Renderer {
         this.cursor = { position: vec3.create() };
         this.target = { position: vec3.create(), scale: 10 };
         this.camera = { position: vec3.create(), scale: 10 };
+        this.shouldTP = false;
         this.proj = mat4.create();
         
         // console.log("Loading bot skins & names");
@@ -193,6 +202,7 @@ class Renderer {
 
         // 8 MB cache for mass text
         this.massBuffer = new Float32Array(new ArrayBuffer(128 * CELL_LIMIT));
+        this.store = new TextureStore(this);
 
         // console.log(`Supported WebGL2 extensions: `, gl.getSupportedExtensions());
         if (!gl.getExtension("EXT_color_buffer_float")) {
@@ -282,11 +292,28 @@ class Renderer {
         gl.useProgram(border_prog);
         gl.uniform4f(this.getUniform(border_prog, "u_color"), c, c, c, 1);
 
-        this.loadPlayerData({ id: 253, name: "virus", skin: "/static/img/virus.png" });
+        this.loadPlayerData({ id: 253, skin: `/static/img/virus-${this.SKIN_DIM}.png`, persist: true });
         this.start();
 
         this.protocol = new Protocol(this);
+        this.protocol.on("close", this.cleanup.bind(this));
+
         await this.protocol.replay.init();
+    }
+
+    cleanup() {
+        if (this.protocol.replaying) return;
+        this.clearCells();
+        this.clearScreen();
+        this.clearPlayerData()
+        this.store.clear();
+        this.stats.reset();
+    }
+
+    teleportCamera() {
+        this.camera.scale = this.target.scale;
+        this.camera.position.set(this.target.position);
+        this.shouldTP = false;
     }
 
     clearCells() {
@@ -294,16 +321,8 @@ class Renderer {
         this.massBuffer.fill(0);
     }
 
-    clearData() {
-        this.playerData = new Map([[0, { name: "Server", skin: "" }]]);
-        // eh no need to worry about none-player cell textures
-        const keys = [...this.playerTextures.keys()].filter(k => k <= 250);
-        for (const k of keys) {
-            const v = this.playerTextures.get(k);
-            if (v.name) this.gl.deleteTexture(v.name);
-            if (v.skin) this.gl.deleteTexture(v.skin);
-            this.playerTextures.delete(k);
-        }
+    clearPlayerData() {
+        for (let i = 1; i <= 250; i++) this.playerData[i] = undefined;
     }
 
     randomPlayer() {
@@ -740,9 +759,9 @@ class Renderer {
                 gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
             }
 
-            const textures = this.playerTextures.get(i) || {};
-            
-            if (this.state.skin || i > 250) gl.bindTexture(gl.TEXTURE_2D, textures.skin || this.empty_texture);
+            const T = this.store.get(this.playerData[i] && this.playerData[i].skin);
+            const use_empty = !(this.state.skin || i > 250) || !T || !T.tex;
+            gl.bindTexture(gl.TEXTURE_2D, use_empty ? this.empty_texture : T.tex);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
@@ -761,22 +780,21 @@ class Renderer {
 
         for (let i = 1; i < CELL_TYPES; i++) {
 
-            if (!this.playerTextures.has(i)) continue;
+            if (!this.playerData[i]) continue;
             let begin = this.nameTypesTable[i - 1];
             let end   = this.nameTypesTable[i];
             if (begin == end) continue;
             if (!end) end = 65536;
 
-            const textures = this.playerTextures.get(i);
-            if (!textures.name || !textures.name_dim) continue;
+            const T = this.store.get(this.playerData[i] && this.playerData[i].name);
+            if (!T || !T.tex) continue;
+            if (this.state.name && i <= 250) gl.bindTexture(gl.TEXTURE_2D, T ? T.tex : this.empty_texture);
 
             const begin_offset = this.nameBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
             const buff = new Float32Array(this.core.buffer, begin_offset, (end - begin) * 3);
 
             gl.uniform4f(this.getUniform(this.peel_prog2, "u_dim"), 
-                textures.name_dim[0], textures.name_dim[1], NAME_SCALE, NAME_Y_OFFSET);
-            
-            gl.bindTexture(gl.TEXTURE_2D, textures.name);
+                T.dim[0] / 512, T.dim[1] / 512, NAME_SCALE, NAME_Y_OFFSET);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
@@ -875,6 +893,7 @@ class Renderer {
 
         this.fps++;
         const delta = now - this.lastTimestamp;
+        this.protocol.replay.update(delta);
         this.lastTimestamp = now;
         
         this.cellTypesTable.fill(0);
@@ -905,7 +924,7 @@ class Renderer {
         //         }
         //     }
         // }
-        this.lerpCamera(delta / this.state.draw, position);
+        this.shouldTP ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw, position);
         this.checkViewport();
 
         if (!this.state.focused) {
@@ -952,7 +971,7 @@ class Renderer {
         this.stats.text  = text_count;
         
         // Background and final prog
-        this.clear();
+        this.clearScreen();
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.bindVertexArray(this.quadVAO);
 
@@ -986,50 +1005,19 @@ class Renderer {
 
     updateTextures() {
         const gl = this.gl;
-        if (this.updates.size) {
+        if (this.updates.length) {
             gl.activeTexture(gl.TEXTURE11);
-            let limit = 0;
-            for (const [id, v] of this.updates.entries()) {
-                this.uploadPlayerTextures(id, v[0], v[1]);
-                this.updates.delete(id);
+            let limit = 2;
+            while (this.updates.length && limit--) {
+                const { id, skin: skin_bitmap, name: name_bitmap } = this.updates.pop();
+                const p = this.playerData[id];
+                if (p) {
+                    this.store.setData(p.skin, skin_bitmap);
+                    this.store.setData(p.name, name_bitmap);
+                }
                 if (++limit > 2) break;
             }
         }
-    }
-
-    /**
-     * @param {WebGLTexture} texture 
-     * @param {ImageBitmap} bitmap 
-     */
-    uploadTexture(texture, bitmap) {
-        const gl = this.gl;
-        if (!bitmap) return;
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        bitmap.close();
-    }
-    
-    /** @param {ImageBitmap} skin_bitmap @param {ImageBitmap} name_bitmap */
-    uploadPlayerTextures(id = 0, skin_bitmap, name_bitmap) {
-        const gl = this.gl;
-        const textures = this.playerTextures.get(id) || {}; 
-            
-        if (textures.skin) gl.deleteTexture(textures.skin);
-        if (textures.name) gl.deleteTexture(textures.name);
-
-        if (skin_bitmap) textures.skin = gl.createTexture();
-        if (name_bitmap) textures.name = gl.createTexture();
-        if (name_bitmap) textures.name_dim = [name_bitmap.width / 512, name_bitmap.height / 512];
-
-        this.uploadTexture(textures.skin, skin_bitmap);
-        this.uploadTexture(textures.name, name_bitmap);
-        this.playerTextures.set(~~id, textures);
     }
 
     /**  @param {WebGLProgram[]} progs @param {(() => void)[]} funcs */
@@ -1090,7 +1078,7 @@ class Renderer {
         return offsetBack;
     }
 
-    clear() {
+    clearScreen() {
         const gl = this.gl;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.clearColor(0, 0, 0, 1);
@@ -1119,6 +1107,7 @@ if (!self.window) {
                 } else p.spawn(e.data.name, e.data.skin);
             }
             if (e.data.chat) p.sendChat(e.data.chat);
+            if (e.data.replay) p.startReplay(e.data.replay);
         });
     
         self.postMessage({ event: "ready" });
