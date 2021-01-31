@@ -414,14 +414,15 @@ module.exports = class Engine {
 
                 for (const cell_id of this.counters[id]) {
                     const cell = this.cells[cell_id];
-                    x += cell.x * cell.r;
-                    y += cell.y * cell.r;
+                    const sqr = cell.r * cell.r;
+                    x += cell.x * sqr;
+                    y += cell.y * sqr;
                     min_x = cell.x < min_x ? cell.x : min_x;
                     max_x = cell.x > max_x ? cell.x : max_x;
                     min_y = cell.y < min_y ? cell.y : min_y;
                     max_y = cell.y > max_y ? cell.y : max_y;
-                    score += cell.r * cell.r / 100;
-                    size += cell.r;
+                    score += sqr * 0.01;
+                    size += sqr;
                 }
 
                 controller.box.l = min_x;

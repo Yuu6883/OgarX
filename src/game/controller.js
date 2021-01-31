@@ -129,4 +129,9 @@ module.exports = class Controller {
             (e.__now <= e.options.PLAYER_SPAWN_DELAY || 
              e.__now >= this.lastSpawnTick + e.options.PLAYER_SPAWN_DELAY);
     }
+
+    requestSpawn() {
+        this.spawn = true;
+        if (this.canSpawn) this.engine.delayKill(this.id, true);
+    }
 }

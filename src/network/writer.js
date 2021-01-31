@@ -1,5 +1,4 @@
-const PoolSize = 1048576;
-const BufferPool = new DataView(new ArrayBuffer(PoolSize));
+const BufferPool = new DataView(new ArrayBuffer(1048576)); // 10 mb
 
 module.exports = class Writer {
     

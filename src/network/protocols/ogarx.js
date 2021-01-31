@@ -90,9 +90,7 @@ module.exports = class OgarXProtocol extends Protocol {
             case 1:
                 controller.name = reader.readUTF16String();
                 controller.skin = reader.readUTF16String();
-                controller.spawn = true;
-                if (controller.canSpawn)
-                    this.game.engine.delayKill(controller.id, true);
+                controller.requestSpawn();
                 break;
             case 2:
                 if (controller.alive) return;
@@ -200,10 +198,11 @@ module.exports = class OgarXProtocol extends Protocol {
         const vx = this.controller.viewportX;
         const vy = this.controller.viewportY;
 
-        // 1 byte OP + 1byte cell count + 1byte linelocked + 4 bytes score +4 bytes vx + 4 bytes vy + 4 * 2 bytes 0 padding = 23 bytes
+        // 1 byte OP + 2 bytes cell count + 1 byte linelocked + 
+        // 4 bytes score + 4 bytes vx + 4 bytes vy + 4 * 2 bytes 0 padding = 24 bytes
         // We don't have to calculate this because serialize returns the write end
         // But this is a good way to verify it wrote as expect
-        const buffer_length = 23 + 10 * A_count + 8 * U_count + 4 * E_count + 2 * D_count;
+        const buffer_length = 24 + 10 * A_count + 8 * U_count + 4 * E_count + 2 * D_count;
         
         const mem_check = AUED_end_ptr + buffer_length - this.memory.buffer.byteLength;
         if (mem_check > 0) {

@@ -110,7 +110,7 @@ unsigned char* serialize(
     // Write OP code
     writeUint8(4);
     // Write cell count and line lock (booleans)
-    writeUint8(cell_count);
+    writeUint16(cell_count);
     writeUint8(line_lock);
     writeFloat32(score);
     // Write viewport floats

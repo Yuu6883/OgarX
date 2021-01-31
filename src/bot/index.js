@@ -39,15 +39,14 @@ module.exports = class Bot extends Handle {
         // this.controller.mouseY = this.controller.viewportY;
 
         // Less than 20% of or spawn mass and 3 second spawn cooldown
-        if (!c.alive || c.score < s * s / 500) {
-            c.spawn = true;
-            this.nextAction = 5;
+        if (!c.alive || c.score < e.options.BOT_SPAWN_SIZE * e.options.BOT_SPAWN_SIZE * 0.002) {
+            c.requestSpawn();
+            this.nextAction = 3;
             // console.log("BOT SPAWN");
         } else {
             let canEjectCount = 0;
-            for (const cell_id of this.myCellIDs) {
+            for (const cell_id of this.myCellIDs)
                 if (cells[cell_id].r > e.options.PLAYER_MIN_EJECT_SIZE) canEjectCount++;
-            }
 
             if (canEjectCount > 3) {
                 c.ejectMarco = true;

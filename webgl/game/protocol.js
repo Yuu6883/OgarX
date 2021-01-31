@@ -1,4 +1,5 @@
 const { EventEmitter } = require("events");
+// const BSON = require("bson/dist/bson.browser.umd");
 const Reader = require("../../src/network/reader");
 const Writer = require("../../src/network/writer");
 const FakeSocket = require("./fake-socket");
@@ -93,11 +94,10 @@ class ReplaySystem {
     async save() {
         await new Promise(async (resolve, reject) => {
             const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s);
-            // Remove heading snapshot when player is not alive
-            while (!snapshots[0].score) snapshots.shift();
 
             /** @type {ArrayBuffer[]} */
             const buffers = snapshots.reduceRight((prev, curr) => prev.concat(curr.packets), []);
+
             /** @type {number[]} */
             let tArray = snapshots.reduceRight((prev, curr) => prev.concat(curr.packetTimestamps), []);
             const minTimestamp = Math.min(...tArray);
@@ -133,7 +133,9 @@ class ReplaySystem {
                 size,
             }, uid);
 
-            dataStore.add({ initial, buffers, timestamps, players }, uid);
+            const toStore = { initial, buffers, timestamps, players };
+            dataStore.add(toStore, uid);
+            // console.log(BSON.deserialize(BSON.serialize(toStore)));
 
             tx.oncomplete = () => {
                 self.postMessage({ event: "replay" });
@@ -164,9 +166,9 @@ class ReplaySystem {
     }
 
     /** @param {ArrayBuffer} packet */
-    recordPacket(packet, time = performance.now()) {
+    recordPacket(packet) {
         this.snapshots[0].packets.push(packet);
-        this.snapshots[0].packetTimestamps.push(time);
+        this.snapshots[0].packetTimestamps.push(performance.now());
     }
 
     /** @param {ReplaySnapshot} snapshot */
@@ -178,13 +180,11 @@ class ReplaySystem {
         snapshot.packetTimestamps = [];
     }
 
-    reset() {
+    resetSnapshots() {
         this.snapshots.forEach(s => this.free(s));
     }
 
     async load(id = 0) {
-        this.renderer.cleanup();
-
         /** @type {{ buffers: ArrayBuffer[], players: ArrayBuffer }} */
         const data = await new Promise((resolve, reject) => {
             const tx = this.db.transaction(["replay-data"], "readonly");
@@ -207,16 +207,19 @@ class ReplaySystem {
         if (!this.curr) return;
         // Overwrite state
         if (!this.t) this.source.set(this.curr.initial);
-
         // "Receive" packet
         while (this.curr.timestamps[this.i] < this.t) 
             this.protocol.onMessage({ data: this.curr.packets[this.i++] });
 
         // Loop
-        if (this.i >= this.curr.timestamps.length) {
-            this.i = 0;
-            this.t = 0;
-        } else this.t += dt;
+        if (this.i >= this.curr.timestamps.length) this.resetTrack();
+        else this.t += dt;
+    }
+
+    resetTrack() {
+        this.i = 0;
+        this.t = 0;
+        this.renderer.shouldTP = true;
     }
 }
 
@@ -240,7 +243,9 @@ module.exports = class Protocol extends EventEmitter {
 
     disconnect() {
         this.connected && this.ws.close();
-        this.replay.curr = null;
+        
+        delete this.replay.curr;
+        this.replay.resetTrack();
     }
 
     connect(urlOrPort, name = "", skin = "") {
@@ -250,6 +255,8 @@ module.exports = class Protocol extends EventEmitter {
         this.ws.binaryType = "arraybuffer";
 
         this.ws.onopen = () => {
+            this.renderer.clearCells();
+
             const writer = new Writer();
             writer.writeUInt8(69);
             writer.writeInt16(420);
@@ -334,9 +341,6 @@ module.exports = class Protocol extends EventEmitter {
         const reader = new Reader(new DataView(e.data));
         const OP = reader.readUInt8();
         this.bandwidth += e.data.byteLength;
-        
-        if (!this.replaying && RecordOPs.includes(OP))
-            this.replay.recordPacket(e.data);
 
         switch (OP) {
             case 1:
@@ -394,18 +398,20 @@ module.exports = class Protocol extends EventEmitter {
                 delete this.ping;
                 break;
         }
+        
+        if (!this.replaying && RecordOPs.includes(OP))
+            this.replay.recordPacket(e.data);
     }
 
     get player() { return this.renderer.playerData[this.pid]; }
 
     /** @param {ArrayBuffer} buffer */
     parsePlayers(buffer) {
-        console.log("Parsing players");
         const reader = new Reader(new DataView(buffer));
         const length = reader.readUInt8();
         for (let i = 0; i < length; i++) {
             const data = { 
-                id: reader.readUInt8(), 
+                id: reader.readUInt8(),
                 name: reader.readUTF16String(), 
                 skin: reader.readUTF16String()
             };
@@ -415,21 +421,21 @@ module.exports = class Protocol extends EventEmitter {
 
     /** @param {ArrayBuffer} buffer */
     parseCellData(buffer) {
-        this.lastPacket = Date.now();
+        this.lastPacket = this.renderer.lastTimestamp;
 
         const core = this.renderer.core;
-        const header = new DataView(buffer, 1, 14);
+        const header = new DataView(buffer, 1, 15);
 
         const prev = this.renderer.stats.mycells;
-        const curr = header.getUint8(0);
+        const curr = header.getUint16(0);
         if (!prev && curr) this.renderer.shouldTP = true;
         this.renderer.stats.mycells = curr;
-        this.renderer.stats.linelocked = header.getUint8(1);
-        this.renderer.stats.score = header.getFloat32(2, true);
-        this.renderer.target.position[0] = header.getFloat32(6, true);
-        this.renderer.target.position[1] = header.getFloat32(10, true);
+        this.renderer.stats.linelocked = header.getUint8(2);
+        this.renderer.stats.score = header.getFloat32(3, true);
+        this.renderer.target.position[0] = header.getFloat32(7, true);
+        this.renderer.target.position[1] = header.getFloat32(11, true);
         
-        core.HEAPU8.set(new Uint8Array(buffer, 15), this.renderer.cellTypesTableOffset);                 
+        core.HEAPU8.set(new Uint8Array(buffer, 16), this.renderer.cellTypesTableOffset);                 
         core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
     }
 
@@ -501,9 +507,8 @@ module.exports = class Protocol extends EventEmitter {
     get replaying() { return !!this.replay.curr; }
 
     async startReplay(id = 0) {
-        this.disconnect();
-        console.log("Loading replay");
+        this.disconnect();  
+        this.renderer.cleanup();      
         await this.replay.load(id);
-        console.log("Replay loaded");
     }
 }

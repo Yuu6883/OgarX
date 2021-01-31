@@ -305,13 +305,12 @@ class Renderer {
         if (this.protocol.replaying) return;
         this.clearCells();
         this.clearScreen();
-        this.clearPlayerData()
+        this.clearPlayerData();
         this.store.clear();
         this.stats.reset();
     }
 
     teleportCamera() {
-        console.log("TELEPORTING CAMERA");
         this.camera.scale = this.target.scale;
         this.camera.position.set(this.target.position);
         this.shouldTP = false;
@@ -900,7 +899,7 @@ class Renderer {
         this.cellTypesTable.fill(0);
         this.nameTypesTable.fill(0);
 
-        const lerp = this.protocol.lastPacket ? (Date.now() - this.protocol.lastPacket) / this.state.draw : 0;
+        const lerp = this.protocol.lastPacket ? (now - this.protocol.lastPacket) / this.state.draw : 0;
 
         const cell_count = this.core.instance.exports.draw_cells(0, 
             this.cellTypesTableOffset, 
