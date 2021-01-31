@@ -100,7 +100,7 @@ void* write_AUED(
 
 // Step 4
 unsigned char* serialize(
-    unsigned char cell_count,
+    unsigned short cell_count,
     unsigned char line_lock,
     float score,
     float vx, float vy,
@@ -109,7 +109,7 @@ unsigned char* serialize(
 
     // Write OP code
     writeUint8(4);
-    // Write cell count and line lock (booleans)
+    // Write cell count and line lock
     writeUint16(cell_count);
     writeUint8(line_lock);
     writeFloat32(score);

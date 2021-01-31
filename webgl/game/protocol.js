@@ -427,7 +427,7 @@ module.exports = class Protocol extends EventEmitter {
         const header = new DataView(buffer, 1, 15);
 
         const prev = this.renderer.stats.mycells;
-        const curr = header.getUint16(0);
+        const curr = header.getUint16(0, true);
         if (!prev && curr) this.renderer.shouldTP = true;
         this.renderer.stats.mycells = curr;
         this.renderer.stats.linelocked = header.getUint8(2);
