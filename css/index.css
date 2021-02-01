@@ -139,6 +139,7 @@ h1, h2, h3, h4, h5, h6 {
     top: 50%;
     transform: translate(-50%, -50%);
     z-index: -1;
+    object-fit: cover;
 }
 #hud, #game-over {
     display: flex;
