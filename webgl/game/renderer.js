@@ -906,8 +906,6 @@ class Renderer {
             this.cellBufferOffset, lerp,
             this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
         
-        let text_count = 0;
-        
         this.updateTarget();
 
         let position = null;
@@ -929,10 +927,10 @@ class Renderer {
 
         if (!this.state.visible) {
             this.updateTextures();
-            // Cap at 10 fps when window not focused
-            if (now - this.lastDraw < 100) return;
+            return;
         }
 
+        let text_count = 0;
         const gl = this.gl;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         this.rellocPeelingBuffers(gl.drawingBufferWidth, gl.drawingBufferHeight);
