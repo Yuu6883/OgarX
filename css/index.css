@@ -34,20 +34,18 @@ body {
     width: 30px;
     height: 30px;
     opacity: 1;
-    color: rgba(238, 238, 238, 0.5)!important;
-    fill: rgba(238, 238, 238, 0.5)!important;
-    transition: fill 0.25s linear, color 0.25s linear;
-    cursor: pointer;
 }
 .play-icon {
     border-radius: 50%;
     background-color: #00000044;
 }
-.play-icon svg {
+.ogarx-icon svg {
     color: rgba(238, 238, 238, 0.5)!important;
     fill: rgba(238, 238, 238, 0.5)!important;
+    transition: fill 0.25s linear, color 0.25s linear;
+    cursor: pointer;
 }
-.settings-icon svg:hover, .play-icon svg:hover {
+.ogarx-icon svg:hover {
     color: rgba(238, 238, 238, 0.9)!important;
     fill: rgba(238, 238, 238, 0.9)!important;
 }
@@ -137,8 +135,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 #canvas {
     position: absolute;
-    top:  0px;
-    left: 0px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     z-index: -1;
 }
 #hud, #game-over {
