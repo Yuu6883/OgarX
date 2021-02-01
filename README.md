@@ -1,4 +1,4 @@
-# <strong> OgarX </strong>
+# <strong> [OgarX](https://ogar69.yuu.dev) </strong>
 This project is an optimized rewrite of [OgarII](https://github.com/Luka967/OgarII). A lot of features from the original project are not implemented (while I focused on other features that serve my interests the best).
 
 ## Disclaimer
