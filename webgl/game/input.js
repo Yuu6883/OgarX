@@ -120,11 +120,9 @@ module.exports = class Keyboard {
     }
 
     blur() {
-        this.hud.state.focused = 0;
     }
 
     focus() {
-        this.hud.state.focused = 1;
         for (const k of this.pressing) this.keyUp(k);
         this.pressing.clear();
     }

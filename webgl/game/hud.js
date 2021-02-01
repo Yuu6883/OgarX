@@ -120,8 +120,10 @@ module.exports = class HUD {
         this.input = new Input(this);
         this.options = new Options(this);
         
-        this.state.focused = 1;
+        this.state.visible = !document.hidden;
 
+        document.addEventListener("visibilitychange", () => this.state.visible = !document.hidden);
+        
         window.addEventListener("keydown", e => this.input.keyDown(e));
         window.addEventListener("keyup", e => this.input.keyUp(e));
         window.addEventListener("blur", _ => this.input.blur());

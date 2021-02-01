@@ -927,7 +927,7 @@ class Renderer {
         this.shouldTP ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw, position);
         this.checkViewport();
 
-        if (!this.state.focused) {
+        if (!this.state.visible) {
             this.updateTextures();
             // Cap at 10 fps when window not focused
             if (now - this.lastDraw < 100) return;

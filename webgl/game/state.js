@@ -31,8 +31,8 @@ module.exports = class State {
     get respawn() { return Atomics.load(this.buffer, 4); }
     set respawn(v) { Atomics.store(this.buffer, 4, v); }
 
-    get focused() { return Atomics.load(this.buffer, 5); }
-    set focused(v) { Atomics.store(this.buffer, 5, v); }
+    get visible() { return Atomics.load(this.buffer, 5); }
+    set visible(v) { Atomics.store(this.buffer, 5, v); }
 
     get lineLock() { return Atomics.load(this.buffer, 6); }
     set lineLock(v) { Atomics.store(this.buffer, 6, v); }
