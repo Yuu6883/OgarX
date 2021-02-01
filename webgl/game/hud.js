@@ -36,7 +36,6 @@ module.exports = class HUD {
         this.server = "";
         
         this.registerEvents();
-        this.resize();
         this.initUIComponents();
         
         if (navigator.userAgent.includes("Chrome")) {
@@ -100,19 +99,18 @@ module.exports = class HUD {
     }
 
     resize() {
-        
-        let w = Math.floor(this.state.resolution * window.devicePixelRatio * window.innerWidth);
-        let h = Math.floor(this.state.resolution * window.devicePixelRatio * window.innerHeight);
+        const w = 1920; //Math.floor(this.state.resolution * window.devicePixelRatio * window.innerWidth);
+        const h = 1080; // Math.floor(this.state.resolution * window.devicePixelRatio * window.innerHeight);
 
         this.viewport.width  = w;
         this.viewport.height = h;
         
-        this.canvas.style.width = window.innerWidth + "px";
-        this.canvas.style.height = window.innerHeight + "px";
+        this.canvas.style.width = w + "px";
+        this.canvas.style.height = h + "px";
     }
 
     registerEvents() {
-        window.onresize = this.resize.bind(this);
+        // window.onresize = this.resize.bind(this);
         this.resize();
 
         document.addEventListener("contextmenu", e => e.preventDefault());
@@ -132,8 +130,8 @@ module.exports = class HUD {
         window.addEventListener("mouseup",   e => this.input.keyUp({ key: `MOUSE ${e.button}`}));
 
         window.addEventListener("mousemove", e => {
-            this.mouse.x = ~~(e.clientX * window.devicePixelRatio * this.state.resolution);
-            this.mouse.y = ~~(e.clientY * window.devicePixelRatio * this.state.resolution);
+            this.mouse.x = ~~(4096 * (2 * e.clientX / window.innerWidth - 1));
+            this.mouse.y = ~~(4096 * (2 * e.clientY / window.innerHeight - 1));
         });
 
         canvas.addEventListener("wheel", e => {

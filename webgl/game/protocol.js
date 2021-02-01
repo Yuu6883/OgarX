@@ -8,6 +8,11 @@ const FakeSocket = require("./fake-socket");
 // const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
 //     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 
+const PREVIEW_WIDTH = 1920 >> 2;
+const PREVIEW_HEIGHT = 1080 >> 2;
+const REPLAY_PREVIEW_FPS = 5;
+const REPLAY_LENGTH = 20;
+
 class ReplaySnapshot {
     constructor(length = 0) {
         this.score = 0;
@@ -18,10 +23,17 @@ class ReplaySnapshot {
         this.packetTimestamps = [];
         /** @type {ArrayBuffer[]} */
         this.packets = [];
+        
+        this.preview = new OffscreenCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+        this.ctx = this.preview.getContext("2d");
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = "high";
+    }
+
+    clearPreview() {
+        this.ctx.clearRect(0, 0, this.preview.width, this.preview.height);
     }
 }
-
-const REPLAY_LENGTH = 10;
 
 class ReplaySystem {
 
@@ -34,32 +46,20 @@ class ReplaySystem {
         this.t = 0;
         this.i = 0;
 
-        this.encoder = new OffscreenCanvas(0, 0);
-        this.encoderCTX = this.encoder.getContext("bitmaprenderer");
-
-        this.thumbnail = new ArrayBuffer(0); // Placeholder
-        this.thumbnailUint8View = new Uint8Array(this.thumbnail);
-        this.thumbnailUint8ClampedView = new Uint8ClampedArray(this.thumbnail);
-
         this.protocol = protocol;
         this.renderer = renderer;
 
         this.source = new Uint8Array(renderer.core.buffer, 0, renderer.cellDataBufferLength);
-        this.snapshots = Array.from({ length }, _ => new ReplaySnapshot(this.source.byteLength));
+        this.snapshots = Array.from({ length: length * REPLAY_PREVIEW_FPS }, _ => new ReplaySnapshot(this.source.byteLength));
+        
+        const pool = this.sharedArrayBuffer = new SharedArrayBuffer(this.snapshots.length * PREVIEW_WIDTH * PREVIEW_HEIGHT * 4);
+        this.previewPool = new Uint8ClampedArray(this.sharedArrayBuffer);
+
+        this.renderer.loader.postMessage({ pool });
     }
 
     async init() {
         this.db = await ReplayDB();
-    }
-
-    resizeBuffer() {
-        if (this.renderer.RGBABytes > this.thumbnail.byteLength) {
-            this.thumbnail = new ArrayBuffer(this.renderer.RGBABytes);
-            this.thumbnailUint8View = new Uint8Array(this.thumbnail);
-            this.thumbnailUint8ClampedView = new Uint8ClampedArray(this.thumbnail);
-            this.thumbnailData = new ImageData(new Uint8ClampedArray(this.thumbnail), 
-                this.renderer.gl.drawingBufferWidth, this.renderer.gl.drawingBufferHeight);
-        }
     }
 
     encodePlayerData() {
@@ -89,48 +89,42 @@ class ReplaySystem {
     }
 
     async save() {
-        const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s);
+        const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s).reverse();
 
         /** @type {ArrayBuffer[]} */
-        const buffers = snapshots.reduceRight((prev, curr) => prev.concat(curr.packets), []);
+        const buffers = snapshots.reduce((prev, curr) => 
+            prev.concat(curr.packets), []).map(b => b.slice());
 
         /** @type {number[]} */
-        let tArray = snapshots.reduceRight((prev, curr) => prev.concat(curr.packetTimestamps), []);
+        let tArray = snapshots.reduce((prev, curr) => prev.concat(curr.packetTimestamps), []);
         const minTimestamp = Math.min(...tArray);
         tArray = tArray.map(t => t - minTimestamp);
-        const packetSizeTotal = buffers.reduce((prev, curr) => prev + curr.byteLength, 0);
         const players = this.encodePlayerData();
 
         const timestamps = new Float32Array(tArray).buffer;
 
-        const initial = this.encodeState(snapshots[snapshots.length - 1].state);
+        const initial = this.encodeState(snapshots[0].state);
 
-        this.encoder.width = this.thumbnailData.width >> 2;
-        this.encoder.height = this.thumbnailData.height >> 2;
-        this.encoderCTX.transferFromImageBitmap(await createImageBitmap(this.thumbnailData, {
-            imageOrientation: "flipY", 
-            resizeWidth: this.encoder.width, 
-            resizeHeight: this.encoder.height,
-            resizeQuality: "high"
-        }));
-        const thumbnail = await this.encoder.convertToBlob({ type: "image/jpeg", quality: 1 });
-        // Bytes to store
-        const size = initial.byteLength + thumbnail.size + players.byteLength +
-            timestamps.byteLength + packetSizeTotal;
+        let index = 0;
 
-        const replay = {
-            meta: { thumbnail, size },
-            data: { initial, buffers, timestamps, players }
-        };
-        this.renderer.loader.postMessage({ replay });
-        self.postMessage({ event: "replay" });
+        // Job takes too long, spread it out to per frame
+        while (index < snapshots.length) {
+            await new Promise(resolve => {
+                const imageData = snapshots[index].ctx.getImageData(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+                // Write the preview backward
+                this.previewPool.set(imageData.data, imageData.data.byteLength * ~~index);
+                index++;
+                requestAnimationFrame(resolve);
+            });
+        }
+
+        const replay = { initial, buffers, timestamps, players, 
+            PREVIEW_WIDTH, PREVIEW_HEIGHT, 
+            REPLAY_PREVIEW_FPS, PREVIEW_LENGTH: snapshots.length };
+        this.renderer.loader.postMessage({ replay }, buffers);
     }
 
     set score(v) {
-        if (v > this.maxScore) {
-            this.resizeBuffer();
-            this.renderer.screenshot(this.thumbnailUint8View);
-        }
         this.snapshots[0].score = Math.max(v, this.snapshots[0].score);
     }
 
@@ -142,7 +136,8 @@ class ReplaySystem {
         this.free(tail);
         this.snapshots.unshift(tail);
         tail.view.set(this.source);
-        
+        tail.clearPreview();
+        tail.ctx.drawImage(this.renderer.canvas, 0, 0, tail.preview.width, tail.preview.height);
         this.score = this.renderer.stats.score;
     }
 
@@ -282,6 +277,9 @@ module.exports = class Protocol extends EventEmitter {
     }
 
     setupIntervals() {
+
+        this.replayInterval = self.setInterval(() => this.replay.recordState(), 1000 / REPLAY_PREVIEW_FPS);
+
         this.pingInterval = self.setInterval(() => {
             this.renderer.stats.bandwidth = this.bandwidth;
             this.bandwidth = 0;
@@ -292,7 +290,6 @@ module.exports = class Protocol extends EventEmitter {
             new Uint8Array(PING)[0] = 69;
             this.send(PING);
             this.ping = Date.now();
-            this.replay.recordState();
         }, 1000);
 
         const state = this.renderer.state;
@@ -386,7 +383,8 @@ module.exports = class Protocol extends EventEmitter {
                 break;
         }
         
-        if (!this.replaying && RecordOPs.includes(OP))
+        if (!this.replaying && RecordOPs.includes(OP) && 
+            (this.renderer.target.position[0] || this.renderer.target.position[1])) // monke check
             this.replay.recordPacket(e.data);
     }
 

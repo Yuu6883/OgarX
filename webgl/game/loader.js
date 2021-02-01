@@ -2,6 +2,7 @@ let loaded = false;
 /** @type {IDBDatabase} */
 let db;
 const ReplayDB = require("./replay-db");
+const GIFEncoder = require("gif-encoder");
 const { serialize } = require("./custom-bson");
 
 (async() => {
@@ -11,6 +12,9 @@ const { serialize } = require("./custom-bson");
     db = await ReplayDB();
     loaded = true;
 })();
+
+/** @type {SharedArrayBuffer} */
+let pool;
 
 onmessage = async evt => {
 
@@ -74,14 +78,49 @@ onmessage = async evt => {
     }
 
     if (data.replay) {
-        const tx = db.transaction(["replay-meta", "replay-data"], "readwrite");
-        const metaStore = tx.objectStore("replay-meta");
-        const dataStore = tx.objectStore("replay-data");
 
         const id = Date.now();
-        metaStore.add(data.replay.meta, id);
-        dataStore.add(serialize(data.replay.data), id);
-        tx.oncomplete = () => self.postMessage({ event: "replay-saved", id });
-        tx.onerror = () => self.postMessage({ event: "replay-failed" });
+
+        const w = data.replay.PREVIEW_WIDTH, h = data.replay.PREVIEW_HEIGHT;
+        const bytes = w * h * 4;
+        const gif = new GIFEncoder(w, h);
+        gif.writeHeader();
+        gif.setDelay(1000 / data.replay.REPLAY_PREVIEW_FPS / 2);
+        gif.setRepeat(0);
+        gif.setQuality(5);
+
+        const buffers = [];
+        gif.on("data", chunk => buffers.push(chunk.buffer));
+        gif.on("end", () => {
+
+            console.log(`GIF took ${((Date.now() - id) / 1000).toFixed(1)} seconds to encode`);
+            const s = serialize(data.replay);
+
+            const thumbnail = new Blob(buffers, { type: "image/gif" });
+            const meta = {
+                thumbnail,
+                size: s.byteLength + thumbnail.size
+            };
+
+            const tx = db.transaction(["replay-meta", "replay-data"], "readwrite");
+            const metaStore = tx.objectStore("replay-meta");
+            const dataStore = tx.objectStore("replay-data");
+
+            metaStore.add(meta, id);
+            dataStore.add(s, id);
+            tx.oncomplete = () => self.postMessage({ event: "replay-saved", id });
+            tx.onerror = () => self.postMessage({ event: "replay-failed" });
+        });
+
+        for (let offset = 0; offset < data.replay.PREVIEW_LENGTH * bytes && 
+                offset < pool.byteLength; offset += bytes)
+            gif.addFrame(new Uint8Array(pool, offset, bytes));
+
+        gif.finish();
+    }
+
+    if (data.pool) {
+        pool = data.pool;
+        console.log(`${(pool.byteLength / 1024 / 1024).toFixed(1)}MB preview buffer allocated for GIF generation`);
     }
 };

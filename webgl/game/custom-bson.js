@@ -1,8 +1,23 @@
 const pako = require("pako");
 const Reader = require("../../src/network/reader");
 
+const isArrayBuffer = b => typeof b == "object" && b.byteLength !== undefined;
+
 /** @param {Object<string, ArrayBuffer|ArrayBuffer[]>} indexedBuffers */
 const serialize = indexedBuffers => {
+
+    // Delete the fields that's not arraybuffer or array of arraybuffer
+    for (const k of Object.keys(indexedBuffers)) {
+        const v = indexedBuffers[k];
+        if ((Array.isArray(v) && v.every(isArrayBuffer)) || 
+            isArrayBuffer(v)) {
+            // console.log(`Keeping key "${k}"`);
+        } else {
+            // console.log(`Deleting key "${k}"`);
+            delete indexedBuffers[k];
+        }
+    }
+
     let length = 0;
     for (const key in indexedBuffers) {
         length += key.length + 1;

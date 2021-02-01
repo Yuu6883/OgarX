@@ -146,10 +146,10 @@ class Renderer {
         });
         if (!gl) return console.error("WebGL2 Not Supported");
 
-        console.log("Loading WASM...");
+        // console.log("Loading WASM...");
         await this.core.load();
 
-        console.log("Loading font");
+        // console.log("Loading font");
         let font = new FontFace("Bree Serif", "url(/static/font/BreeSerif-Regular.ttf)");
         self.fonts && fonts.add(font);
         await font.load();
@@ -183,14 +183,14 @@ class Renderer {
         this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
 
         this.cellDataBufferLength = this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
-        console.log(`Table offset: ${this.cellTypesTableOffset}`);
+        // console.log(`Table offset: ${this.cellTypesTableOffset}`);
         this.cellBufferOffset = this.cellTypesTableOffset + CELL_TYPES * 2; // Offset table
-        console.log(`Render buffers offset: ${this.cellBufferOffset}`);
+        // console.log(`Render buffers offset: ${this.cellBufferOffset}`);
         this.cellBufferEnd = this.cellBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
-        console.log(`Render buffer end ${this.cellBufferEnd}`);
+        // console.log(`Render buffer end ${this.cellBufferEnd}`);
         this.nameBufferOffset = this.cellBufferEnd + CELL_TYPES * 2;
         this.nameBufferEnd = this.nameBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
-        console.log(`Memory allocated: ${this.core.buffer.byteLength} bytes`);
+        console.log(`${(this.core.buffer.byteLength / 1024 / 1024).toFixed(1)}MB allocated for renderer WebAssembly`);
         
         this.cellTypesTable = new Uint16Array(this.core.buffer, this.cellTypesTableOffset, CELL_TYPES); 
         this.nameTypesTable = new Uint16Array(this.core.buffer, this.cellBufferEnd, CELL_TYPES);
@@ -306,6 +306,7 @@ class Renderer {
         this.clearCells();
         this.clearScreen();
         this.clearPlayerData();
+        this.target.position.fill(0);
         this.store.clear();
         this.stats.reset();
     }
@@ -359,14 +360,6 @@ class Renderer {
             view.setFloat32(32 + o, y, true);  // netY
             view.setFloat32(36 + o, size, true); // netSize
         }
-    }
-
-    get RGBABytes() { return this.gl.drawingBufferWidth * this.gl.drawingBufferHeight * 4; }
-
-    /** @param {Uint8Array} pixels */
-    screenshot(pixels) {
-        const gl = this.gl;
-        gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     }
 
     /** @param {string} name */
@@ -578,10 +571,10 @@ class Renderer {
         const circle_texture = gl.createTexture();
         gl.activeTexture(gl.TEXTURE10);
         gl.bindTexture(gl.TEXTURE_2D, circle_texture);
-        // Generating circle
+        // Generate circle
         {
             const CIRCLE_RADIUS = this.state.circle_radius;
-            console.log(`Generating ${CIRCLE_RADIUS << 1}x${CIRCLE_RADIUS << 1} circle texture`);
+            // console.log(`Generating ${CIRCLE_RADIUS << 1}x${CIRCLE_RADIUS << 1} circle texture`);
             const temp = self.window ? document.createElement("canvas") : new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
             if (self.window) temp.width = temp.height = CIRCLE_RADIUS << 1;
             const temp_ctx = temp.getContext("2d");
@@ -599,7 +592,7 @@ class Renderer {
     }
 
     generateMassTextures() {
-        console.log("Generating mass characters");
+        // console.log("Generating mass characters");
 
         const gl = this.gl;
         // Create mass texture on texture 13
@@ -698,10 +691,7 @@ class Renderer {
 
     updateTarget() {
         // Screen space to world space
-        this.screenToWorld(this.cursor.position,
-            this.mouse.x / this.viewport.width  * 2 - 1, 
-            this.mouse.y / this.viewport.height * 2 - 1);
-
+        this.screenToWorld(this.cursor.position, this.mouse.x / 4096, this.mouse.y / 4096);
         const scroll = this.mouse.resetScroll();
         this.target.scale *= (1 + scroll / 1000);
         this.target.scale = Math.min(Math.max(this.target.scale, 0.01), 10000);

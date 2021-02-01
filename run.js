@@ -51,7 +51,7 @@ pm2.connect(err => {
             if (e) console.error(e);
             else  console.log(`PM2 Process "${proc.name}" ` +
                 `(${proc.env.OGARX_MODE}-${proc.env.OGARX_SERVER}) mounted on ` +
-                `:${proc.env.OGARX_PORT || 443}${proc.env.OGARX_ENDPOINT || "/"}`);
+                `:${proc.env.OGARX_PORT || 443}/${proc.env.OGARX_ENDPOINT}`);
             res();
         });
     }));
