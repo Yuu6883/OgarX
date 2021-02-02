@@ -2,55 +2,6 @@ const { saveAs } = require("file-saver");
 const ReplayDB = require("./replay-db");
 const CLIPS_PER_PAGE = 20;
 
-/** 
- * @param {Promise<ReplayMeta>} metaPromise 
- * @param {(id: number) => void} onPlay
- * @param {(id: number) => Promise<Blob>} downloadReplay
- * @param {(id: number) => Promise<void>} deleteReplay
- */
-const ReplayComponent = (id = 0, metaPromise, onPlay, downloadReplay, deleteReplay) => {
-    const div = document.createElement("div");
-    div.classList.add("replay-item", "uk-inline", "uk-width-1-5@l", "uk-width-1-3@m", "uk-width-1-2@s");
-    div.setAttribute("replay-id", id);
-    metaPromise.then(meta => {
-        const img = new Image;
-        img.classList.add("replay-thumbnail");
-        const url = URL.createObjectURL(meta.thumbnail);
-        img.onload = () => URL.revokeObjectURL(url);
-        img.src = url;
-        div.appendChild(img);
-    });
-    const div2 = document.createElement("div");
-    div2.classList.add("uk-position-center");
-    const a = document.createElement("a");
-    const download = document.createElement("a");
-    download.classList.add("uk-position-small", "uk-position-bottom-left", "ogarx-icon");
-    download.setAttribute("uk-icon", "icon: download; ratio: 1.5");
-    download.addEventListener("click", async e => {
-        e.stopPropagation();
-        const replayGIF = await downloadReplay(id);
-        saveAs(replayGIF, `${id}.gif`);
-    });
-
-    const trash = document.createElement("a");
-    trash.classList.add("uk-position-small", "uk-position-bottom-right", "ogarx-icon");
-    trash.setAttribute("uk-icon", "icon: trash; ratio: 1.5");
-    trash.addEventListener("click", async e => {
-        e.stopPropagation();
-        deleteReplay(id);
-    });
-
-    a.classList.add("play-icon", "ogarx-icon");
-    a.setAttribute("uk-icon", "icon: play; ratio: 3;");
-    div.addEventListener("click", () => onPlay(id));
-
-    div.appendChild(download);
-    div.appendChild(trash);
-    div.appendChild(div2);
-    div2.appendChild(a);
-    return div;
-}
-
 module.exports = class ReplayMenu {
 
     /** @param {import("./hud")} hud */
@@ -152,14 +103,9 @@ module.exports = class ReplayMenu {
 
             for (const k of keysToRender) {
                 if (!this.components.some(c => c.getAttribute("replay-id") == k)) {
-                    const metaPromise = this.getReplayMeta(k);
-                    const comp = ReplayComponent(k, metaPromise, 
-                        this.play.bind(this), this.download.bind(this), this.delete.bind(this));
+                    const comp = this.createReplayComponent(k);
                     const c = this.components.find(c => ~~c.getAttribute("replay-id") < ~~k);
-                    if (c) {
-                        console.log(comp, c);
-                        this.elem.insertBefore(comp, c);
-                    } else this.elem.prepend(comp);
+                    c ? this.elem.insertBefore(comp, c) : this.elem.prepend(comp);
                     this.components.push(comp);
                 }
             }
@@ -171,9 +117,9 @@ module.exports = class ReplayMenu {
         this.hud.replay(id);
     }
 
-    async download(id = 0) {
+    async fetch(id = 0, type = "image/gif") {
         const [meta, data] = await Promise.all([this.getReplayMeta(id), this.getReplayData(id)]);
-        return new Blob([meta.thumbnail, data, new Uint32Array([data.byteLength]).buffer], { type: "image/gif" });
+        return new Blob([meta.thumbnail, data, new Uint32Array([data.byteLength]).buffer], { type });
     }
 
     async delete(id = 0) {
@@ -188,6 +134,13 @@ module.exports = class ReplayMenu {
         });
 
         this.sync();
+    }
+
+    async copy(id = 0) {
+        const replayGIF = await this.download(id);
+        const clipboardItemInput = new ClipboardItem({ 'image/gif' : replayGIF });
+        await navigator.clipboard.write([clipboardItemInput]);
+        this.hud.onSuccess("Clip copied to clipboard");
     }
 
     /** @returns {Promise<ReplayMeta>} */
@@ -228,6 +181,70 @@ module.exports = class ReplayMenu {
             req.onsuccess = _ => resolve(req.result);
             req.onerror = reject;
         });
+    }
+    
+    createReplayComponent(id = 0) {
+        const div = document.createElement("div");
+        div.classList.add("replay-item", "uk-inline", "uk-width-1-5@l", "uk-width-1-3@m", "uk-width-1-2@s");
+        div.setAttribute("replay-id", id);
+
+        this.getReplayMeta(id).then(meta => {
+            const img = new Image;
+            img.classList.add("replay-thumbnail");
+            const url = URL.createObjectURL(meta.thumbnail);
+            img.onload = () => URL.revokeObjectURL(url);
+            img.src = url;
+            div.appendChild(img);
+        });
+
+        const div2 = document.createElement("div");
+        div2.classList.add("uk-position-center");
+        const a = document.createElement("a");
+
+        const trash = document.createElement("a");
+        trash.classList.add("uk-position-small", "uk-position-bottom-right", "ogarx-icon");
+        trash.setAttribute("uk-icon", "icon: trash; ratio: 1.5");
+        trash.setAttribute("uk-tooltip", "Delete Clip");
+        trash.addEventListener("click", e => {
+            e.stopPropagation();
+            this.delete(id)
+                .then(() => this.hud.onSuccess("Clip Deleted"));
+        });
+        
+        const download = document.createElement("a");
+        download.classList.add("uk-position-small", "uk-position-bottom-left", "ogarx-icon");
+        download.setAttribute("uk-icon", "icon: download; ratio: 1.5");
+        download.setAttribute("uk-tooltip", "Download Clip");
+        download.addEventListener("click", e => {
+            e.stopPropagation();
+            this.fetch(id)
+                .then(blob => saveAs(blob, `ogarx-${id}.gif`))
+                .then(() => this.hud.onSuccess("Downloading Clip"));
+        });
+
+        const copy = document.createElement("a");
+        copy.classList.add("uk-position-small", "uk-position-top-right", "ogarx-icon");
+        copy.setAttribute("uk-icon", "icon: copy; ratio: 1.5");
+        copy.setAttribute("uk-tooltip", "Copy To Clipboard");
+        copy.addEventListener("click", e => {
+            e.stopPropagation();
+            this.fetch(id)
+                .then(blob => {
+                    navigator.clipboard.write([new ClipboardItem({ [blob.type] : blob })]);
+                    this.hud.onSuccess("Clip Copied");
+                });
+        });
+
+        a.classList.add("play-icon", "ogarx-icon");
+        a.setAttribute("uk-icon", "icon: play; ratio: 3;");
+        div.addEventListener("click", () => this.play(id));
+
+        div.appendChild(download);
+        div.appendChild(trash);
+        // div.appendChild(copy); // Browser doesn't allow copying gif to clipboard bruh
+        div.appendChild(div2);
+        div2.appendChild(a);
+        return div;
     }
 }
 
