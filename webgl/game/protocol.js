@@ -136,9 +136,16 @@ class ReplaySystem {
         this.free(tail);
         this.snapshots.unshift(tail);
         tail.view.set(this.source);
-        tail.clearPreview();
-        tail.ctx.drawImage(this.renderer.canvas, 0, 0, tail.preview.width, tail.preview.height);
         this.score = this.renderer.stats.score;
+        this.requestPreview = true;
+    }
+
+    savePreview() {
+        if (!this.requestPreview) return;
+        this.requestPreview = false;
+        const s = this.snapshots[0];
+        s.clearPreview();
+        s.ctx.drawImage(this.renderer.canvas, 0, 0, s.preview.width, s.preview.height);
     }
 
     /** @param {ArrayBuffer} packet */

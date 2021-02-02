@@ -915,7 +915,7 @@ class Renderer {
         this.shouldTP ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw, position);
         this.checkViewport();
 
-        if (!this.state.visible) {
+        if (!this.state.visible && !this.protocol.replay.requestPreview) {
             this.updateTextures();
             return;
         }
@@ -986,6 +986,8 @@ class Renderer {
         // gl.bindVertexArray(vao);
         // gl.drawArrays(gl.TRIANGLES, 0, 6);
         // this.stop();
+
+        this.protocol.replay.savePreview();
         
         this.updateTextures();
         this.lastDraw = now;
