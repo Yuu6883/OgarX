@@ -48,7 +48,7 @@ module.exports = class Controller {
 
     set name(v) {
         if (v != this.__name) {
-            this.__name = v;
+            this.__name = v.slice(0, this.engine.options.PLAYER_NAME_MAX_LENGTH);
             this.updated = true;
         }
     }
