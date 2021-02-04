@@ -148,9 +148,7 @@ module.exports = class HUD {
         } // else console.log(`Loading skin from ${this.skin}`);
 
         const img = new Image();
-        img.onload = () => {
-            this.skins.current = this.skinElem.src = this.skin;
-        }
+        img.onload = () => this.skins.current = this.skinElem.src = this.skin;
         ignoreError || (img.onerror = () => {
             this.onError(`Failed to load skin "${this.skin}"`);
             this.skinElem.src = "/static/img/skin.png";
@@ -219,35 +217,48 @@ module.exports = class HUD {
 
         this.lbElem = document.getElementById("leaderboard-data");
 
+        const gateways = [...document.querySelectorAll('[gateway]').values()]
+            .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
+
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
-            const localButton1 = document.createElement("p");
-            localButton1.classList.add("servers");
-            localButton1.setAttribute("server", "localhost:3000/mega");
-            localButton1.innerText = "Dev Mega";
-            document.getElementById("local-list").append(localButton1);
-
-            const localButton2 = document.createElement("p");
-            localButton2.classList.add("servers");
-            localButton2.setAttribute("server", "localhost:3001/covid");
-            localButton2.innerText = "Dev Covid";
-            document.getElementById("local-list").append(localButton2);
-            
-            const localButton3 = document.createElement("p");
-            localButton3.classList.add("servers");
-            localButton3.setAttribute("server", "localhost:3002/omega");
-            localButton3.innerText = "Dev Omega";
-            document.getElementById("local-list").append(localButton3);
-
+            gateways.push({ list: document.querySelector("[region='Local']"), gateway: "localhost:6969" });
             window.hud = this;
         }
 
-        document.querySelectorAll(".servers").forEach(e => {
-            e.addEventListener("click", () => {
-                this.server = e.textContent;
-                const server = e.attributes.getNamedItem("server").value;
-                this.connect(server);
-            });
-        });
+        /** @type {Map<string, HTMLElement>} */
+        const servers = new Map();
+
+        for (const { list, gateway } of gateways) {
+            const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
+            source.onmessage = event => {
+                /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[], time: number }} */
+                const data = JSON.parse(event.data);
+                for (const server of data.servers) {
+                    let elem = servers.get(server.uid);
+                    if (!elem) {
+                        `<p class="servers" server="na.ogar69.yuu.dev:3001">Mega</p>`
+                        elem = document.createElement("p");
+                        elem.innerHTML = `<span></span><span></span>`;
+                        list.appendChild(elem);
+                        servers.set(server.uid, elem);
+                    }
+                }
+                for (const [k, v] of [...servers.entries()]) {
+                    if (!data.servers.some(s => s.uid == k)) {
+                        servers.delete(k);
+                        v.remove();
+                    }
+                }
+            }
+        }
+
+        // document.querySelectorAll(".servers").forEach(e => {
+        //     e.addEventListener("click", () => {
+        //         this.server = `${e.parentElement.getAttribute("region")} ${e.textContent}`;
+        //         const server = e.attributes.getNamedItem("server").value;
+        //         this.connect(server);
+        //     });
+        // });
 
         this.gameoverElem = document.getElementById("game-over");
         this.respawnSpinner = document.getElementById("respawn-spinner");

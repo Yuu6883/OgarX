@@ -71,7 +71,7 @@ let token = process.env.OGARX_TOKEN;
             res.end();
         }
     })
-    .get("/restart", (res, req) => {
+    .get("/restart/:token", (res, req) => {
         const authorization = req.getParameter(0);
         if (token) {
             if (token == authorization) {

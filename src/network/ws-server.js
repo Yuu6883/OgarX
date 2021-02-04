@@ -131,7 +131,7 @@ module.exports = class SocketServer {
                         `${token ? "WITH" : "WITHOUT"} token`);
                     resolve(true);
                 } else {
-                    console.error(`WS-Server failed to open on :${port}/${endpoint}` +
+                    console.error(`WS-Server failed to open on :${port}/${endpoint} ` +
                         `${token ? "WITH" : "WITHOUT"} token`);
                     resolve(false);
                 }
