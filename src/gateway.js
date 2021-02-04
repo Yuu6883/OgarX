@@ -33,7 +33,7 @@ const connections = new Set();
 
 const interval = setInterval(() => {
     for (const res of connections)
-        res.write("data: " + JSON.stringify([...sockets].map(s => s.data)) + "\n\n");
+        res.write("data: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n");
 }, 500);
 
 (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App())
