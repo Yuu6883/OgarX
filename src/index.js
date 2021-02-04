@@ -38,6 +38,6 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
 
     setInterval(() => {
         if (engine.usage > 0.8)
-            console.log(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
+            console.warn(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
     }, 1000);
 })();

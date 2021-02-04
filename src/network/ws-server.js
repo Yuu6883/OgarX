@@ -1,5 +1,11 @@
+const net = require("net");
+const path = require("path");
 const { execSync } = require("child_process");
 const uWS = require("uWebSockets.js");
+const crypto = require("crypto");
+
+const pipename = str => process.platform == "win32" ? `\\\\.\\pipe\\${str.replace(/^\//, "").replace(/\//g, "-")}` : str;
+const SOCKET_FILE = path.resolve(__dirname, "..", "unix.sock");
 
 const Protocols = require("./protocols");
 const Game = require("../game");
@@ -17,6 +23,7 @@ const bufferToString = buffer => {
 module.exports = class SocketServer {
 
     constructor(name) {
+        this.uid = crypto.randomBytes(12).toString("hex");
         this.modes = require("../modes");
         this.game = new Game(name);
     }
@@ -30,6 +37,19 @@ module.exports = class SocketServer {
         }
     }
 
+    ipcConnect() {
+        if (this.ipcClient) return;
+        this.ipcClient = net.connect(pipename(SOCKET_FILE))
+            .on("error", this.ipcReconnect.bind(this))
+            .on("close", this.ipcReconnect.bind(this));
+    }
+
+    ipcReconnect() {
+        delete this.ipcClient;
+        console.log("Reconnecting to Gateway");
+        setTimeout(() => this.ipcConnect(), 5000);
+    }
+
     /** 
      * @param {Object} arg0
      * @param {uWS.AppOptions} arg0.sslOptions
@@ -38,9 +58,27 @@ module.exports = class SocketServer {
      * @param {string} [arg0.endpoint=""]
      * @return {Promise<boolean>}
      */
-    open({ sslOptions, port = 443, endpoint = "", token = "" }) {
+    open({ sslOptions, port = 3000, endpoint = "", token = "" }) {
         if (this.listening || this.sock) return false;
         this.listening = true;
+
+        this.ipcConnect();
+
+        const g = this.game;
+        this.ipcInterval = setInterval(() => {
+            try {
+                this.ipcClient.write(JSON.stringify({
+                    uid: this.uid,
+                    name: g.name,
+                    endpoint: `${port}/${endpoint}`,
+                    bot: g.engine.bots.length,
+                    players: g.handles - g.engine.bots.length,
+                    total: 250, // Number in theory
+                    load: g.engine.usage
+                }));
+            } catch (_) { }
+        }, 1000);
+
         return new Promise(resolve => {
             (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App()).ws(`/${endpoint}`, {
                 idleTimeout: 10,
@@ -106,7 +144,7 @@ module.exports = class SocketServer {
                     res.end();
                 }
             })
-            .get("/*", (res, req) => res.end("Hello OGARX!!"))
+            .get("/*", (res, _) => res.end("Hello OGARX"))
             .listen("0.0.0.0", port, sock => {
                 this.listening = false;
                 if (sock) {
@@ -126,6 +164,8 @@ module.exports = class SocketServer {
     close() {
         this.sock && uWS.us_listen_socket_close(this.sock);
         this.sock = null;
+        clearInterval(this.ipcInterval);
+        try { this.ipcClient.destroy(); } catch (e) {}
         console.log(`Server closed`);
     }
 }

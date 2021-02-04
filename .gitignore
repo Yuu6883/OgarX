@@ -12,3 +12,5 @@ debug.log*
 public/client/js/*
 
 ssl/*
+
+*.sock*

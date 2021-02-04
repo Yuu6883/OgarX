@@ -28,6 +28,8 @@ if (!fs.existsSync("config.json")) {
 
 const validateMode = mode => fs.existsSync(path.resolve(__dirname, "src", "modes", `${mode}.js`));
 
+const { GATEWAY_PORT, GATEWAY_ORIGIN } = process.env;
+
 /** @type {pm2.StartOptions[]} */
 const procToStart = [];
 
@@ -55,5 +57,15 @@ pm2.connect(err => {
             res();
         });
     }));
+    tasks.push(new Promise(res => pm2.start({
+            name: "Gateway",
+            cwd: __dirname,
+            script: "./src/gateway.js",
+            env: { GATEWAY_PORT, GATEWAY_ORIGIN }
+        }, e => {
+            if (e) console.error(e);
+            else console.log("Gateway Process started");
+            res();
+        })));
     Promise.all(tasks).then(() => process.exit(0));
 });
