@@ -1,4 +1,6 @@
 const { existsSync, unlinkSync } = require("fs");
+const { execSync } = require("child_process");
+
 const net = require("net");
 const path = require("path");
 const uWS = require("uWebSockets.js");
@@ -36,6 +38,8 @@ const interval = setInterval(() => {
         res.write("data: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n");
 }, 500);
 
+let token = process.env.OGARX_TOKEN;
+
 (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App())
     .get(`/gateway`, (res, _) => {
         res.writeStatus("200 OK");
@@ -45,6 +49,27 @@ const interval = setInterval(() => {
         res.onAborted(() => connections.delete(res));
         connections.add(res);
     })
+    .get("/update/:token", (res, req) => {
+        const authorization = req.getParameter(0);
+        if (token) {
+            if (token == authorization) {
+                const result = execSync("git pull origin master", 
+                    { stdio: ['ignore', 'pipe', 'ignore'] }).toString("utf-8");
+                if (result == "Already up to date.\n") {
+                    res.end("Already updated");
+                } else {
+                    res.end(result);
+                }
+            } else {
+                res.writeStatus("401 Unauthorized");
+                res.end();
+            }
+        } else {
+            res.writeStatus("302");
+            res.writeHeader("location", "/");
+            res.end();
+        }
+    })
     .listen("0.0.0.0", port, sock => {
         process.on("SIGINT", () => {
             server.close();
@@ -52,5 +77,6 @@ const interval = setInterval(() => {
             clearInterval(interval);
             process.exit(0);
         });
-        console.log((sock ? "Gateway Server listening" : "Gateway Server failed to listen") + ` on port ${port}`);
+        console.log((sock ? "Gateway Server listening" : "Gateway Server failed to listen") + 
+            ` on port ${port} ` + token ? "WITH token" : "WITHOUT token");
     });

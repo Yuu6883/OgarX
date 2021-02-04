@@ -1,6 +1,5 @@
 const net = require("net");
 const path = require("path");
-const { execSync } = require("child_process");
 const uWS = require("uWebSockets.js");
 const crypto = require("crypto");
 
@@ -106,27 +105,6 @@ module.exports = class SocketServer {
                 },
                 drain: ws => ws.p && ws.p.onDrain(),
                 close: (ws, code, message) => ws.p.off()
-            })
-            .get("/update/:token", (res, req) => {
-                const authorization = req.getParameter(0);
-                if (token) {
-                    if (token == authorization) {
-                        const result = execSync("git pull origin master", 
-                            { stdio: ['ignore', 'pipe', 'ignore'] }).toString("utf-8");
-                        if (result == "Already up to date.\n") {
-                            res.end("Already updated");
-                        } else {
-                            res.end(result);
-                        }
-                    } else {
-                        res.writeStatus("401 Unauthorized");
-                        res.end();
-                    }
-                } else {
-                    res.writeStatus("302");
-                    res.writeHeader("location", "/");
-                    res.end();
-                }
             })
             .get("/restart/:token", (res, req) => {
                 const authorization = req.getParameter(0);
