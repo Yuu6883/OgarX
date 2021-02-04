@@ -87,6 +87,7 @@ let token = process.env.OGARX_TOKEN;
             res.end();
         }
     })
+    .get("/*", (res, _) => res.end("Hello OGARX Gateway"))
     .listen("0.0.0.0", port, sock => {
         process.on("SIGINT", () => {
             server.close();

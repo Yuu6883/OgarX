@@ -122,7 +122,7 @@ module.exports = class SocketServer {
                     res.end();
                 }
             })
-            .get("/*", (res, _) => res.end("Hello OGARX"))
+            .get("/*", (res, _) => res.end(`Hello OGARX ${this.game.name}`))
             .listen("0.0.0.0", port, sock => {
                 this.listening = false;
                 if (sock) {
