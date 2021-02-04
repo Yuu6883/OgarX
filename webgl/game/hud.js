@@ -225,10 +225,10 @@ module.exports = class HUD {
             window.hud = this;
         }
 
-        /** @type {Map<string, HTMLElement>} */
-        const servers = new Map();
-
         for (const { list, gateway } of gateways) {
+            /** @type {Map<string, HTMLElement>} */
+            const servers = new Map();
+
             const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
             source.onmessage = event => {
                 /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[], time: number }} */
@@ -236,11 +236,20 @@ module.exports = class HUD {
                 for (const server of data.servers) {
                     let elem = servers.get(server.uid);
                     if (!elem) {
-                        `<p class="servers" server="na.ogar69.yuu.dev:3001">Mega</p>`
                         elem = document.createElement("p");
-                        elem.innerHTML = `<span></span><span></span>`;
+                        elem.classList.add("servers");
+                        elem.innerHTML = `<span>${server.name}</span><span style="float: right" uk-tooltip="${server.bot} bots">${server.players}/${server.total}</span>`;
                         list.appendChild(elem);
                         servers.set(server.uid, elem);
+
+                        elem.addEventListener("click", () => {
+                            this.server = `${list.getAttribute("region")} ${server.name}`;
+                            this.connect(`${gateway}:${server.endpoint}`);
+                        });
+                    } else {
+                        elem.children[0].textContent = server.name;
+                        elem.children[1].setAttribute("uk-tooltip", `${server.bot} bots`);
+                        elem.children[1].textContent = `${server.players}/${server.total}`;
                     }
                 }
                 for (const [k, v] of [...servers.entries()]) {
@@ -251,14 +260,6 @@ module.exports = class HUD {
                 }
             }
         }
-
-        // document.querySelectorAll(".servers").forEach(e => {
-        //     e.addEventListener("click", () => {
-        //         this.server = `${e.parentElement.getAttribute("region")} ${e.textContent}`;
-        //         const server = e.attributes.getNamedItem("server").value;
-        //         this.connect(server);
-        //     });
-        // });
 
         this.gameoverElem = document.getElementById("game-over");
         this.respawnSpinner = document.getElementById("respawn-spinner");
