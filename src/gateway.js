@@ -1,3 +1,4 @@
+const pm2 = require("pm2");
 const { existsSync, unlinkSync } = require("fs");
 const { execSync } = require("child_process");
 
@@ -60,6 +61,22 @@ let token = process.env.OGARX_TOKEN;
                 } else {
                     res.end(result);
                 }
+            } else {
+                res.writeStatus("401 Unauthorized");
+                res.end();
+            }
+        } else {
+            res.writeStatus("302");
+            res.writeHeader("location", "/");
+            res.end();
+        }
+    })
+    .get("/restart", (res, req) => {
+        const authorization = req.getParameter(0);
+        if (token) {
+            if (token == authorization) {
+                res.end("Restarting all processes");
+                setTimeout(() => pm2.restart("all"), 1000);
             } else {
                 res.writeStatus("401 Unauthorized");
                 res.end();
