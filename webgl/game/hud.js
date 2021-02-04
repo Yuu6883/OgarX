@@ -206,13 +206,12 @@ module.exports = class HUD {
         this.chatElem.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
 
         this.serverInput.value = "Select Server";
-        this.serverInput.addEventListener("click", () => this.serverAccordion.toggle(0, true));
         
         this.nameInput.value = localStorage.getItem("ogarx-name") || "";
 
         this.nameInput.autocomplete = Math.random();
         this.skinInput.autocomplete = Math.random();
-        this.serverAccordion = UIkit.accordion("#server-accordion");
+        this.serverTab = UIkit.offcanvas("#server-menu-offcanvas");
 
         this.updateSkin(true);
 
@@ -221,23 +220,23 @@ module.exports = class HUD {
         this.lbElem = document.getElementById("leaderboard-data");
 
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
-            const localButton1 = document.createElement("button");
-            localButton1.classList.add("servers", "uk-inline");
+            const localButton1 = document.createElement("p");
+            localButton1.classList.add("servers");
             localButton1.setAttribute("server", "localhost:3000/mega");
             localButton1.innerText = "Dev Mega";
-            document.getElementById("server-list").append(localButton1);
+            document.getElementById("local-list").append(localButton1);
 
-            const localButton2 = document.createElement("button");
-            localButton2.classList.add("servers", "uk-inline");
+            const localButton2 = document.createElement("p");
+            localButton2.classList.add("servers");
             localButton2.setAttribute("server", "localhost:3001/covid");
             localButton2.innerText = "Dev Covid";
-            document.getElementById("server-list").append(localButton2);
+            document.getElementById("local-list").append(localButton2);
             
-            const localButton3 = document.createElement("button");
-            localButton3.classList.add("servers", "uk-inline");
+            const localButton3 = document.createElement("p");
+            localButton3.classList.add("servers");
             localButton3.setAttribute("server", "localhost:3002/omega");
             localButton3.innerText = "Dev Omega";
-            document.getElementById("server-list").append(localButton3);
+            document.getElementById("local-list").append(localButton3);
 
             window.hud = this;
         }
@@ -381,7 +380,7 @@ module.exports = class HUD {
         this.showStats();
         this.show(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = serverName;
-        this.serverAccordion.toggle(0, true);
+        this.serverTab.hide();
     }
 
     onDisconnect() {
@@ -398,7 +397,7 @@ module.exports = class HUD {
         this.hide(document.getElementById("leaderboard"));
         this.minimap.clear();
         document.getElementById("server-name").innerText = "";
-        this.serverAccordion.toggle(0, true);
+        this.serverTab.tab();
     }
 
     spawn() {

@@ -57,6 +57,32 @@
             <a class="uk-offcanvas-close" type="button" href="#" uk-close></a>
         </div>
     </div>
+    <div id="server-menu-offcanvas" uk-offcanvas="flip: true;">
+        <div id="offcanvas-menu" class="uk-offcanvas-bar">
+            <a class="uk-offcanvas-close" type="button" href="#" uk-close></a>
+            <ul class="uk-subnav uk-subnav-pill" uk-switcher>
+                <li><a href="#">NA</a></li>
+                <li><a href="#">EU</a></li>
+                <li><a href="#">Local</a></li>
+            </ul>
+            <!-- This is the container of the content items -->
+            <ul class="uk-switcher uk-width-1-1">
+                <li>
+                    <p class="servers" server="na.ogar69.yuu.dev:3000">Virus</p>
+                    <p class="servers" server="na.ogar69.yuu.dev:3001">Mega</p>
+                    <p class="servers" server="na.ogar69.yuu.dev:3002">Omega</p>
+                </li>
+                <li>
+                    <p class="servers" server="eu.ogar69.yuu.dev:3000">Virus</p>
+                    <p class="servers" server="eu.ogar69.yuu.dev:3001">Mega</p>
+                    <p class="servers" server="eu.ogar69.yuu.dev:3002">Omega</p>
+                </li>
+                <li id="local-list">
+                    <p class="servers" server="local">Mega</p>
+                </li>
+            </ul>
+        </div>
+    </div>
     <div id="leaderboard" hidden>
         <h3 id="server-name"></h3>
         <div id="leaderboard-data" class="uk-inline"></div>
@@ -92,21 +118,9 @@
         </div>
         <div>
             <div class="uk-inline">
-                <p></p><input id="name-input" type="text" maxlength="16" placeholder="Name" /></p>
-                <ul id="server-accordion">
-                    <li>
-                        <input id="server-input" readonly type="text" placeholder="Select Server"></input>
-                        <div class="uk-accordion-content">
-                            <div id="server-list">
-                                <button class="servers uk-inline" server="local">Local</button>
-                                <button class="servers uk-inline" server="na.ogar69.yuu.dev:3000">NA Mega</button>
-                                <button class="servers uk-inline" server="eu.ogar69.yuu.dev:3000">EU Virus</button>
-                                <button class="servers uk-inline" server="eu.ogar69.yuu.dev:3001">EU Mega</button>
-                                <button class="servers uk-inline" server="eu.ogar69.yuu.dev:3002">EU Omega</button>
-                            </div>
-                        </div>
-                    </li>
-                </ul>
+                <p></p>
+                <p><input id="name-input" type="text" maxlength="16" placeholder="Name" /></p>
+                <p><input id="server-input" uk-toggle="target: #server-menu-offcanvas" readonly placeholder="Select Server" /></p>
             </div>
             <div>
                 <div class="uk-inline">
