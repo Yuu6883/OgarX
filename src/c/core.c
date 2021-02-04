@@ -123,22 +123,22 @@ void update(Cell cells[], unsigned short* ptr, float dt,
 
         // Bounce and clamp the cells in the box
         unsigned char bounce = cell->boost > 1;
-        float hr = cell->r / 2;
-        if (cell->x < l + hr) {
-            cell->x = l + hr;
+        float cr = cell->r;
+        if (cell->x < l + cr) {
+            cell->x = l + cr;
             cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostX = -cell->boostX;
-        } else if (cell->x > r - hr) {
-            cell->x = r - hr;
+        } else if (cell->x > r - cr) {
+            cell->x = r - cr;
             cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostX = -cell->boostX;
         }
-        if (cell->y > t - hr) {
-            cell->y = t - hr;
+        if (cell->y > t - cr) {
+            cell->y = t - cr;
             cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostY = -cell->boostY;
-        } else if (cell->y < b + hr) {
-            cell->y = b + hr;
+        } else if (cell->y < b + cr) {
+            cell->y = b + cr;
             cell->flags |= UPDATE_BIT;
             if (bounce) cell->boostY = -cell->boostY;
         }

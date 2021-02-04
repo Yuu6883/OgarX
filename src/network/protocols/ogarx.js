@@ -124,7 +124,7 @@ module.exports = class OgarXProtocol extends Protocol {
             default:
                 console.warn(`Unknown OP: ${OP}`);
         }
-    };
+    }
 
     /** @param {import("../../game/controller")[]} controllers */
     onLeaderboard(controllers) {
@@ -219,7 +219,8 @@ module.exports = class OgarXProtocol extends Protocol {
             this.controller.lockDir,
             this.controller.score,
             vx, vy, 
-            AUED_table_ptr, AUED_table_ptr + 16, AUED_end_ptr);
+            AUED_table_ptr, AUED_table_ptr + 16, AUED_end_ptr,
+            -engine.options.MAP_HW, engine.options.MAP_HW, engine.options.MAP_HH, -engine.options.MAP_HH);
         
         const diff = buffer_end - AUED_end_ptr;
         console.assert(diff == buffer_length, "Buffer length must match");

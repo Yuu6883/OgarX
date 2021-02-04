@@ -105,7 +105,8 @@ unsigned char* serialize(
     float score,
     float vx, float vy,
     unsigned int table[],
-    unsigned short* lists, unsigned char* dist) {
+    unsigned short* lists, unsigned char* dist,
+    float l, float r, float t, float b) {
 
     // Write OP code
     writeUint8(4);
@@ -134,11 +135,18 @@ unsigned char* serialize(
 
         writeUint16(cell_id);
         writeUint16(get_cell_type(0, cell_id));
+        float radius = get_cell_r(0, cell_id);
         float x = get_cell_x(0, cell_id);
-        writeInt16(CLAMP(x, SHRT_MIN, SHRT_MAX));
+
+        float x_min = l + radius;
+        float x_max = r - radius;
+        float y_min = b + radius;
+        float y_max = t - radius;
+
+        writeInt16(CLAMP(x, x_min, x_max));
         float y = get_cell_y(0, cell_id);
-        writeInt16(CLAMP(y, SHRT_MIN, SHRT_MAX));
-        writeUint16(get_cell_r(0, cell_id));
+        writeInt16(CLAMP(y, y_min, y_max));
+        writeUint16(radius);
 
         A_ptr += 4;
     }
@@ -149,11 +157,18 @@ unsigned char* serialize(
         unsigned short cell_id = *U_ptr;
 
         writeUint16(cell_id);
+        float radius = get_cell_r(0, cell_id);
         float x = get_cell_x(0, cell_id);
-        writeInt16(CLAMP(x, SHRT_MIN, SHRT_MAX));
+
+        float x_min = l + radius;
+        float x_max = r - radius;
+        float y_min = b + radius;
+        float y_max = t - radius;
+
+        writeInt16(CLAMP(x, x_min, x_max));
         float y = get_cell_y(0, cell_id);
-        writeInt16(CLAMP(y, SHRT_MIN, SHRT_MAX));
-        writeUint16(get_cell_r(0, cell_id));
+        writeInt16(CLAMP(y, y_min, y_max));
+        writeUint16(radius);
 
         U_ptr += 4;
     }
