@@ -71,11 +71,11 @@ module.exports = class SocketServer {
                     name: g.name,
                     endpoint: `${port}/${endpoint}`,
                     bot: g.engine.bots.length,
-                    players: g.handles - g.engine.bots.length,
+                    players: g.handles,
                     total: 250, // Number in theory
                     load: g.engine.usage
                 }));
-            } catch (_) { }
+            } catch (_) {}
         }, 1000);
 
         return new Promise(resolve => {
