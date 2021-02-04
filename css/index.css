@@ -279,7 +279,10 @@ h1, h2, h3, h4, h5, h6 {
 .uk-overlay-default {
     background-color: transparent;
 }
-input[type="text"] {
+.servers {
+    width: 100%;
+}
+input[type="text"], #server-input, .servers {
     margin: auto;
     padding: 5px;
     font-size: 20px;
@@ -292,8 +295,9 @@ input[type="text"] {
     appearance: none;
     -moz-appearance: none;
     -webkit-appearance: none;
+    cursor: pointer;
 }
-input[type="text"]:focus, #server-input:hover, .uk-accordion-title:hover {
+input[type="text"]:focus, #server-input:hover, .servers:hover {
     color: #eee;
     background-color: #22222277;
     border-bottom: solid 3px #93a7e1;
