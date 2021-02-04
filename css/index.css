@@ -282,6 +282,12 @@ h1, h2, h3, h4, h5, h6 {
 .servers {
     width: 100%;
 }
+.servers span {
+    color: #bbb;
+}
+.servers:hover span {
+    color: #eee;
+}
 input[type="text"], #server-input, .servers {
     margin: auto;
     padding: 5px;
