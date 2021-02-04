@@ -97,4 +97,5 @@ let token = process.env.OGARX_TOKEN;
         });
         console.log((sock ? "Gateway Server listening" : "Gateway Server failed to listen") + 
             ` on port ${port} ` + (token ? "WITH token" : "WITHOUT token"));
+        process.send("ready");
     });

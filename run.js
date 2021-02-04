@@ -48,24 +48,24 @@ for (const proc of config) {
 
 pm2.connect(err => {
     if (err) return console.error("Failed to connect to pm2", err);
-    const tasks = procToStart.map(proc => new Promise(res => {        
-        pm2.start(proc, e => {
-            if (e) console.error(e);
-            else  console.log(`PM2 Process "${proc.name}" ` +
-                `(${proc.env.OGARX_MODE}-${proc.env.OGARX_SERVER}) mounted on ` +
-                `:${proc.env.OGARX_PORT || 443}/${proc.env.OGARX_ENDPOINT}`);
-            res();
-        });
-    }));
-    tasks.push(new Promise(res => pm2.start({
-            name: "Gateway",
-            cwd: __dirname,
-            script: "./src/gateway.js",
-            env: { GATEWAY_PORT, GATEWAY_ORIGIN }
-        }, e => {
-            if (e) console.error(e);
-            else console.log("Gateway Process started");
-            res();
-        })));
-    Promise.all(tasks).then(() => process.exit(0));
+    pm2.start({
+        name: "Gateway",
+        cwd: __dirname,
+        script: "./src/gateway.js",
+        wait_ready: true,
+        env: { GATEWAY_PORT, GATEWAY_ORIGIN }
+    }, e => {
+        if (e) console.error(e);
+        else console.log("Gateway Process started");
+
+        Promise.all(procToStart.map(proc => new Promise(res => {        
+            pm2.start(proc, e => {
+                if (e) console.error(e);
+                else  console.log(`PM2 Process "${proc.name}" ` +
+                    `(${proc.env.OGARX_MODE}-${proc.env.OGARX_SERVER}) mounted on ` +
+                    `:${proc.env.OGARX_PORT || 443}/${proc.env.OGARX_ENDPOINT}`);
+                res();
+            });
+        }))).then(() => process.exit(0));
+    });
 });
