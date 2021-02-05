@@ -232,7 +232,7 @@ module.exports = class HUD {
             const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
             const pingbar = document.getElementById(`signal-${region.toLowerCase()}`);
 
-            source.onmessage = event => {
+            source.addEventListener("ping", event => {
                 /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[], timestamp: number }} */
                 const data = JSON.parse(event.data);
                 const ping = Date.now() - data.timestamp;
@@ -241,7 +241,7 @@ module.exports = class HUD {
                 else if (ping < 300) pingbar.className = "signal-bar";
                 else pingbar.className = "signal-worse";
 
-                pingbar.setAttribute("uk-tooltip", `${ping} ms`);
+                pingbar.setAttribute("uk-tooltip", `${gateway} ping: ${ping} ms`);
 
                 for (const server of data.servers) {
                     let elem = servers.get(server.uid);
@@ -268,7 +268,7 @@ module.exports = class HUD {
                         v.remove();
                     }
                 }
-            }
+            });
         }
 
         this.gameoverElem = document.getElementById("game-over");

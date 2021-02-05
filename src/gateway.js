@@ -35,7 +35,7 @@ const port = process.env.GATEWAY_PORT || 443;
 const connections = new Set();
 
 const interval = setInterval(() => {
-    const data = "data: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n";
+    const data = "event: ping\ndata: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n";
     for (const res of connections) res.write(data);
 }, 500);
 
