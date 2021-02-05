@@ -232,16 +232,27 @@ module.exports = class HUD {
             const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
             const pingbar = document.getElementById(`signal-${region.toLowerCase()}`);
 
-            source.addEventListener("ping", event => {
-                /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[], timestamp: number }} */
-                const data = JSON.parse(event.data);
-                const ping = Date.now() - data.timestamp;
-                if (ping < 100) pingbar.className = "signal-good";
-                else if (ping < 200) pingbar.className = "signal-ok";
-                else if (ping < 300) pingbar.className = "signal-bar";
-                else pingbar.className = "signal-worse";
+            let timeout;
+            const ping = async (endpoint = "") => {
+                if (!endpoint.includes("localhost")) return;
+                try {
+                    const res = await fetch(`${window.location.protocol}//${endpoint}/ping`);
+                    const now = Date.now();
+                    const serverTime = await res.text();
+                    console.log(serverTime);
+                    pingbar.setAttribute("uk-tooltip", `${now - serverTime} ms`);
+                } catch (e) {
+                    pingbar.setAttribute("uk-tooltip", `unknown`);
+                    console.log(endpoint, e);
+                }
+                timeout = setTimeout(ping, 5000, endpoint);
+            }
 
-                pingbar.setAttribute("uk-tooltip", `${gateway} ping: ${ping} ms`);
+            source.onopen = () => timeout || ping(gateway);
+
+            source.addEventListener("servers", event => {
+                /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[]}} */
+                const data = { servers: JSON.parse(event.data) };
 
                 for (const server of data.servers) {
                     let elem = servers.get(server.uid);

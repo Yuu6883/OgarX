@@ -35,7 +35,7 @@ const port = process.env.GATEWAY_PORT || 443;
 const connections = new Set();
 
 const interval = setInterval(() => {
-    const data = "event: ping\ndata: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n";
+    const data = "event: servers\ndata: " + JSON.stringify([...sockets].map(s => s.data)) + "\n\n";
     for (const res of connections) res.write(data);
 }, 500);
 
@@ -49,6 +49,12 @@ let token = process.env.OGARX_TOKEN;
         res.writeHeader("Access-Control-Allow-Origin", process.env.GATEWAY_ORIGIN || "*");
         res.onAborted(() => connections.delete(res));
         connections.add(res);
+    })
+    .get("/ping", (res, _) => {
+        res.writeStatus("200 OK");
+        res.writeHeader("Cache-Control", "max-age=0");
+        res.writeHeader("Access-Control-Allow-Origin", process.env.GATEWAY_ORIGIN || "*");
+        res.end(Date.now().toString());
     })
     .get("/update/:token", (res, req) => {
         const authorization = req.getParameter(0);
