@@ -107,6 +107,14 @@ h1, h2, h3, h4, h5, h6 {
 .replay-thumbnail:hover {
     box-shadow: 0px 0px 5px #93a7e1;
 }
+.stats-pie {
+    margin: auto;
+    width: 60%;
+    aspect-ratio: 1/1;
+}
+.stats-pie circle {
+    transition: stroke-dasharray 1s linear, stroke-dashoffset 1s linear;
+}
 #minimap {
     position: absolute;
     bottom: 0px;
