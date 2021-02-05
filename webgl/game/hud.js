@@ -221,18 +221,28 @@ module.exports = class HUD {
             .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
 
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
-            gateways.push({ list: document.querySelector("[region='Local']"), gateway: "localhost:6969" });
+            gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "localhost:6969" });
             window.hud = this;
         }
 
         for (const { list, gateway } of gateways) {
             /** @type {Map<string, HTMLElement>} */
             const servers = new Map();
-
+            const region = list.getAttribute("region");
             const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
+            const pingbar = document.getElementById(`signal-${region.toLowerCase()}`);
+
             source.onmessage = event => {
-                /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[], time: number }} */
+                /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[], timestamp: number }} */
                 const data = JSON.parse(event.data);
+                const ping = Date.now() - data.timestamp;
+                if (ping < 100) pingbar.className = "signal-good";
+                else if (ping < 200) pingbar.className = "signal-ok";
+                else if (ping < 300) pingbar.className = "signal-bar";
+                else pingbar.className = "signal-worse";
+
+                pingbar.setAttribute("uk-tooltip", `${ping} ms`);
+
                 for (const server of data.servers) {
                     let elem = servers.get(server.uid);
                     if (!elem) {
@@ -243,8 +253,8 @@ module.exports = class HUD {
                         servers.set(server.uid, elem);
 
                         elem.addEventListener("click", () => {
-                            this.server = `${list.getAttribute("region")} ${server.name}`;
-                            this.connect(`${gateway}:${server.endpoint}`);
+                            this.server = `${region} ${server.name}`;
+                            this.connect(`${gateway.replace(/\:\d+$/, "")}:${server.endpoint}`);
                         });
                     } else {
                         elem.children[0].textContent = server.name;
@@ -409,7 +419,7 @@ module.exports = class HUD {
         this.hide(document.getElementById("leaderboard"));
         this.minimap.clear();
         document.getElementById("server-name").innerText = "";
-        this.serverTab.tab();
+        this.serverTab.show();
     }
 
     spawn() {

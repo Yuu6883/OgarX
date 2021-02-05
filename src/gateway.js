@@ -35,8 +35,8 @@ const port = process.env.GATEWAY_PORT || 443;
 const connections = new Set();
 
 const interval = setInterval(() => {
-    for (const res of connections)
-        res.write("data: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n");
+    const data = "data: " + JSON.stringify({ servers: [...sockets].map(s => s.data), timestamp: Date.now() }) + "\n\n";
+    for (const res of connections) res.write(data);
 }, 500);
 
 let token = process.env.OGARX_TOKEN;
