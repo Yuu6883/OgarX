@@ -225,28 +225,44 @@ module.exports = class HUD {
             window.hud = this;
         }
 
+        /** @type {Map<string, HTMLElement>} */
+        const elemTable = new Map();
+        const po = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                if (entry.initiatorType != "fetch") return;
+                const elem = elemTable.get(entry.name);
+                if (!elem) return;
+                const ping = ~~entry.duration;
+                elem.setAttribute("uk-tooltip", `${ping} ms`);
+                if (ping < 100) elem.className = "signal-good";
+                else if (ping < 200) elem.className = "signal-ok";
+                else if (ping < 300) elem.className = "signal-bad";
+                else elem.className = "signal-worse";
+            }
+        });
+        po.observe({ type: 'resource', buffered: true });
+
         for (const { list, gateway } of gateways) {
             /** @type {Map<string, HTMLElement>} */
             const servers = new Map();
             const region = list.getAttribute("region");
             const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
-            const pingbar = document.getElementById(`signal-${region.toLowerCase()}`);
-
+        
             let timeout;
-            const ping = async (endpoint = "") => {
+            const ping = async (endpoint = "", t = 5000) => {
                 try {
-                    const res = await fetch(`${window.location.protocol}//${endpoint}/ping`);
-                    const now = Date.now();
-                    const serverTime = await res.text();
-                    pingbar.setAttribute("uk-tooltip", `${now - serverTime} ms`);
-                } catch (e) {
-                    pingbar.setAttribute("uk-tooltip", `unknown`);
-                    console.log(endpoint, e);
-                }
-                timeout = setTimeout(ping, 5000, endpoint);
+                    await fetch(`${window.location.protocol}//${endpoint}/ping`);
+                } catch (e) {}
+                timeout = setTimeout(ping, t, endpoint);
             }
 
-            source.onopen = () => timeout || ping(gateway);
+            source.onopen = () => {
+                if (!timeout) {
+                    elemTable.set(`${window.location.protocol}//${gateway}/ping`,
+                        document.getElementById(`signal-${region.toLowerCase()}`));
+                    ping(gateway, 1000);
+                }
+            }
 
             source.addEventListener("servers", event => {
                 /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[]}} */
