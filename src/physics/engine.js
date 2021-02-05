@@ -62,8 +62,7 @@ const DefaultSettings = {
     PLAYER_SPLIT_CAP: 4,
     PLAYER_MIN_SPLIT_SIZE: 60,
     PLAYER_MIN_EJECT_SIZE: 60,
-    PLAYER_MIN_SPLIT_INCREASE: 0,
-    PLAYER_MIN_EJECT_INCREASE: 0,
+    NORMALIZE_THRESH_MASS: 0,
     PLAYER_NO_MERGE_DELAY: 650,
     PLAYER_NO_COLLI_DELAY: 650,
     PLAYER_NO_EJECT_DELAY: 200,
@@ -145,7 +144,6 @@ module.exports = class Engine {
             wasm_buffer, { env: { 
                 memory: this.memory,
                 powf: Math.pow,
-                roundf: Math.round,
                 unlock_line: id => this.game.controls[id].unlock(),
                 get_score: id => this.game.controls[id].score,
                 get_line_a: id => this.game.controls[id].linearEquation[0],
@@ -336,9 +334,11 @@ module.exports = class Engine {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
             
-            const MULTI = Math.max((1 + this.options.PLAYER_MIN_SPLIT_INCREASE) * Math.sqrt(controller.score) / 300, 1);
+            const MULTI = this.options.NORMALIZE_THRESH_MASS ? 
+                Math.max(Math.sqrt(controller.score / this.options.NORMALIZE_THRESH_MASS), 1) : 1;
             const MIN_SPLIT_SIZE = MULTI * this.options.PLAYER_MIN_SPLIT_SIZE;
-            const SPLIT_BOOST = MULTI * this.options.PLAYER_SPLIT_BOOST;
+            const SPLIT_R_THRESH = Math.sqrt(this.options.NORMALIZE_THRESH_MASS * 100);
+            const boost = this.options.PLAYER_SPLIT_BOOST;
 
             // Split
             let attempts = this.options.PLAYER_SPLIT_CAP;
@@ -346,13 +346,15 @@ module.exports = class Engine {
                 for (const cell_id of [...this.counters[id]]) {
                     const cell = this.cells[cell_id];
                     if (this.counters[id].size >= this.options.PLAYER_MAX_CELLS) break;
-                    if (cell.r < MIN_SPLIT_SIZE) continue;
+                    const r = cell.r;
+                    if (r < MIN_SPLIT_SIZE) continue;
                     let dx = controller.mouseX - cell.x;
                     let dy = controller.mouseY - cell.y;
                     let d = Math.sqrt(dx * dx + dy * dy);
                     if (d < 1) dx = 1, dy = 0, d = 1;
                     else dx /= d, dy /= d;
-                    this.splitFromCell(cell, cell.r / Math.SQRT2, dx, dy, SPLIT_BOOST);
+                    const MULTI_2 = SPLIT_R_THRESH ? Math.max(r / SPLIT_R_THRESH, 1) : 1;
+                    this.splitFromCell(cell, cell.r * Math.SQRT1_2, dx, dy, MULTI_2 * boost);
                 }
                 controller.splitAttempts--;
             }
@@ -367,29 +369,36 @@ module.exports = class Engine {
                     maxEjectPerTick--) {
                     controller.ejectAttempts = Math.max(controller.ejectAttempts - 1, 0);
                     ejected++;
-    
-                    const MULTI = Math.max((1 + this.options.PLAYER_MIN_EJECT_INCREASE) * Math.sqrt(controller.score) / 300, 1);
-                    const LOSS = MULTI * MULTI * this.options.EJECT_LOSS * this.options.EJECT_LOSS;
-                    const EJECT_SIZE = this.options.EJECT_SIZE * MULTI;
-                    const MIN_EJECT_SIZE = this.options.PLAYER_MIN_EJECT_SIZE * MULTI;
-                    const EJECT_BOOST = this.options.EJECT_BOOST * MULTI;
+
+                    const r_th = Math.sqrt(this.options.NORMALIZE_THRESH_MASS * 100);
 
                     for (const cell_id of [...this.counters[id]]) {
                         const cell = this.cells[cell_id];
-                        if (cell.r < MIN_EJECT_SIZE) continue;
+                        
+                        const r = cell.r;
+                        const MULTI = r_th ? Math.max(r / r_th, 1) : 1;
+                        const LOSS = MULTI * MULTI * this.options.EJECT_LOSS * this.options.EJECT_LOSS;
+                        const EJECT_SIZE = this.options.EJECT_SIZE * MULTI;
+                        const MIN_EJECT_SIZE = this.options.PLAYER_MIN_EJECT_SIZE * MULTI;
+                        const EJECT_BOOST = this.options.EJECT_BOOST * MULTI;
+                        
+                        if (r < MIN_EJECT_SIZE) continue;
                         if (cell.age < this.options.PLAYER_NO_EJECT_DELAY) continue;
-                        let dx = controller.mouseX - cell.x;
-                        let dy = controller.mouseY - cell.y;
+                        
+                        const x = cell.x, y = cell.y;
+                        let dx = controller.mouseX - x;
+                        let dy = controller.mouseY - y;
                         let d = Math.sqrt(dx * dx + dy * dy);
                         if (d < 1) dx = 1, dy = 0, d = 1;
                         else dx /= d, dy /= d;
-                        const sx = cell.x + dx * cell.r;
-                        const sy = cell.y + dy * cell.r;
+                        const sx = x + dx * r;
+                        const sy = y + dy * r;
                         const a = Math.atan2(dx, dy) - this.options.EJECT_DISPERSION + 
                             Math.random() * 2 * this.options.EJECT_DISPERSION;
+                        
                         this.newCell(sx, sy, EJECT_SIZE, EJECTED_TYPE, 
                             Math.sin(a), Math.cos(a), EJECT_BOOST);
-                        cell.r = Math.sqrt(cell.r * cell.r - LOSS);
+                        cell.r = Math.sqrt(r * r - LOSS);
                         cell.updated = true;
                     }
     
@@ -416,12 +425,13 @@ module.exports = class Engine {
                 for (const cell_id of this.counters[id]) {
                     const cell = this.cells[cell_id];
                     const sqr = cell.r * cell.r;
-                    x += cell.x * sqr;
-                    y += cell.y * sqr;
-                    min_x = cell.x < min_x ? cell.x : min_x;
-                    max_x = cell.x > max_x ? cell.x : max_x;
-                    min_y = cell.y < min_y ? cell.y : min_y;
-                    max_y = cell.y > max_y ? cell.y : max_y;
+                    let cell_x = cell.x, cell_y = cell.y;
+                    x += cell_x * sqr;
+                    y += cell_y * sqr;
+                    min_x = cell_x < min_x ? cell_x : min_x;
+                    max_x = cell_x > max_x ? cell_x : max_x;
+                    min_y = cell_y < min_y ? cell_y : min_y;
+                    max_y = cell_y > max_y ? cell_y : max_y;
                     score += sqr * 0.01;
                     size += sqr;
                 }
@@ -432,17 +442,17 @@ module.exports = class Engine {
                 controller.box.t = max_y;
 
                 size = size || 1;
-                factor = Math.pow(this.counters[id].size + 50, 0.1);
+                factor = Math.pow(this.counters[id].size + 50, 0.05);
                 controller.viewportX = x / size;
                 controller.viewportY = y / size;
                 size = (factor + 1) * Math.sqrt(score * 100);
-                size_x = size_y = Math.max(size, this.options.PLAYER_VIEW_MIN);
+                size_x = size_y = Math.max(size, this.options.PLAYER_VIEW_MIN) * this.options.PLAYER_VIEW_SCALE;
                 size_x = Math.max(size_x, (controller.viewportX - min_x) * 1.75);
                 size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
                 size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
                 size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
-                controller.viewportHW = size_x * this.options.PLAYER_VIEW_SCALE;
-                controller.viewportHH = size_y * this.options.PLAYER_VIEW_SCALE;
+                controller.viewportHW = size_x;
+                controller.viewportHH = size_y;
     
                 controller.score = score;
                 controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
@@ -498,11 +508,14 @@ module.exports = class Engine {
             const c = this.game.controls[~~id];
             if (!c.handle) continue;
             const s = this.counters[~~id].size;
+            const norm = this.options.NORMALIZE_THRESH_MASS ?
+                Math.min(Math.sqrt(this.options.NORMALIZE_THRESH_MASS / c.score), 1) : 1;
+
             s && this.wasm.update_player_cells(0, ptr, s,
                 c.mouseX, c.mouseY, 
                 c.lockDir, c.linearEquation[0], c.linearEquation[1], c.linearEquation[2],
                 dt,
-                initial, this.options.PLAYER_MERGE_INCREASE, this.options.PLAYER_SPEED,
+                initial, this.options.PLAYER_MERGE_INCREASE, this.options.PLAYER_SPEED, norm,
                 this.options.PLAYER_MERGE_TIME, this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_MERGE_NEW_VER);
             ptr += s << 1;
         }
