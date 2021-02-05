@@ -1,3 +1,4 @@
+const { getColor } = require("./util");
 const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
@@ -19,6 +20,7 @@ const msToText = ms => {
 }
 
 const scoreToText = s => s > 1000000 ? `${(s / 1000000).toFixed(2)}M` : s > 1000 ? `${(s / 1000).toFixed(1)}K` : s;
+const SVG = "http://www.w3.org/2000/svg";
 
 module.exports = class HUD {
 
@@ -225,7 +227,7 @@ module.exports = class HUD {
             window.hud = this;
         }
 
-        /** @type {Map<string, HTMLElement>} */
+        /** @type {Map<string, { signal: HTMLElement, pie: SVGElement }>} */
         const elemTable = new Map();
         const po = new PerformanceObserver((list) => {
             for (const entry of list.getEntries()) {
@@ -233,11 +235,12 @@ module.exports = class HUD {
                 const elem = elemTable.get(entry.name);
                 if (!elem) return;
                 const ping = ~~entry.duration;
-                elem.setAttribute("uk-tooltip", `${ping} ms`);
-                if (ping < 100) elem.className = "signal-good";
-                else if (ping < 200) elem.className = "signal-ok";
-                else if (ping < 300) elem.className = "signal-bad";
-                else elem.className = "signal-worse";
+                const { signal } = elem;
+                signal.setAttribute("uk-tooltip", `${ping} ms`);
+                if (ping < 100) signal.className = "signal-good";
+                else if (ping < 200) signal.className = "signal-ok";
+                else if (ping < 300) signal.className = "signal-bad";
+                else signal.className = "signal-worse";
             }
         });
         po.observe({ type: 'resource', buffered: true });
@@ -245,6 +248,10 @@ module.exports = class HUD {
         for (const { list, gateway } of gateways) {
             /** @type {Map<string, HTMLElement>} */
             const servers = new Map();
+            
+            /** @type {Map<string, SVGCircleElement>} */
+            const pies = new Map();
+
             const region = list.getAttribute("region");
             const source = new EventSource(`${window.location.protocol}//${gateway}/gateway`);
         
@@ -255,25 +262,36 @@ module.exports = class HUD {
                 } catch (e) {}
                 timeout = setTimeout(ping, t, endpoint);
             }
+            
+            const pieSVG = document.getElementById(`${region.toLowerCase()}-server-stats`);
 
             source.onopen = () => {
                 if (!timeout) {
-                    elemTable.set(`${window.location.protocol}//${gateway}/ping`,
-                        document.getElementById(`signal-${region.toLowerCase()}`));
+                    elemTable.set(`${window.location.protocol}//${gateway}/ping`, {
+                        signal: document.getElementById(`signal-${region.toLowerCase()}`)
+                    });
                     ping(gateway, 1000);
                 }
             }
-
+            
             source.addEventListener("servers", event => {
                 /** @type {{ servers: { uid: number, name: string, endpoint: string, bot: number, players: number, total: number, load: number }[]}} */
                 const data = { servers: JSON.parse(event.data) };
 
-                for (const server of data.servers) {
+                let totalUsage = 0;
+                const init = ~~(Math.random() * 100);
+                for (const id in data.servers) {
+                    const server = data.servers[id];
                     let elem = servers.get(server.uid);
+                    
+                    const [r, g, b] = getColor(id + init);
+                    const color = `rgb(${~~(255 * r)}, ${~~(255 * g)}, ${~~(255 * b)})`;
+
                     if (!elem) {
                         elem = document.createElement("p");
                         elem.classList.add("servers");
                         elem.innerHTML = `<span>${server.name}</span><span style="float: right" uk-tooltip="${server.bot} bots">${server.players}/${server.total}</span>`;
+                        elem.style.borderRight = `2px solid ${color}`;
                         list.appendChild(elem);
                         servers.set(server.uid, elem);
 
@@ -286,10 +304,30 @@ module.exports = class HUD {
                         elem.children[1].setAttribute("uk-tooltip", `${server.bot} bots`);
                         elem.children[1].textContent = `${server.players}/${server.total}`;
                     }
+
+                    const percent = server.load * 100;
+                    let pie = pies.get(server.uid);
+                    if (!pie) {
+                        pie = document.createElementNS(SVG, "circle");
+                        pie.setAttribute("cx", "21");
+                        pie.setAttribute("cy", "21");
+                        pie.setAttribute("r", "15.91549430918954");
+                        pie.setAttribute("fill", "transparent");
+                        pie.setAttribute("stroke-width", "8")
+                        pie.setAttribute("stroke", color);
+                        pie.setAttribute("stroke-dashoffset", "25");
+                        pieSVG.prepend(pie);
+                        pies.set(server.uid, pie);
+                    }
+                    totalUsage = Math.min(100, totalUsage + percent);
+                    pie.setAttribute("stroke-dasharray", `${Math.ceil(totalUsage)} ${100 - Math.ceil(totalUsage)}`);
                 }
+
                 for (const [k, v] of [...servers.entries()]) {
                     if (!data.servers.some(s => s.uid == k)) {
                         servers.delete(k);
+                        pies.get(k).remove();
+                        pies.delete(k);
                         v.remove();
                     }
                 }
