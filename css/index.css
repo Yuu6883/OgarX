@@ -392,3 +392,51 @@ select {
     background: #93a7e1;
     cursor: pointer; /* Cursor on hover */
 }
+
+.uk-subnav span {
+    font-size: 20px;
+}
+
+.signal-bars {  
+    height: 26px;
+    width: 30px;  
+    margin: auto;
+    padding: 0px!important;
+    display: flex;
+    align-items: flex-end;
+}
+
+.signal-bars div {
+    width: 6px;  
+    background-color: #777;
+    margin-left: 0px;
+    margin-right: 2px;
+}
+
+.signal-bars > :nth-child(1) { height: 20%; }
+.signal-bars > :nth-child(2) { height: 40%; }
+.signal-bars > :nth-child(3) { height: 60%; }
+.signal-bars > :nth-child(4) { height: 80%; margin-right: 0px; }
+
+.signal-good .signal-bars > div {
+    background-color: #16a085;
+    border: thin solid darken(#16a085, 7%);
+}
+
+.signal-ok .signal-bars > :nth-child(1), 
+.signal-ok .signal-bars > :nth-child(2), 
+.signal-ok .signal-bars > :nth-child(3) {
+    background-color: #f1c40f;
+    border: thin solid darken(#f1c40f, 7%);
+}
+
+.signal-bad .signal-bars > :nth-child(1), 
+.signal-bad .signal-bars > :nth-child(2) {
+    background-color: #e74c3c;
+    border: thin solid darken(#e74c3c, 20%);
+}
+
+.signal-worse .signal-bars > :nth-child(1) {
+    background-color: #a01303;
+    border: thin solid darken( #a01303, 20%);
+}
