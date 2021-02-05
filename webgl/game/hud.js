@@ -234,12 +234,10 @@ module.exports = class HUD {
 
             let timeout;
             const ping = async (endpoint = "") => {
-                if (!endpoint.includes("localhost")) return;
                 try {
                     const res = await fetch(`${window.location.protocol}//${endpoint}/ping`);
                     const now = Date.now();
                     const serverTime = await res.text();
-                    console.log(serverTime);
                     pingbar.setAttribute("uk-tooltip", `${now - serverTime} ms`);
                 } catch (e) {
                     pingbar.setAttribute("uk-tooltip", `unknown`);
