@@ -118,7 +118,13 @@ class Renderer {
     initLoader() {
         this.loader = new Worker(self.window ? "js/loader.min.js" : "loader.min.js");
         /** @param {{ data: { id: number, skin?: ImageBitmap, name?: ImageBitmap }}} e */
-        this.loader.onmessage = e => this.updates.unshift(e.data);
+        this.loader.onmessage = e => {
+            if (!e.data) return;
+            if (e.data.event === "replay") {
+                self.postMessage(e.data);
+                this.protocol.replay.saving = false;
+            } else if (e.data.id) this.updates.unshift(e.data);
+        }
     }
 
     /**

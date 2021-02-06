@@ -60,10 +60,11 @@ module.exports = class HUD {
                 if (data.event === "leaderboard") this.onLeaderboard(data.lb);
                 if (data.event === "connect") this.onConnect(data.server);
                 if (data.event === "disconnect") this.onDisconnect();
-                if (data.event === "error") this.onError(data.message || "");
                 if (data.event === "minimap") this.minimap.onData(data.minimap);
                 if (data.event === "stats") this.onStats(data.kills, data.score, data.surviveTime);
-                if (data.event === "replay") this.onSuccess("Clip Saved");
+                if (data.event === "replay") this.onReplay(data.state);
+                if (data.event === "error") this.onError(data.message || "Unknown Error");
+                if (data.event === "warning") this.onWarning(data.message || "Unknown Warning");
             }
         } else if (navigator.userAgent.includes("Firefox")) {
             fetch("js/renderer.min.js")
@@ -337,6 +338,8 @@ module.exports = class HUD {
             });
         }
 
+        document.querySelector('[server="local"]').addEventListener("click", () => this.connectToLocal());
+
         this.gameoverElem = document.getElementById("game-over");
         this.respawnSpinner = document.getElementById("respawn-spinner");
         this.pingElem = document.getElementById("ping");
@@ -382,6 +385,21 @@ module.exports = class HUD {
         this.chatElem.scrollTo(0, this.chatElem.scrollHeight);
     }
 
+    /** @param {"success"|"failed"|"starting"} state */
+    onReplay(state) {
+        switch (state) {
+            case "starting":
+                this.onWarning("Saving Clip...");
+                break;
+            case "failed":
+                this.onError("Failed to Save Clip");
+                break;
+            case "success":
+                this.onSuccess("Clip Saved!");
+                break;
+        }
+    }
+
     /**
      * @param {Object} lb 
      * @param {number} lb.rank
@@ -418,6 +436,10 @@ module.exports = class HUD {
 
     onSuccess(message) {
         UIkit.notification({ message, status: "success", timeout: 3000 });
+    }
+
+    onWarning(message) {
+        UIkit.notification({ message, status: "warning", timeout: 3000 });
     }
 
     onError(message) {

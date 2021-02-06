@@ -79,6 +79,8 @@ onmessage = async evt => {
 
     if (data.replay) {
 
+        // self.postMessage({ event: "replay", state: "starting" });
+
         const id = Date.now();
 
         const w = data.replay.PREVIEW_WIDTH, h = data.replay.PREVIEW_HEIGHT;
@@ -108,8 +110,8 @@ onmessage = async evt => {
 
             metaStore.add(meta, id);
             dataStore.add(s, id);
-            tx.oncomplete = () => self.postMessage({ event: "replay-saved", id });
-            tx.onerror = () => self.postMessage({ event: "replay-failed" });
+            tx.oncomplete = () => self.postMessage({ event: "replay", id, state: "success" });
+            tx.onerror = () => self.postMessage({ event: "replay", state: "failed" });
         });
 
         for (let offset = 0; offset < data.replay.PREVIEW_LENGTH * bytes && 
@@ -119,8 +121,5 @@ onmessage = async evt => {
         gif.finish();
     }
 
-    if (data.pool) {
-        pool = data.pool;
-        console.log(`${(pool.byteLength / 1024 / 1024).toFixed(1)}MB preview buffer allocated for GIF generation`);
-    }
+    if (data.pool) pool = data.pool;
 };
