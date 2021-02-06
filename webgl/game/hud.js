@@ -264,6 +264,7 @@ module.exports = class HUD {
             }
             
             const pieSVG = document.getElementById(`${region.toLowerCase()}-server-stats`);
+            const text = pieSVG.previousElementSibling;
 
             source.onopen = () => {
                 if (!timeout) {
@@ -284,7 +285,7 @@ module.exports = class HUD {
                     const server = data.servers[id];
                     let elem = servers.get(server.uid);
                     
-                    const [r, g, b] = getColor(id + init);
+                    const [r, g, b] = getColor(5 * id + init);
                     const color = `rgb(${~~(255 * r)}, ${~~(255 * g)}, ${~~(255 * b)})`;
 
                     if (!elem) {
@@ -313,7 +314,7 @@ module.exports = class HUD {
                         pie.setAttribute("cy", "21");
                         pie.setAttribute("r", "15.91549430918954");
                         pie.setAttribute("fill", "transparent");
-                        pie.setAttribute("stroke-width", "8")
+                        pie.setAttribute("stroke-width", (8 - ~~id / 100).toString())
                         pie.setAttribute("stroke", color);
                         pie.setAttribute("stroke-dashoffset", "25");
                         pieSVG.prepend(pie);
@@ -322,6 +323,8 @@ module.exports = class HUD {
                     totalUsage = Math.min(100, totalUsage + percent);
                     pie.setAttribute("stroke-dasharray", `${Math.ceil(totalUsage)} ${100 - Math.ceil(totalUsage)}`);
                 }
+
+                text.textContent = ~~totalUsage + "%";
 
                 for (const [k, v] of [...servers.entries()]) {
                     if (!data.servers.some(s => s.uid == k)) {

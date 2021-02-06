@@ -115,6 +115,13 @@ h1, h2, h3, h4, h5, h6 {
 .stats-pie circle {
     transition: stroke-dasharray 1s linear, stroke-dashoffset 1s linear;
 }
+.stats-pie text {
+    stroke: none;
+    fill: #eee;
+    text-anchor: middle;
+    alignment-baseline: central;
+    font-size: 8px;
+}
 #minimap {
     position: absolute;
     bottom: 0px;
