@@ -10,7 +10,7 @@ module.exports = class Bot extends Handle {
     constructor(game) {
         super(game);
         this.join();
-        this.controller.name = pick(BOTS.names);
+        this.controller.name = `[BOT] ${pick(BOTS.names)}`;
         this.controller.skin = pick(BOTS.skins);
 
         this.__nextActionTick = 0;
