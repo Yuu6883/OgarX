@@ -103,7 +103,7 @@
                     </div>
                 </li>
                 <li>
-                    <p class="servers" server="local">Mega</p>
+                    <p class="servers" server="local" uk-tooltip="Runs in your browser">Local Mega</p>
                     <div region="Dev"></div>
                     <div class="uk-margin-large-top uk-text-center uk-width-1-1">
                         <p>Server Usage</p>
@@ -177,10 +177,13 @@
             <a class="uk-modal-close-default" type="button" href="#" uk-close></a>
             <h3 class="uk-text-center" id="replay-title">Clips</h3>
             <div id="replay-list" class="uk-flex uk-flex-wrap uk-text-center"></div>
-            <h3 class="uk-text-center"><button id="upload-replay">
-                <input type="file" accept="image/gif" multiple hidden/>
-                Upload Replay
-            </button></h3>
+            <h3 class="uk-text-center">
+                <button id="upload-replay">
+                    <input type="file" accept="image/gif" multiple hidden/>Upload Replay
+                </button>
+            </h3>
+            <span id="prev-clip" uk-tooltip="Previous Page" uk-icon="icon: chevron-double-left; ratio: 3;" class="ogarx-icon uk-position-center-left-out"></span>
+            <span id="next-clip" uk-tooltip="Next Page" uk-icon="icon: chevron-double-right; ratio: 3;" class="ogarx-icon uk-position-center-right-out"></span>
         </div>
     </div>
     <canvas id="canvas"></canvas>
