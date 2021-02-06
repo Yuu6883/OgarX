@@ -1,6 +1,6 @@
 const { saveAs } = require("file-saver");
 const ReplayDB = require("./replay-db");
-const CLIPS_PER_PAGE = 20;
+const CLIPS_PER_PAGE = 15;
 
 module.exports = class ReplayMenu {
 
@@ -44,6 +44,34 @@ module.exports = class ReplayMenu {
             await this.sync();
         });
         this.uploadButton.addEventListener("click", () => input.click());
+
+        this.prevButton = document.querySelector("#prev-clip");
+        this.prevButton.addEventListener("click", () => this.prevPage());
+        this.nextButton = document.querySelector("#next-clip");
+        this.nextButton.addEventListener("click", () => this.nextPage());
+    }
+
+    get canGoPrev() { return this.page > 0; }
+    get canGoNext() { return this.page < Math.ceil(this.count / CLIPS_PER_PAGE) - 1; }
+    get isOverPage() { return this.page >= Math.ceil(this.count / CLIPS_PER_PAGE) && (this.page > 0); }
+
+    updateButtons() {
+        if (this.canGoPrev) this.prevButton.classList.remove("disabled");
+        else this.prevButton.classList.add("disabled");
+        if (this.canGoNext) this.nextButton.classList.remove("disabled");
+        else this.nextButton.classList.add("disabled");
+    }
+
+    prevPage() {
+        if (!this.canGoPrev) return;
+        this.page--;
+        return this.sync(true);
+    }
+
+    nextPage() {
+        if (!this.canGoNext) return;
+        this.page++;
+        return this.sync(true);
     }
 
     /** @param {File} file */
@@ -78,8 +106,10 @@ module.exports = class ReplayMenu {
         const count = await this.countReplays();
         if (force || this.count !== count) {
             this.count = count;
+            if (this.isOverPage) return await this.prevPage();
             await this.update();
         }
+        this.updateButtons();
     }
 
     async update() {
@@ -90,6 +120,7 @@ module.exports = class ReplayMenu {
         } else {
             this.title.textContent = "Clips";
 
+            // Descending, from latest to oldest
             this.keys = await this.getAllKeys();
             const keysToRender = this.keys.slice(this.page * CLIPS_PER_PAGE, (this.page + 1) * CLIPS_PER_PAGE);
 
@@ -105,8 +136,8 @@ module.exports = class ReplayMenu {
                 if (!this.components.some(c => c.getAttribute("replay-id") == k)) {
                     const comp = this.createReplayComponent(k);
                     const c = this.components.find(c => ~~c.getAttribute("replay-id") < ~~k);
-                    c ? this.elem.insertBefore(comp, c) : this.elem.prepend(comp);
-                    this.components.push(comp);
+                    c ? this.elem.insertBefore(comp, c) : this.elem.appendChild(comp);
+                    this.components.unshift(comp);
                 }
             }
         }
@@ -185,7 +216,7 @@ module.exports = class ReplayMenu {
     
     createReplayComponent(id = 0) {
         const div = document.createElement("div");
-        div.classList.add("replay-item", "uk-inline", "uk-width-1-5@l", "uk-width-1-3@m", "uk-width-1-2@s");
+        div.classList.add("replay-item", "uk-inline", "uk-width-1-5@l", "uk-width-1-3@m", "uk-width-1-1@s");
         div.setAttribute("replay-id", id);
 
         this.getReplayMeta(id).then(meta => {
@@ -197,9 +228,9 @@ module.exports = class ReplayMenu {
             div.appendChild(img);
         });
 
-        const div2 = document.createElement("div");
-        div2.classList.add("uk-position-center");
-        const a = document.createElement("a");
+        const playContainer = document.createElement("div");
+        playContainer.classList.add("uk-position-center");
+        const playIcon = document.createElement("a");
 
         const trash = document.createElement("a");
         trash.classList.add("uk-position-small", "uk-position-bottom-right", "ogarx-icon");
@@ -222,28 +253,33 @@ module.exports = class ReplayMenu {
                 .then(() => this.hud.onSuccess("Downloading Clip"));
         });
 
-        const copy = document.createElement("a");
-        copy.classList.add("uk-position-small", "uk-position-top-right", "ogarx-icon");
-        copy.setAttribute("uk-icon", "icon: copy; ratio: 1.5");
-        copy.setAttribute("uk-tooltip", "Copy To Clipboard");
-        copy.addEventListener("click", e => {
-            e.stopPropagation();
-            this.fetch(id)
-                .then(blob => {
-                    navigator.clipboard.write([new ClipboardItem({ [blob.type] : blob })]);
-                    this.hud.onSuccess("Clip Copied");
-                });
-        });
+        // Browser doesn't allow copying gif to clipboard bruh
+        // const copy = document.createElement("a");
+        // copy.classList.add("uk-position-small", "uk-position-top-right", "ogarx-icon");
+        // copy.setAttribute("uk-icon", "icon: copy; ratio: 1.5");
+        // copy.setAttribute("uk-tooltip", "Copy To Clipboard");
+        // copy.addEventListener("click", e => {
+        //     e.stopPropagation();
+        //     this.fetch(id)
+        //         .then(blob => {
+        //             navigator.clipboard.write([new ClipboardItem({ [blob.type] : blob })]);
+        //             this.hud.onSuccess("Clip Copied");
+        //         });
+        // });
 
-        a.classList.add("play-icon", "ogarx-icon");
-        a.setAttribute("uk-icon", "icon: play; ratio: 3;");
-        div.addEventListener("click", () => this.play(id));
+        playIcon.classList.add("play-icon", "ogarx-icon");
+        playIcon.setAttribute("uk-icon", "icon: play; ratio: 3;");
+        playIcon.addEventListener("click", () => this.play(id));
+        playContainer.appendChild(playIcon);
 
-        div.appendChild(download);
-        div.appendChild(trash);
-        // div.appendChild(copy); // Browser doesn't allow copying gif to clipboard bruh
-        div.appendChild(div2);
-        div2.appendChild(a);
+        const overlays = [download, trash, playContainer];
+
+        overlays.forEach(e => e.style.opacity = 0);
+        overlays.forEach(e => div.appendChild(e));
+
+        div.addEventListener("mouseenter", () => overlays.forEach(e => e.style.opacity = 1));
+        div.addEventListener("mouseleave", () => overlays.forEach(e => e.style.opacity = 0));
+
         return div;
     }
 }

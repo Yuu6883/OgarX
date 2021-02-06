@@ -53,8 +53,8 @@ class ReplaySystem {
         this.snapshots = Array.from({ length: length * REPLAY_PREVIEW_FPS }, _ => new ReplaySnapshot(this.source.byteLength));
         
         const pool = this.sharedArrayBuffer = new SharedArrayBuffer(this.snapshots.length * PREVIEW_WIDTH * PREVIEW_HEIGHT * 4);
+        console.log(`${(pool.byteLength / 1024 / 1024).toFixed(1)}MB preview buffer allocated for GIF generation`);
         this.previewPool = new Uint8ClampedArray(this.sharedArrayBuffer);
-
         this.renderer.loader.postMessage({ pool });
     }
 
@@ -89,6 +89,10 @@ class ReplaySystem {
     }
 
     async save() {
+        if (this.saving) return self.postMessage(
+            { event: "warning", message: "Saving Current Clip, Please Try Again Later." });
+            
+        this.saving = true;
         const snapshots = this.snapshots.filter(s => s.packets.length).map(s => s).reverse();
 
         /** @type {ArrayBuffer[]} */
@@ -106,6 +110,8 @@ class ReplaySystem {
         const initial = this.encodeState(snapshots[0].state);
 
         let index = 0;
+
+        self.postMessage({ event: "replay", state: "starting" });
 
         // Job takes too long, spread it out to per frame
         while (index < snapshots.length) {
@@ -319,7 +325,7 @@ module.exports = class Protocol extends EventEmitter {
             this.send(writer.finalize());
 
             if (currState.respawn) this.spawn();
-            if (currState.clip) this.replay.save();
+            if (currState.clip && !this.replaying) this.replay.save();
         }, 1000 / 33); // TODO?
     }
 
