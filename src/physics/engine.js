@@ -149,6 +149,11 @@ module.exports = class Engine {
                 get_line_a: id => this.game.controls[id].linearEquation[0],
                 get_line_b: id => this.game.controls[id].linearEquation[1],
                 get_line_c: id => this.game.controls[id].linearEquation[2],
+                remove_cell: (id, type, eatenBy, eatenByType) => this.removeCell(id, type, eatenBy, eatenByType),
+                split_virus: (x, y, bx, by) => this.splitVirus(x, y, bx, by),
+                pop_player: (id, type, mass) => this.popPlayer(id, type, mass),
+                tree_update: id => this.tree.update(this.cells[id]),
+                console_log: console.log
             }
         });
 
@@ -281,7 +286,6 @@ module.exports = class Engine {
         this.serialize();
 
         this.resolve();
-        this.postResolve();
     }
 
     spawnCells() {
@@ -587,6 +591,7 @@ module.exports = class Engine {
     }
 
     resolve() {
+        this.removedCells = [];
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
             this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);
 
@@ -597,54 +602,63 @@ module.exports = class Engine {
             this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
             this.options.EAT_OVERLAP, this.options.EAT_MULT, 
             this.options.VIRUS_PUSH_BOOST, this.options.VIRUS_MAX_BOOST,
-            VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
+            this.options.VIRUS_SIZE, VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
     }
 
-    postResolve() {
-        this.removedCells = [];
-        // Handle pop, update quadtree, remove item from quadtree
-        for (let i = 0; i < this.indices; i++) {
-            const index = this.resolveIndices.getUint16(i * 2, true);
-            const cell = this.cells[index];
-            if (cell.shouldRemove) {
-                this.tree.remove(cell);
-                this.counters[cell.type].delete(cell.id);
-                this.removedCells.push(index);
-                this.cellCount--;
-                if (cell.type <= 250 && !this.counters[cell.type].size) {
-                    cell.eatenBy && this.game.controls[this.cells[cell.eatenBy].type].kills++;
-                    this.game.controls[cell.type].surviveTime = this.__now - this.game.controls[cell.type].lastSpawnTick;
-                    this.game.controls[cell.type].lastSpawnTick = this.__now;
-                    this.game.controls[cell.type].dead = true;
-                    this.game.controls[cell.type].score = 0;
-                }
-            } else if (cell.popped) {
-                // pop the cell OR split virus
-                if (cell.type == VIRUS_TYPE) {
-                    cell.r = this.options.VIRUS_SIZE;
-                    this.tree.update(cell);
-                    const angle = Math.atan2(cell.boostX, cell.boostY);
-                    this.newCell(cell.x, cell.y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
-                        Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
-                } else {
-                    this.game.controls[cell.type].lastPoppedTick = this.__now;
-                    const splits = this.distributeCellMass(cell);
-                    splits.length && (this.game.controls[cell.type].lockDir = false);
-                    for (const mass of splits) {
-                        const angle = Math.random() * 2 * Math.PI;
-                        this.splitFromCell(cell, Math.sqrt(mass * 100),
-                            Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
-                    }
-                }
-            } else if (cell.updated) this.tree.update(cell);
+    /**
+     * 
+     * @param {number} id 
+     * @param {number} type 
+     * @param {number} eatenBy 
+     * @param {number} eatenByType 
+     */
+    removeCell(id, type, eatenBy, eatenByType) {
+        this.tree.remove(this.cells[id]);
+        this.counters[type].delete(id);
+        this.removedCells.push(id);
+        this.cellCount--;
+        if (type <= 250 && !this.counters[type].size) {
+            eatenBy && this.game.controls[eatenByType].kills++;
+            this.game.controls[type].surviveTime = this.__now - this.game.controls[type].lastSpawnTick;
+            this.game.controls[type].lastSpawnTick = this.__now;
+            this.game.controls[type].dead = true;
+            this.game.controls[type].score = 0;
         }
     }
 
     /**
-     * @param {Cell} cell 
-     * @param {number} size 
+     * @param {number} x 
+     * @param {number} y 
      * @param {number} boostX 
      * @param {number} boostY 
+     */
+    splitVirus(x, y, boostX, boostY) {
+        const angle = Math.atan2(boostX, boostY);
+        this.newCell(x, y, this.options.VIRUS_SIZE, VIRUS_TYPE, 
+            Math.sin(angle), Math.cos(angle), this.options.VIRUS_SPLIT_BOOST);
+    }
+
+    /**
+     * @param {number} id
+     * @param {number} type
+     * @param {number} mass
+     */
+    popPlayer(id, type, mass) {
+        this.game.controls[type].lastPoppedTick = this.__now;
+        const splits = this.distributeCellMass(type, mass);
+        splits.length && (this.game.controls[type].lockDir = false);
+        for (const mass of splits) {
+            const angle = Math.random() * 2 * Math.PI;
+            this.splitFromCell(this.cells[id], Math.sqrt(mass * 100),
+                Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+        }
+    }
+
+    /**
+     * @param {Cell} cell
+     * @param {number} size
+     * @param {number} boostX
+     * @param {number} boostY
      * @param {number} boost
      */
     splitFromCell(cell, size, boostX, boostY, boost) {
@@ -656,15 +670,16 @@ module.exports = class Engine {
     }
 
     /**
-     * @param {Cell} cell
+     * @param {number} type
+     * @param {number} mass
      * @returns {number[]}
      */
-    distributeCellMass(cell) {
-        let cellsLeft = this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
+    distributeCellMass(type, mass) {
+        let cellsLeft = this.options.PLAYER_MAX_CELLS - this.counters[type].size;
         if (cellsLeft <= 0) return [];
         let splitMin = this.options.PLAYER_MIN_SPLIT_SIZE;
         splitMin = splitMin * splitMin / 100;
-        const cellMass = cell.r * cell.r / 100;
+        const cellMass = mass;
         if (this.options.VIRUS_MONOTONE_POP) {
             const amount = Math.min(Math.floor(cellMass / splitMin), cellsLeft);
             const perPiece = cellMass / (amount + 1);

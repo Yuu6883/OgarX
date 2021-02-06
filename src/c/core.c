@@ -51,6 +51,12 @@ typedef struct {
 extern float get_score(unsigned char id);
 extern void unlock_line(unsigned char id);
 
+extern void remove_cell(unsigned short id, unsigned char type, 
+    unsigned short eatenBy, unsigned char eatenByType);
+extern void split_virus(float x, float y, float boostX, float boostY);
+extern void pop_player(unsigned short id, unsigned char type, float mass);
+extern void tree_update(unsigned short id);
+
 size_t bytes_per_cell() { return sizeof(Cell); }
 unsigned char get_cell_updated(Cell ptr[], unsigned short id) { return IS_PLAYER(ptr[id].type) || (ptr[id].flags & UPDATE_BIT); };
 float get_cell_x(Cell ptr[], unsigned short id) { return ptr[id].x; };
@@ -344,13 +350,15 @@ extern float get_line_a(unsigned char id);
 extern float get_line_b(unsigned char id);
 extern float get_line_c(unsigned char id);
 
+extern void console_log(unsigned short id);
+
 unsigned int resolve(Cell cells[],
     unsigned short* ptr, unsigned short pellet_count,
     QuadNode* root, QuadNode** sp, 
     unsigned int noMergeDelay, unsigned int noColliDelay, 
     float eatOverlap, float eatMulti, 
     float virusBoost, float virusMaxBoost,
-    float virusMaxSize, unsigned int removeTick) {
+    float virusSize, float virusMaxSize, unsigned int removeTick) {
 
     unsigned int collisions = 0;
     unsigned short* ptr_copy = ptr;
@@ -560,12 +568,29 @@ unsigned int resolve(Cell cells[],
     float line_c;
     float line_a_b_sqr_sum_inv;
     
-    while (*ptr_copy) {
-        Cell* cell = &cells[*ptr_copy++];
-        unsigned char type = cell->type;
-        if (NOT_PLAYER(type)) break; // only player cells can use lock bit
+    // Post resolve
+    while (1) {
+        unsigned short id = *ptr_copy++;
+        if (!id) break;
 
-        if (cell->flags & LOCK_BIT) {
+        Cell* cell = &cells[id];
+        unsigned char type = cell->type;
+        unsigned char flags = cell->flags;
+
+        if (flags & REMOVE_BIT) {
+            remove_cell(id, type, cell->eatenBy, cells[cell->eatenBy].type);
+            continue;
+        } else if (flags & POP_BIT) {
+            if (IS_VIRUS(type)) {
+                cell->r = virusSize;
+                split_virus(cell->x, cell->y, cell->boostX, cell->boostY);
+            } else {
+                pop_player(id, type, cell->r * cell->r * 0.01f);
+            }
+            continue;
+        } else tree_update(id);
+
+        if (flags & LOCK_BIT) {
             if (lock_type != type) {
                 line_a = get_line_a(type);
                 line_b = get_line_b(type);
