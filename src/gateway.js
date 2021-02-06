@@ -24,20 +24,34 @@ const sockets = new Set();
 
 server.on("connection", sock => {
     sockets.add(sock);
-    sock.on("data", buffer => sock.data = JSON.parse(buffer.toString()))
+    sock.on("data", buffer => {
+            const data = JSON.parse(buffer.toString());
+            sock.pid = data.pid;
+            delete data.pid;
+            sock.data = data;
+        })
         .on("close", () => sockets.delete(sock));
 });
 
 server.listen(pipename(SOCKET_FILE));
 const port = process.env.GATEWAY_PORT || 443;
 
+let timeout = null;
 /** @type {Set<uWS.HttpResponse>} */
 const connections = new Set();
 
-const interval = setInterval(() => {
-    const data = "event: servers\ndata: " + JSON.stringify([...sockets].map(s => s.data)) + "\n\n";
+const broadcast = async () => {
+    /** @type {pm2.ProcessDescription[]} */
+    const procList = await new Promise(resolve => pm2.list((err, list) => resolve(err ? [] : list)));
+    const data = "event: servers\ndata: " + JSON.stringify([...sockets].map(s => {
+        const data = Object.assign({}, s.data);
+        const proc = procList.find(p => p.pid == s.pid);
+        data.load = proc ? proc.monit.cpu * 0.01 : 1 / sockets.size;
+        return data;
+    })) + "\n\n";
     for (const res of connections) res.write(data);
-}, 500);
+    timeout = setTimeout(broadcast, 500);
+}
 
 let token = process.env.OGARX_TOKEN;
 
@@ -103,5 +117,6 @@ let token = process.env.OGARX_TOKEN;
         });
         console.log((sock ? "Gateway Server listening" : "Gateway Server failed to listen") + 
             ` on port ${port} ` + (token ? "WITH token" : "WITHOUT token"));
+        broadcast();
         process.send("ready");
     });

@@ -67,13 +67,13 @@ module.exports = class SocketServer {
         this.ipcInterval = setInterval(() => {
             try {
                 this.ipcClient.write(JSON.stringify({
+                    pid: process.pid,
                     uid: this.uid,
                     name: g.name,
                     endpoint: `${port}/${endpoint}`,
                     bot: g.engine.bots.length,
                     players: g.handles,
-                    total: 250, // Number in theory
-                    load: g.engine.usage
+                    total: 250 // Number in theory
                 }));
             } catch (_) {}
         }, 1000);
