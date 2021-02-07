@@ -229,7 +229,7 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     sendStats() {
-        if (!this.controller.score) return;
+        if (!this.controller.maxScore) return;
         const writer = new Writer();
         writer.writeUInt8(7);
         writer.writeUInt32(this.controller.kills);

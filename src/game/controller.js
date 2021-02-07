@@ -120,6 +120,7 @@ module.exports = class Controller {
         this.spawn = false;
         this.autoRespawn = false;
         this.surviveTime = 0;
+        this.lastSpawnTick = this.engine.__now;
     }
 
     get canSpawn() {

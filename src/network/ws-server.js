@@ -9,16 +9,6 @@ const SOCKET_FILE = path.resolve(__dirname, "..", "unix.sock");
 const Protocols = require("./protocols");
 const Game = require("../game");
 
-/** @param {ArrayBuffer} buffer */
-const bufferToString = buffer => {
-    const array = new Uint8Array(buffer);
-    const chars = [];
-    let index = 0;
-    while (array[index] && index++ < array.length)
-        chars.push(String.fromCharCode(array[index]));
-    return chars.join("");
-}
-
 module.exports = class SocketServer {
 
     constructor(name) {
@@ -49,7 +39,7 @@ module.exports = class SocketServer {
         setTimeout(() => this.ipcConnect(), 5000);
     }
 
-    /** 
+    /**
      * @param {Object} arg0
      * @param {uWS.AppOptions} arg0.sslOptions
      * @param {number} [arg0.port=443]

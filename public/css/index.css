@@ -143,6 +143,7 @@ h1, h2, h3, h4, h5, h6 {
     width: 200px;
     height: 200px;
     background-color: rgba(14, 14, 14, 0.8);
+    border: solid 2px#ffffff77;
 }
 .minimap-node {
     transition: cx 0.25s linear, cy 0.25s linear, r 0.25s linear;

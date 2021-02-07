@@ -194,8 +194,8 @@ module.exports = class Engine {
         this.removedCells = [];
         /** @type {[number, boolean][]} */
         this.killArray = [];
-        /** @type {number[]} */
-        this.spawnArray = [];
+        /** @type {Set<number>} */
+        this.spawnSet = new Set();
     }
 
     get running() { return !!this.updateInterval; }
@@ -242,8 +242,10 @@ module.exports = class Engine {
         this.bindBuffers();
     }
     
-    delaySpawn(id) {
-        this.spawnArray.push(id);
+    /** @param {Controller} controller */
+    delaySpawn(controller) {
+        controller.spawn = false;
+        this.spawnSet.add(controller.id);
     }
 
     delayKill(id = 0, replace = false) {
@@ -304,11 +306,12 @@ module.exports = class Engine {
             } else break;
         }
 
-        this.spawnArray = this.spawnArray.filter(id => {
+        for (const id of [...this.spawnSet]) {
             const c = this.game.controls[id];
             // Somehow still alive
             if (c.alive) {
-                return false;
+                this.spawnSet.delete(id);
+                continue;
             }
 
             // Success varaible
@@ -324,13 +327,11 @@ module.exports = class Engine {
             }
 
             if (s) {
+                this.spawnSet.delete(id);
                 this.game.emit("spawn", c);
                 c.afterSpawn();
-                c.lastSpawnTick = this.__now;
             }
-
-            return !s;
-        });
+        }
     }
 
     handleInputs(dt) {
@@ -471,7 +472,7 @@ module.exports = class Engine {
             }
 
             // Spawn
-            if (controller.canSpawn) this.delaySpawn(controller.id);
+            if (controller.canSpawn) this.delaySpawn(controller);
         }
     }
 
