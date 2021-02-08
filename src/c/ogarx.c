@@ -103,6 +103,7 @@ unsigned char* serialize(
     unsigned short cell_count,
     unsigned char line_lock,
     float score,
+    float mx, float my,
     float vx, float vy,
     unsigned int table[],
     unsigned short* lists, unsigned char* dist,
@@ -114,6 +115,9 @@ unsigned char* serialize(
     writeUint16(cell_count);
     writeUint8(line_lock);
     writeFloat32(score);
+    // Write mouse coordinates
+    writeFloat32(mx);
+    writeFloat32(my);
     // Write viewport floats
     writeFloat32(vx);
     writeFloat32(vy);

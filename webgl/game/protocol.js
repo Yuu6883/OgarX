@@ -229,6 +229,7 @@ module.exports = class Protocol extends EventEmitter {
         this.bandwidth = 0;
         this.renderer = renderer;
         this.replay = new ReplaySystem(renderer, this, REPLAY_LENGTH);
+        this.map = { hw: 10000, hh: 10000 };
         this.setupIntervals();
         this.onMessage = this.onMessage.bind(this);
     }
@@ -272,7 +273,6 @@ module.exports = class Protocol extends EventEmitter {
 
         this.ws.onclose = e => {
             this.bandwidth = 0;
-            delete this.map;
             delete this.ping;
             delete this.lastName;
             delete this.lastSkin;
@@ -342,10 +342,8 @@ module.exports = class Protocol extends EventEmitter {
         switch (OP) {
             case 1:
                 this.pid = reader.readUInt16();
-                this.map = { 
-                    hw: reader.readUInt16(), 
-                    hh: reader.readUInt16()
-                };
+                this.map.hw = reader.readUInt16();
+                this.map.hh = reader.readUInt16();
                 console.log(`Map Dimension: ${this.map.hw << 1}x${this.map.hh << 1}`);
                 const server = reader.readUTF16String();
                 this.emit("protocol");
@@ -421,20 +419,23 @@ module.exports = class Protocol extends EventEmitter {
     parseCellData(buffer) {
         this.lastPacket = this.renderer.lastTimestamp;
 
+        const r = this.renderer;
         const core = this.renderer.core;
-        const header = new DataView(buffer, 1, 15);
+        const header = new DataView(buffer, 1, 23);
 
         const prev = this.renderer.stats.mycells;
         const curr = header.getUint16(0, true);
-        if (this.replaying && !prev && curr) this.renderer.shouldTP = true;
-        this.renderer.stats.mycells = curr;
-        this.renderer.stats.linelocked = header.getUint8(2);
-        this.renderer.stats.score = header.getFloat32(3, true);
-        this.renderer.target.position[0] = header.getFloat32(7, true);
-        this.renderer.target.position[1] = header.getFloat32(11, true);
+        if (this.replaying && !prev && curr) r.shouldTP = true;
+        r.stats.mycells = curr;
+        r.stats.linelocked = header.getUint8(2);
+        r.stats.score = header.getFloat32(3, true);
+        r.syncMouse.x = header.getFloat32(7, true);
+        r.syncMouse.y = header.getFloat32(11, true);
+        r.target.position[0] = header.getFloat32(15, true);
+        r.target.position[1] = header.getFloat32(19, true);
         
-        core.HEAPU8.set(new Uint8Array(buffer, 16), this.renderer.cellTypesTableOffset);                 
-        core.instance.exports.deserialize(0, this.renderer.cellTypesTableOffset);
+        core.HEAPU8.set(new Uint8Array(buffer, 24), r.cellTypesTableOffset);                 
+        core.instance.exports.deserialize(0, r.cellTypesTableOffset);
     }
 
     /** @param {Reader} reader */

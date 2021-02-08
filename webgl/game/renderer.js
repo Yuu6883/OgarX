@@ -16,7 +16,8 @@ const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
    MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE,
    QUAD_VERT_SHADER_SOURCE, 
    BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE,
-   BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE
+   BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE,
+   SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE
 } = require("./shaders");
 
 const NAME_MASS_MIN = 0.03;
@@ -46,6 +47,8 @@ class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
 
+        this.core = new WasmCore(this);
+
         /** @type {Map<string, WebGLFramebuffer|WebGLFramebuffer[]>} */
         this.fbo = new Map();
         /** @type {Map<string, WebGLFramebuffer>} */
@@ -63,8 +66,8 @@ class Renderer {
         this.mouse = new Mouse();
         this.state = new State();
         this.viewport = new Viewport();
-        this.core = new WasmCore(this);
         this.viewbox = { t: 0, b: 0, l: 0, r: 0 };
+        this.syncMouse = { x: 0, y: 0 };
 
         this.initLoader();
 
@@ -228,6 +231,7 @@ class Renderer {
         const blend_prog = this.blend_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
         const final_prog = this.final_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
         const border_prog = this.border_prog = makeProgram(gl, BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE);
+        const sprite_prog = this.sprite_prog = makeProgram(gl, SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE);
         // this.fxaaProg = makeProgram(gl, FXAA_VERT_SHADER_SOURCE, FXAA_FRAG_SHADER_SOURCE);
     
         // Dual depth peeling uniforms
@@ -256,11 +260,17 @@ class Renderer {
         this.loadUniform(final_prog, "u_front_color");
         this.loadUniform(final_prog, "u_back_color");
 
+        this.loadUniform(sprite_prog, "u_pos");
+        this.loadUniform(sprite_prog, "u_proj");
+        this.loadUniform(sprite_prog, "u_texture");
+
         this.setUpPeelingBuffers();
         this.generateQuadVAO();
         this.generateMassVAO();
+        this.generateSpriteVAO();
         this.generateCircleTexture();
         this.generateMassTextures();
+        await this.generateMouseTexture();
         // await this.genCells();
 
         this.allocBuffer("cell_data_buffer");
@@ -284,6 +294,9 @@ class Renderer {
 
         gl.useProgram(final_prog);
         gl.uniform1i(this.getUniform(final_prog, "u_back_color"), 6);
+        
+        gl.useProgram(sprite_prog);
+        gl.uniform1i(this.getUniform(sprite_prog, "u_texture"), 14);
         
         gl.activeTexture(gl.TEXTURE11);
         this.empty_texture = gl.createTexture();
@@ -571,6 +584,34 @@ class Renderer {
         }
     }
 
+    generateSpriteVAO() {
+        const gl = this.gl;
+
+        const vao = this.spriteVAO = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+    
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("sprite_pos_buffer"));
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            +1, +1,
+            +1, -1,
+            -1, -1,
+            +1, +1,
+            -1, -1,
+            -1, +1,
+        ]), gl.STATIC_DRAW);
+    
+        // a_position
+        {
+            const size = 2;
+            const type = gl.FLOAT;
+            const normalize = false;
+            const stride = 0;
+            const offset = 0;
+            gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+            gl.enableVertexAttribArray(0);
+        }
+    }
+
     generateCircleTexture() {
         const gl = this.gl;
         // Create circle texture on texture unit 10
@@ -689,6 +730,24 @@ class Renderer {
         }
     }
 
+    async generateMouseTexture() {
+        const gl = this.gl;
+        // Create mouse texture on texture 14
+        gl.activeTexture(gl.TEXTURE14);
+        gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+
+        const res = await fetch("/static/img/cursor.png");
+        const buffer = await res.blob();
+        const bitmap = await createImageBitmap(buffer);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, bitmap.width, bitmap.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+        bitmap.close();
+    }
+
     screenToWorld(out = vec3.create(), x = 0, y = 0) {
         const temp = mat4.create();
         mat4.invert(temp, this.proj);
@@ -696,6 +755,7 @@ class Renderer {
     }
 
     updateTarget() {
+        // console.log(this.mouse.x / 4096, this.mouse.y / 4096);
         // Screen space to world space
         this.screenToWorld(this.cursor.position, this.mouse.x / 4096, this.mouse.y / 4096);
         const scroll = this.mouse.resetScroll();
@@ -721,9 +781,10 @@ class Renderer {
 
     checkViewport() {
         const gl = this.gl;
-        if (gl.canvas.width != this.viewport.width || gl.canvas.height != this.viewport.height) {
-            gl.canvas.width  = this.viewport.width;
-            gl.canvas.height = this.viewport.height;
+        const r = this.state.resolution;
+        if (gl.canvas.width != r[0] || gl.canvas.height != r[1]) {
+            gl.canvas.width  = r[0];
+            gl.canvas.height = r[1];
         }
     }
 
@@ -967,6 +1028,7 @@ class Renderer {
         // Background and final prog
         this.clearScreen();
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
         gl.bindVertexArray(this.quadVAO);
 
         if (this.protocol.map) {
@@ -983,6 +1045,19 @@ class Renderer {
 
         // Blend back
         gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        if (this.state.mouse_sync) {
+            gl.useProgram(this.sprite_prog);
+            gl.uniformMatrix4fv(this.getUniform(this.sprite_prog, "u_proj"), false, this.proj);
+
+            const [x, y] = this.cursor.position;
+            gl.uniform2f(this.getUniform(this.sprite_prog, "u_pos"), x, y);
+
+            gl.bindVertexArray(this.spriteVAO);
+
+            // Draw sync mouse texture
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
         
         // FXAA prog
         // gl.bindFramebuffer(gl.FRAMEBUFFER, null);

@@ -317,8 +317,7 @@ layout(location=0) in vec2 a_position;
 uniform mat4 u_proj;
 uniform vec2 u_map;
 void main() {
-    vec4 world_pos = vec4(a_position * u_map, 0.0, 1.0);
-    gl_Position = u_proj * world_pos;
+    gl_Position = u_proj * vec4(a_position * u_map, 0.0, 1.0);
 }
 `;
 
@@ -330,5 +329,38 @@ uniform vec4 u_color;
 out vec4 color;
 void main() {
     color = u_color;
+}
+`;
+
+
+module.exports.SPRITE_VERT_SHADER_SOURCE = 
+`#version 300 es
+precision highp float;
+
+uniform vec2 u_pos;
+uniform mat4 u_proj;
+
+layout(location=0) in vec2 a_position;
+
+out vec2 uv;
+
+void main() {
+    gl_Position = u_proj * vec4(u_pos, 0.0f, 1.0f) + 
+        vec4(a_position * vec2(20.f / 1920.f, -29.0f / 1080.f), 0.0f, 0.0f);
+    uv = 0.5f + a_position / 2.0f;
+}
+`;
+
+module.exports.SPRITE_FRAG_SHADER_SOURCE =
+`#version 300 es
+precision highp float;
+
+uniform sampler2D u_texture;
+
+in vec2 uv;
+out vec4 color;
+
+void main() {
+    color = texture(u_texture, uv);
 }
 `;

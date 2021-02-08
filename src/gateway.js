@@ -34,7 +34,9 @@ server.on("connection", sock => {
 });
 
 server.listen(pipename(SOCKET_FILE));
-const port = process.env.GATEWAY_PORT || 443;
+
+let port = process.env.GATEWAY_PORT || 443;
+if (process.platform === "win32") port = 6969;
 
 let timeout = null;
 /** @type {Set<uWS.HttpResponse>} */

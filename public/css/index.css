@@ -164,7 +164,7 @@ h1, h2, h3, h4, h5, h6 {
     color: #93a7e1;
 }
 #canvas {
-    position: absolute;
+    position: fixed;
     min-width: 100vw;
     min-height: 100vh;
     left: 50%;

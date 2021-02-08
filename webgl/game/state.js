@@ -1,20 +1,19 @@
 module.exports = class State {
     constructor () {
         this.setBuffer();
-        this.quality = 0;
     }
 
     setBuffer(buf) {
         if (!buf) {
-            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(100);
-            else buf = new ArrayBuffer(100);
+            if (self.SharedArrayBuffer) buf = new SharedArrayBuffer(200);
+            else buf = new ArrayBuffer(200);
         }
 
         this.sharedBuffer = buf;
         this.buffer = new Int32Array(this.sharedBuffer);
     }
 
-    get resolution() { return [1, 0.9, 0.8, 0.7, 0.6, 0.5][this.quality] || 1; }
+    get resolution() { return [[1920, 1080], [1280, 720], [854, 480]][this.quality] || [1920, 1080]; }
 
     get spectate() { return Atomics.load(this.buffer, 0); }
     set spectate(v) { Atomics.store(this.buffer, 0, v) }
@@ -72,6 +71,12 @@ module.exports = class State {
     
     get ignore_skin() { return Atomics.load(this.buffer, 17); }
     set ignore_skin(v) { Atomics.store(this.buffer, 17, v); }
+    
+    get mouse_sync() { return Atomics.load(this.buffer, 18); }
+    set mouse_sync(v) { Atomics.store(this.buffer, 18, v); }
+
+    get quality() { return Atomics.load(this.buffer, 19); }
+    set quality(v) { Atomics.store(this.buffer, 19, v); }
 
     exchange() {
         return {

@@ -102,19 +102,19 @@ module.exports = class HUD {
     }
 
     resize() {
-        const w = 1920; //Math.floor(this.state.resolution * window.devicePixelRatio * window.innerWidth);
-        const h = 1080; // Math.floor(this.state.resolution * window.devicePixelRatio * window.innerHeight);
-
-        this.viewport.width  = w;
-        this.viewport.height = h;
-        
-        this.canvas.style.width = w + "px";
-        this.canvas.style.height = h + "px";
+        const DPR = window.devicePixelRatio;
+        this.viewport.width  = this.canvas.clientWidth * DPR;
+        const r = this.state.resolution;
+        const ratio = (window.innerWidth / window.innerHeight) / (r[0] / r[1]);
+        if (ratio < 1) {
+            this.viewport.height = ratio * this.canvas.clientHeight * DPR;
+        } else {
+            this.viewport.height = this.canvas.clientHeight * DPR;
+        }
     }
 
     registerEvents() {
-        // window.onresize = this.resize.bind(this);
-        this.resize();
+        window.onresize = this.resize.bind(this);
 
         document.addEventListener("contextmenu", e => e.preventDefault());
 
@@ -133,8 +133,17 @@ module.exports = class HUD {
         window.addEventListener("mouseup",   e => this.input.keyUp({ key: `MOUSE ${e.button}`}));
 
         window.addEventListener("mousemove", e => {
-            this.mouse.x = ~~(4096 * (2 * e.clientX / window.innerWidth - 1));
-            this.mouse.y = ~~(4096 * (2 * e.clientY / window.innerHeight - 1));
+            let dx = 2 * e.clientX / window.innerWidth  - 1;
+            let dy = 2 * e.clientY / window.innerHeight - 1;
+            const r = this.state.resolution;
+            const ratio = (window.innerWidth / window.innerHeight) / (r[0] / r[1]);
+            if (ratio > 1) {
+                dy /= ratio;
+            } else {
+                dx *= ratio;
+            }
+            this.mouse.x = ~~(4096 * dx);
+            this.mouse.y = ~~(4096 * dy);
         });
 
         canvas.addEventListener("wheel", e => {
@@ -482,6 +491,7 @@ module.exports = class HUD {
     }
 
     onConnect(serverName = "Server") {
+        this.resize(); // ???
         this.serverInput.value = this.server;
         this.show(this.playButton);
         this.show(this.spectateButton);

@@ -9,7 +9,8 @@ const DEFAULT = {
     skin_quality: 0,
     text_quality: 0,
     circle_quality: 0,
-    ignore_skin: 0
+    ignore_skin: 0,
+    mouse_sync: 0
 };
 const OPTION_KEYS = Object.keys(DEFAULT);
 
@@ -17,12 +18,13 @@ const MultiChoice = {
     skin: ["Disabled", "Enabled"],
     name: ["Disabled", "Enabled"],
     mass: ["Disabled", "Short", "Long"],
-    quality: ["x1.0", "x0.8", "x0.7", "x0.6", "x0.5"],
+    quality: ["1080p", "720p", "480p"],
     auto_respawn: ["Disabled", "Enabled"],
     skin_quality: ["High", "Medium", "Low", "Laptop"],
     text_quality: ["High", "Medium", "Low", "Laptop"],
     circle_quality: ["High", "Medium", "Low", "Laptop"],
-    ignore_skin: ["Disabled", "Enabled"]
+    ignore_skin: ["Disabled", "Enabled"],
+    // mouse_sync: ["Disabled", "Enabled"]
 }
 
 module.exports = class Options {
