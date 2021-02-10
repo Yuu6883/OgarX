@@ -90,6 +90,7 @@ const DefaultSettings = {
     WORLD_OVERSIZE_MESSAGE: "${c.name} died from oversize",
     EAT_OVERLAP: 3,
     EAT_MULT: 1.140175425099138,
+    SOCKET_MOUSE_SYNC: true,
     SOCKET_WATERMARK: 1024 * 512, // 500kb
     IGNORE_TYPE: 253
 }

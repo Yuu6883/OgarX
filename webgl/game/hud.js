@@ -19,7 +19,7 @@ const msToText = ms => {
     return `${h.toFixed(1)}h`;
 }
 
-const scoreToText = s => s > 1000000 ? `${(s / 1000000).toFixed(2)}M` : s > 1000 ? `${(s / 1000).toFixed(1)}K` : s;
+const scoreToText = s => s > 1000000 ? `${(s / 1000000).toFixed(2)}M` : s > 1000 ? `${(s / 1000).toFixed(1)}K` : Math.round(s);
 const SVG = "http://www.w3.org/2000/svg";
 
 module.exports = class HUD {

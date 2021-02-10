@@ -96,8 +96,19 @@ module.exports = class OgarXProtocol extends Protocol {
                 if (controller.alive) return;
                 // TODO: spectate a target
             case 3:
-                controller.mouseX = reader.readFloat32();
-                controller.mouseY = reader.readFloat32();
+                const mx = reader.readFloat32();
+                const my = reader.readFloat32();
+                if (this.game.engine.options.SOCKET_MOUSE_SYNC) {
+                    for (const c of this.game.controls) {
+                        if (c.handle instanceof OgarXProtocol && c.handle.ws.ip == this.ws.ip) {
+                            c.mouseX = mx;
+                            c.mouseY = my;
+                        }
+                    }
+                } else {
+                    controller.mouseX = mx;
+                    controller.mouseY = my;
+                }
                 // controller.spectate TODO:
                 const spectate = reader.readUInt8();
                 const splits = reader.readUInt8();

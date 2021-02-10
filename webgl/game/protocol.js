@@ -307,7 +307,7 @@ module.exports = class Protocol extends EventEmitter {
 
         const state = this.renderer.state;
         this.mouseInterval = self.setInterval(() => {
-            if (!this.connected || !this.pid) return;
+            if (!this.connected || !this.pid || !this.renderer.state.visible) return;
 
             const writer = new Writer();
             writer.writeUInt8(3);

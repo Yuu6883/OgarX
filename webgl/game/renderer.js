@@ -755,7 +755,6 @@ class Renderer {
     }
 
     updateTarget() {
-        // console.log(this.mouse.x / 4096, this.mouse.y / 4096);
         // Screen space to world space
         this.screenToWorld(this.cursor.position, this.mouse.x / 4096, this.mouse.y / 4096);
         const scroll = this.mouse.resetScroll();
@@ -764,13 +763,13 @@ class Renderer {
     }
 
     // Smooth update camera
-    lerpCamera(d = 1 / 60, position) {
+    lerpCamera(d = 1 / 60) {
         const l = Math.min(Math.max(d * this.state.zoom, 0), 1);
         vec3.lerp(this.camera.position, this.camera.position, this.target.position, d);
         this.camera.scale += (this.target.scale - this.camera.scale) * l;
 
-        const x = position ? position.x : this.camera.position[0];
-        const y = position ? position.y : this.camera.position[1];
+        const x = this.camera.position[0];
+        const y = this.camera.position[1];
         const hw = this.viewport.width  * this.camera.scale / 2;
         const hh = this.viewport.height * this.camera.scale / 2;
 
@@ -887,7 +886,7 @@ class Renderer {
             const size = buffer[o + 2];
             // mass = 1 is short, 2 is long
             const mass = this.state.mass - 1 ? Math.floor(buffer[o + 3]).toString() : 
-                buffer[o + 3] > 1000 ? (buffer[o + 3] / 1000).toFixed(1) + "k" : buffer[o + 3];
+                buffer[o + 3] > 1000 ? (buffer[o + 3] / 1000).toFixed(1) + "k" : Math.round(buffer[o + 3]).toString();
             
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
@@ -961,25 +960,12 @@ class Renderer {
         const cell_count = this.core.instance.exports.draw_cells(0, 
             this.cellTypesTableOffset, 
             this.cellBufferOffset, lerp,
-            this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
+            this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r, 
+            this.protocol.pid, this.stats.mycells);
         
         this.updateTarget();
 
-        let position = null;
-        // Client side camera centering for single cell
-        // if (this.protocol.pid) {
-        //     let begin = this.cellTypesTable[this.protocol.pid - 1];
-        //     let end   = this.cellTypesTable[this.protocol.pid];
-        //     if (begin != end) {
-        //         if (!end) end = 65536;
-        //         if (end - begin == 1) {
-        //             const x = this.renderBufferView.getFloat32(begin * 3, true);
-        //             const y = this.renderBufferView.getFloat32(begin * 3 + 4, true);
-        //             // position = { x, y };
-        //         }
-        //     }
-        // }
-        this.shouldTP ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw, position);
+        this.shouldTP ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw);
         this.checkViewport();
 
         if (!this.state.visible && !this.protocol.replay.requestPreview) {

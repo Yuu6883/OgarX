@@ -94,7 +94,7 @@ void update(Cell cells[], unsigned short* ptr, float dt,
         cell->age += dt;
         cell->flags &= CLEAR_BITS;
 
-        if (IS_EJECTED(cell->type) && cell->age > eject_max_age)
+        if (IS_EJECTED(cell->type) && eject_max_age && cell->age > eject_max_age)
             cell->flags |= REMOVE_BIT;
 
         // Boost cell
@@ -377,6 +377,8 @@ unsigned int resolve(Cell cells[],
             ptr += pellet_count;
             continue;
         }
+
+        if (IS_EJECTED(type) && !(flags & UPDATE_BIT)) continue; 
 
         if (IS_DEAD(type)) {
             if (cell->age > removeTick) {

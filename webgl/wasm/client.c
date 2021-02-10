@@ -56,6 +56,8 @@ unsigned int bytes_per_cell_data() { return sizeof(CellData); }
 unsigned int bytes_per_render_cell() { return sizeof(RenderCell); }
 unsigned int bytes_per_render_mass() { return sizeof(RenderMass); }
 
+extern void set_camera(float x, float y, float size);
+
 void deserialize(CellData data[], unsigned short* packet) {
     AddPacket* add_data = (AddPacket*) packet;
 
@@ -118,7 +120,8 @@ void deserialize(CellData data[], unsigned short* packet) {
 unsigned int draw_cells(CellData data_begin[], 
     unsigned short offset_table[], 
     RenderCell render_cells[], float lerp,
-    float t, float b, float l, float r) {
+    float t, float b, float l, float r, 
+    unsigned char mypid, unsigned short mycells) {
 
     lerp = lerp > 1 ? 1 : lerp < 0 ? 0 : lerp;
 
@@ -170,6 +173,8 @@ unsigned int draw_cells(CellData data_begin[],
             render_cells[offset].x = begin->currX;
             render_cells[offset].y = begin->currY;
             render_cells[offset].size = begin->currSize;
+            if (begin->type == mypid && mycells == 1 && begin->netSize && begin->currSize < 1000) 
+                set_camera(begin->currX, begin->currY, begin->currSize);
         }
         begin++;
     }

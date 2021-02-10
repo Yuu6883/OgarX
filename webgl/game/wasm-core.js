@@ -9,6 +9,10 @@ module.exports = class WasmCore {
         const res = await fetch("/static/wasm/client.wasm");
         const m = new WebAssembly.Memory({ initial: page, maximum: page });
         const e = { env: { memory: m, 
+            set_camera: (x, y, size) => {
+                this.renderer.camera.position[0] = this.renderer.target.position[0] = x;
+                this.renderer.camera.position[1] = this.renderer.target.position[1] = y;
+            },
             debug: () => {
                 console.log(this.renderer.cellTypesTable.slice(251));
             }

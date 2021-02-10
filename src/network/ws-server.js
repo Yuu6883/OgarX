@@ -82,7 +82,7 @@ module.exports = class SocketServer {
                         req.getHeader('sec-websocket-extensions'),
                         context);
                 },
-                open: ws => () => {}, // Do nothing in open event
+                open: ws => () => ws.ip = new Uint8Array(res.getRemoteAddress()).join("."), // save ip
                 message: (ws, message, isBinary) => {
                     if (!isBinary) ws.end(1003);
                     if (!ws.p) {

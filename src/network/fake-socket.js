@@ -21,6 +21,8 @@ module.exports = class FakeSocket {
         this.p = null;
     }
 
+    get ip() { return "127.0.0.1"; }
+
     getBufferedAmount() { return 0; }
 
     /** @param {BufferSource} buffer */
