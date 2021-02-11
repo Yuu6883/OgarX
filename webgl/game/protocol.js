@@ -103,8 +103,9 @@ class ReplaySystem {
         let tArray = snapshots.reduce((prev, curr) => prev.concat(curr.packetTimestamps), []);
         const minTimestamp = Math.min(...tArray);
         tArray = tArray.map(t => t - minTimestamp);
-        const players = this.encodePlayerData();
 
+        const handshake = this.protocol.HANDSHAKE_PACKET;
+        const players = this.encodePlayerData();
         const timestamps = new Float32Array(tArray).buffer;
 
         const initial = this.encodeState(snapshots[0].state);
@@ -124,8 +125,8 @@ class ReplaySystem {
             });
         }
 
-        const replay = { initial, buffers, timestamps, players, 
-            PREVIEW_WIDTH, PREVIEW_HEIGHT, 
+        const replay = { handshake, initial, buffers, timestamps, players, 
+            PREVIEW_WIDTH, PREVIEW_HEIGHT,
             REPLAY_PREVIEW_FPS, PREVIEW_LENGTH: snapshots.length };
         this.renderer.loader.postMessage({ replay }, buffers);
     }
@@ -138,6 +139,8 @@ class ReplaySystem {
 
     // Record current state
     recordState() {
+        if (this.curr) return;
+
         const tail = this.snapshots.pop();
         this.free(tail);
         this.snapshots.unshift(tail);
@@ -190,7 +193,10 @@ class ReplaySystem {
         console.assert(this.curr.timestamps.length === this.curr.packets.length,
             "Packet and timestamp length MUST match");
 
+        if (data.handshake) this.protocol.onMessage({ data: data.handshake });
         this.protocol.parsePlayers(data.players);
+
+        console.log("Replay loaded", this.curr);
     }
 
     update(dt = 0) {
@@ -203,7 +209,7 @@ class ReplaySystem {
             core.instance.exports.deserialize(0, this.renderer.cellBufferOffset);
         }
         // "Receive" packet
-        while (this.curr.timestamps[this.i] < this.t) 
+        while (this.curr.timestamps[this.i] < this.t)
             this.protocol.onMessage({ data: this.curr.packets[this.i++] });
 
         // Loop
@@ -341,6 +347,7 @@ module.exports = class Protocol extends EventEmitter {
 
         switch (OP) {
             case 1:
+                this.HANDSHAKE_PACKET = e.data;
                 this.pid = reader.readUInt16();
                 this.map.hw = reader.readUInt16();
                 this.map.hh = reader.readUInt16();
