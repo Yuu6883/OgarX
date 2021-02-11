@@ -11,29 +11,24 @@ You can not use this server as a substiture for OgarII or any clones since I've 
 * Raw WebGL client
 
 ## Features
-* Render borders/map
-* Auto respawn
-* Custom resolution
-* Minimap
-* Custom keybinds
-* Customizable render options
-* Main menu UI
-* Game chat
-* Leaderboard
-* Display stats (FPS, net delay, etc)
-
-## Todo
-* Replay System (in progress)
-* Server commands (chat/web-console/terminal)
-* Configurable local server
-* Peer-to-peer connection
-* Public server list
-* Rewrite shader so overlapping cells with exact same mass renders correctly
+ - [x] Public server list
+ - [x] Replay System
+ - [x] Render borders/map
+ - [x] Auto respawn
+ - [x] Custom resolution
+ - [x] Minimap
+ - [x] Custom keybinds
+ - [x] Customizable render options
+ - [x] Main menu UI
+ - [x]  Game chat
+ - [x] Leaderboard
+ - [x]  Display stats (FPS, net delay, etc)
+ - [ ] Better shader (performance & correctness issues)
+ - [ ] Commands (some form of authentication needed)
+ - [ ] ~~Configurable local server~~ (some options should not be modifiable)
+ - [ ] ~~Peer-to-peer connection~~ (WebRTC API is terrible)
 
 ## Demo
-**WARNING: only works with latest Chrome** and laptops will have low fps<br>
+**WARNING: only works with latest Chrome** and laptops have low fps due to the shader program<br>
 https://ogar69.yuu.dev<br>
-(Local server is implemented with SharedWorker)
-
-## Notes
-SoonTM
+(Local server is implemented with a SharedWorker)
