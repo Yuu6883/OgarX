@@ -1,6 +1,4 @@
-if (self.importScripts) {
-    importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");    
-}
+importScripts("https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js");    
 
 const Stats = require("./stats");
 const Mouse = require("./mouse");
@@ -10,14 +8,11 @@ const Protocol = require("./protocol");
 const WasmCore = require("./wasm-core");
 const TextureStore = require("./texture-store");
 
-const { makeProgram, pick, getColor } = require("./util");
-const { CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE,
-   NAME_VERT_SHADER_SOURCE, NAME_FRAG_PEELING_SHADER_SOURCE,
+const { makeProgram, COLORS } = require("./util");
+const {
+   SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE,
    MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE,
-   QUAD_VERT_SHADER_SOURCE, 
-   BLEND_BACK_FRAG_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE,
-   BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE,
-   SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE
+   BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE
 } = require("./shaders");
 
 const NAME_MASS_MIN = 0.03;
@@ -30,7 +25,7 @@ const MASS_Y_OFFSET = -0.33;
 
 // Constants
 const CELL_TYPES = 256;
-const CELL_LIMIT = 2 ** 16; // 65536
+const CELL_LIMIT = 1 << 16; // 65536
 const MIN_SIZE = 30;
 const SIZE_RANGE = 200;
 const POS_RANGE = 65536;
@@ -56,6 +51,8 @@ class Renderer {
         /** @type {Map<WebGLProgram, Map<string, WebGLUniformLocation>} */
         this.uniforms = new Map();
 
+        /** @type {WebGLTexture[]} */
+        this.circleTextures = [];
         /** @type {{ skin: string, name: string }[]} */
         this.playerData = Array.from({ length: 256 });
         this.playerData[0] = { name: "Server" };
@@ -71,10 +68,6 @@ class Renderer {
 
         this.initLoader();
 
-        this.drawCells = this.drawCells.bind(this);
-        this.drawNames = this.drawNames.bind(this);
-        this.drawMass  = this.drawMass.bind(this);
-
         this.fps = 0;
         this.fpsInterval = setInterval(() => {
             this.stats.fps = this.fps;
@@ -89,8 +82,9 @@ class Renderer {
             try {
                 this.render(now);
             } catch (e) { 
-                this.stop(); 
-                console.error(e);
+                this.stop();
+                this.protocol.disconnect();
+                throw e;
             }
         };
         this.r = requestAnimationFrame(loop);
@@ -109,11 +103,11 @@ class Renderer {
 
         const old = this.playerData[id];
         if (old) {
-            if (this.store.replace(old.name, name)) this.loader.postMessage({ id, name });
-            if (this.store.replace(old.skin, skin)) this.loader.postMessage({ id, skin });
+            if (this.textures.replace(old.name, name)) this.loader.postMessage({ id, name });
+            if (this.textures.replace(old.skin, skin)) this.loader.postMessage({ id, skin, quality: this.state.skin_dim });
         } else {
-            if (this.store.add(name, persist)) this.loader.postMessage({ id, name });
-            if (this.store.add(skin, persist)) this.loader.postMessage({ id, skin });
+            if (this.textures.add(name, persist)) this.loader.postMessage({ id, name });
+            if (this.textures.add(skin, persist)) this.loader.postMessage({ id, skin, quality: this.state.skin_dim });
         }
         this.playerData[id] = { skin, name };
     }
@@ -153,10 +147,15 @@ class Renderer {
             powerPreference: "high-performance",
             preserveDrawingBuffer: true
         });
+
         if (!gl) return console.error("WebGL2 Not Supported");
+
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         // console.log("Loading WASM...");
         await this.core.load();
+        this.wasm = this.core.instance.exports;
 
         // console.log("Loading font");
         let font = new FontFace("Bree Serif", "url(/static/font/BreeSerif-Regular.ttf)");
@@ -165,151 +164,65 @@ class Renderer {
         font = new FontFace("Lato", "url(/static/font/Lato-Bold.ttf)");
         self.fonts && fonts.add(font);
         await font.load();
-
-        if (!self.mat4) {
-            console.log("Loading glMatrix library");
-            const glMatrixScript = document.createElement("script");
-            glMatrixScript.src = "https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js";
-            document.body.appendChild(glMatrixScript);
-            await new Promise(resolve => glMatrixScript.onload = resolve);
-        }
         
         this.cursor = { position: vec3.create() };
         this.target = { position: vec3.create(), scale: 10 };
-        this.camera = { position: vec3.create(), scale: 10 };
-        this.shouldTP = false;
+        this.camera = { position: vec3.create(), scale: 10, tp: false };
         this.proj = mat4.create();
         
-        // console.log("Loading bot skins & names");
-        // const res = await fetch("/static/data/bots.json");
-        /** @type {{ names: string[], skins: string[] }} */
-        this.bots = { names: [], skins: [] }; // await res.json();
-
         this.IGNORE_SKIN = this.state.ignore_skin;
         this.SKIN_DIM = this.state.skin_dim;
 
-        this.BYTES_PER_CELL_DATA = this.core.instance.exports.bytes_per_cell_data();
-        this.BYTES_PER_RENDER_CELL = this.core.instance.exports.bytes_per_render_cell();
+        this.BYTES_PER_CELL_DATA = this.wasm.bytes_per_cell_data();
+        this.BYTES_PER_RENDER_CELL = this.wasm.bytes_per_render_cell();
+        this.INDICES_OFFSET = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
+       
+        // name text vertex cpu buffer
+        this.nameWidths = new Float32Array(256);
+        this.nameBuffer = new Float32Array(new ArrayBuffer(6 * CELL_LIMIT));
 
-        this.cellDataBufferLength = this.cellTypesTableOffset = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
-        // console.log(`Table offset: ${this.cellTypesTableOffset}`);
-        this.cellBufferOffset = this.cellTypesTableOffset + CELL_TYPES * 2; // Offset table
-        // console.log(`Render buffers offset: ${this.cellBufferOffset}`);
-        this.cellBufferEnd = this.cellBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
-        // console.log(`Render buffer end ${this.cellBufferEnd}`);
-        this.nameBufferOffset = this.cellBufferEnd + CELL_TYPES * 2;
-        this.nameBufferEnd = this.nameBufferOffset + CELL_LIMIT * this.BYTES_PER_RENDER_CELL;
-        console.log(`${(this.core.buffer.byteLength / 1024 / 1024).toFixed(1)}MB allocated for renderer WebAssembly`);
-        
-        this.cellTypesTable = new Uint16Array(this.core.buffer, this.cellTypesTableOffset, CELL_TYPES); 
-        this.nameTypesTable = new Uint16Array(this.core.buffer, this.cellBufferEnd, CELL_TYPES);
-
-        this.renderBuffer = this.core.HEAPU8.subarray(this.cellBufferOffset, this.cellBufferEnd);
-        this.renderBufferView = new DataView(this.core.buffer, this.cellBufferOffset, CELL_LIMIT * this.BYTES_PER_RENDER_CELL);
-        /** @type {Map<string, number>} */
-        this.massWidthsTable = new Map();
-
-        // 8 MB cache for mass text
+        // ASCII
+        this.massWidths = new Float32Array(256);
+        // mass text vertex cpu buffer
+        this.massCounts = new Uint8Array(CELL_LIMIT);
         this.massBuffer = new Float32Array(new ArrayBuffer(128 * CELL_LIMIT));
-        this.store = new TextureStore(this);
 
-        // console.log(`Supported WebGL2 extensions: `, gl.getSupportedExtensions());
-        if (!gl.getExtension("EXT_color_buffer_float")) {
-            console.error("FLOAT color buffer not available");
-            return;
-        }
+        const alloc = this.core.buffer.byteLength + this.nameWidths.byteLength + 
+            this.nameBuffer.byteLength + this.massWidths.byteLength +
+            this.massCounts.byteLength + this.massBuffer.byteLength;
 
-        gl.enable(gl.BLEND);
-        gl.depthMask(false);
-        gl.disable(gl.DEPTH_TEST);
-        gl.disable(gl.CULL_FACE);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        console.log(`${(alloc / 1024 / 1024).toFixed(1)} MB allocated for renderer`);
+        
+        this.textures = new TextureStore(this);
 
-        const peel_prog1 = this.peel_prog1 = makeProgram(gl, CELL_VERT_SHADER_SOURCE, CELL_FRAG_PEELING_SHADER_SOURCE);
-        const peel_prog2 = this.peel_prog2 = makeProgram(gl, NAME_VERT_SHADER_SOURCE, NAME_FRAG_PEELING_SHADER_SOURCE);
-        const peel_prog3 = this.peel_prog3 = makeProgram(gl, MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE);
-        const blend_prog = this.blend_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, BLEND_BACK_FRAG_SHADER_SOURCE);
-        const final_prog = this.final_prog = makeProgram(gl, QUAD_VERT_SHADER_SOURCE, FINAL_FRAG_SHADER_SOURCE);
-        const border_prog = this.border_prog = makeProgram(gl, BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE);
-        const sprite_prog = this.sprite_prog = makeProgram(gl, SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE);
-        // this.fxaaProg = makeProgram(gl, FXAA_VERT_SHADER_SOURCE, FXAA_FRAG_SHADER_SOURCE);
-    
-        // Dual depth peeling uniforms
-        for (const p of [peel_prog1, peel_prog2, peel_prog3]) {
-            this.loadUniform(p, "u_proj");
-            this.loadUniform(p, "u_depth");
-            this.loadUniform(p, "u_front_color");
-        }
+        const main_prog = this.main_prog = makeProgram(gl, SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE);
+        const mass_prog = this.mass_prog = makeProgram(gl, MASS_VERT_SHADER_SOURCE,   MASS_FRAG_PEELING_SHADER_SOURCE);
+        const brdr_prog = this.brdr_prog = makeProgram(gl, BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE);
 
-        this.loadUniform(peel_prog1, "u_skin");
-        this.loadUniform(peel_prog1, "u_circle");
-        this.loadUniform(peel_prog1, "u_circle_color");
+        this.loadUniform(main_prog, "u_proj");
+        this.loadUniform(main_prog, "u_uvs");
+        this.loadUniform(main_prog, "u_texture");
 
-        this.loadUniform(peel_prog2, "u_dim");
-        this.loadUniform(peel_prog2, "u_name");
+        this.loadUniform(mass_prog, "u_proj");
+        this.loadUniform(mass_prog, "u_uvs");
+        this.loadUniform(mass_prog, "u_mass_char");
 
-        this.loadUniform(peel_prog3, "u_uvs");
-        this.loadUniform(peel_prog3, "u_mass_char");
+        this.loadUniform(brdr_prog, "u_map");
+        this.loadUniform(brdr_prog, "u_proj");
+        this.loadUniform(brdr_prog, "u_color");
 
-        this.loadUniform(blend_prog, "u_back_color");
-
-        this.loadUniform(border_prog, "u_map");
-        this.loadUniform(border_prog, "u_proj");
-        this.loadUniform(border_prog, "u_color");
-
-        this.loadUniform(final_prog, "u_front_color");
-        this.loadUniform(final_prog, "u_back_color");
-
-        this.loadUniform(sprite_prog, "u_pos");
-        this.loadUniform(sprite_prog, "u_proj");
-        this.loadUniform(sprite_prog, "u_texture");
-
-        this.setUpPeelingBuffers();
-        this.generateQuadVAO();
+        this.generateCellVAO();
+        this.generateNameVAO();
         this.generateMassVAO();
-        this.generateSpriteVAO();
+        this.generateBorderVAO();
+
+        this.generateDeadcellTexture();
         this.generateCircleTexture();
         this.generateMassTextures();
-        await this.generateMouseTexture();
-        // await this.genCells();
-
-        this.allocBuffer("cell_data_buffer");
-        gl.bindVertexArray(this.quadVAO);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
-        gl.bufferData(gl.ARRAY_BUFFER, this.renderBuffer, gl.DYNAMIC_DRAW);
-
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-        gl.vertexAttribDivisor(1, 2);
-        gl.enableVertexAttribArray(1);
-
-        gl.useProgram(peel_prog1);
-        gl.uniform1i(this.getUniform(peel_prog1, "u_circle"), 10);
-        gl.uniform1i(this.getUniform(peel_prog1, "u_skin"), 11);
-
-        gl.useProgram(peel_prog2);
-        gl.uniform1i(this.getUniform(peel_prog2, "u_name"), 12);
-
-        gl.useProgram(peel_prog3);
-        gl.uniform1i(this.getUniform(peel_prog3, "u_mass_char"), 13);
-
-        gl.useProgram(final_prog);
-        gl.uniform1i(this.getUniform(final_prog, "u_back_color"), 6);
-        
-        gl.useProgram(sprite_prog);
-        gl.uniform1i(this.getUniform(sprite_prog, "u_texture"), 14);
-        
-        gl.activeTexture(gl.TEXTURE11);
-        this.empty_texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, this.empty_texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
         const c = 12 / 255;
-        gl.useProgram(border_prog);
-        gl.uniform4f(this.getUniform(border_prog, "u_color"), c, c, c, 1);
+        gl.useProgram(brdr_prog);
+        gl.uniform4f(this.getUniform(brdr_prog, "u_color"), c, c, c, 1);
 
         this.loadPlayerData({ id: 253, skin: `/static/img/virus-${this.SKIN_DIM}.png`, persist: true });
         this.start();
@@ -326,14 +239,14 @@ class Renderer {
         this.clearScreen();
         this.clearPlayerData();
         this.target.position.fill(0);
-        this.store.clear();
+        this.textures.clear();
         this.stats.reset();
     }
 
     teleportCamera() {
         this.camera.scale = this.target.scale;
         this.camera.position.set(this.target.position);
-        this.shouldTP = false;
+        this.camera.tp = false;
     }
 
     clearCells() {
@@ -345,46 +258,10 @@ class Renderer {
         for (let i = 1; i <= 250; i++) this.playerData[i] = undefined;
     }
 
-    randomPlayer() {
-        return {
-            skin: pick(this.bots.skins),
-            name: pick(this.bots.names)
-        }
-    }
-
-    async genCells() {
-        for (let i = 1; i < 256; i++)
-            this.loadPlayerData({ id: i, ...this.randomPlayer() });
-
-        this.GEN_CELLS = 65536;
-        const view = new DataView(this.core.buffer, 0, this.GEN_CELLS * this.BYTES_PER_CELL_DATA);
-        
-        const RNGRange = (min, max) => Math.random() * (max - min) + min;
-        
-        for (let i = 0; i < this.GEN_CELLS; i++) {
-            const o = this.BYTES_PER_CELL_DATA * i;
-            const type = ~~(255 * Math.random() + 1);
-            const x = ~~RNGRange(-POS_RANGE, POS_RANGE) + type / 10;
-            const y = ~~RNGRange(-POS_RANGE, POS_RANGE) + type / 10;
-            const size = RNGRange(MIN_SIZE, MIN_SIZE + SIZE_RANGE);
-
-            view.setUint32(0 + o , type, true);
-            view.setFloat32(4 + o, x, true); // oldX
-            view.setFloat32(8 + o, y, true); // oldY
-            view.setFloat32(12 + o, size, true); // oldSize
-            view.setFloat32(16 + o, x, true); // currX
-            view.setFloat32(20 + o, y, true); // currY
-            view.setFloat32(24 + o, size, true); // currSize
-            view.setFloat32(28 + o, x, true);  // netX
-            view.setFloat32(32 + o, y, true);  // netY
-            view.setFloat32(36 + o, size, true); // netSize
-        }
-    }
-
     /** @param {string} name */
     allocBuffer(name) {
         if (this.buffers.has(name)) throw new Error(`Already allocated buffer "${name}"`);
-        const buf = this.gl.createBuffer()
+        const buf = this.gl.createBuffer();
         this.buffers.set(name, buf);
         return buf;
     }
@@ -405,237 +282,143 @@ class Renderer {
         this.fbo.delete(name);
     }
 
-    rellocPeelingBuffers(w, h) {
-        if (w <= this.FBO_WIDTH && h <= this.FBO_HEIGHT) return;
-        console.log(`Reallocating framebuffers to [${w}, ${h}]`);
-        this.freeFrameBuffer("peel_depths");
-        this.freeFrameBuffer("peel_colors");
-        this.freeFrameBuffer("blend_back");
-        this.setUpPeelingBuffers(w, h);
-    }
-
-    /** Make sure texture units [0-6] are not changed anywhere later in rendering */
-    setUpPeelingBuffers(w = 1920, h = 1080) {
-
-        this.FBO_WIDTH = w;
-        this.FBO_HEIGHT = h;
-
-        this.allocFrameBuffer("peel_depths", 2);
-        this.allocFrameBuffer("peel_colors", 2);
-        this.allocFrameBuffer("blend_back");
-
-        const gl = this.gl;
-        const FBOTexParam = () => {
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        }
-
-        // Texture unit 0-5 are used for depth peeling
-        for (let i = 0; i < 2; i++) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("peel_depths")[i]);
-            const texture_unit_offset = i * 3;
-
-            const depthTarget  = gl.createTexture();
-            gl.activeTexture(gl.TEXTURE0 + texture_unit_offset);
-            gl.bindTexture(gl.TEXTURE_2D, depthTarget);
-            FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, w, h, 0, gl.RG, gl.FLOAT, null);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
-
-            const frontColorTarget = gl.createTexture();
-            gl.activeTexture(gl.TEXTURE1 + texture_unit_offset);
-            gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
-            FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
-
-            const backColorTarget = gl.createTexture();
-            gl.activeTexture(gl.TEXTURE2 + texture_unit_offset);
-            gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
-            FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
-
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("peel_colors")[i]);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, frontColorTarget, 0);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, backColorTarget, 0);
-        }
-
-        
-        // Texture unit 6 is used for blendback
-        {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo.get("blend_back"));
-
-            const blendBackTarget = gl.createTexture();
-            gl.activeTexture(gl.TEXTURE6);
-            gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
-            FBOTexParam();
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        }
-        
-        // Texture unit 7 is potentially used for FXAA
-        {
-            // const fxaa_tex = gl.getUniformLocation(fxaaProg, "tDiffuse");
-            // const fxaa_res = gl.getUniformLocation(fxaaProg, "resolution");
-            // const fxaaBuffer = gl.createFramebuffer();
-            // gl.bindFramebuffer(gl.FRAMEBUFFER, fxaaBuffer);
-            // const fxaaTarget = gl.createTexture();
-            // gl.activeTexture(gl.TEXTURE7);
-            // gl.bindTexture(gl.TEXTURE_2D, fxaaTarget);
-            // FBOTexParam();
-            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1920, 1080, 0, gl.RGBA, gl.HALF_FLOAT, null);
-            // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fxaaTarget, 0);
-            // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        }
-    }
-
-    clearPeelingBuffers() {
+    generateCellVAO() {
         const gl = this.gl;
 
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindVertexArray(this.cellVAO = gl.createVertexArray());
+
+        // 4 bytes per float * 2 triangles * 3 vertices per triangle * 2 floats per vertex = 48
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("cell_data_buffer"));
+        gl.bufferData(gl.ARRAY_BUFFER, this.core.HEAPU8.subarray(0, 48 * CELL_LIMIT), gl.DYNAMIC_DRAW);
         
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[0]);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-        gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[1]);
-        gl.clearColor(-MIN_DEPTH, MAX_DEPTH, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_colors")[0]);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_colors")[1]);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        // draw depth for first pass to peel
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[0]);
-        gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-        gl.blendEquation(gl.MAX);
-
-        for (const prog of [this.peel_prog1, this.peel_prog2, this.peel_prog3]) {
-            gl.useProgram(prog);
-            gl.uniform1i(this.getUniform(prog, "u_depth"), 3);
-            gl.uniform1i(this.getUniform(prog, "u_front_color"), 4);
-        }
+        const size = 2;
+        const type = gl.FLOAT;
+        const normalize = false;
+        const stride = 0;
+        const offset = 0;
+        gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+        gl.enableVertexAttribArray(0);
     }
 
-    generateQuadVAO() {
+    generateNameVAO() {
         const gl = this.gl;
 
-        const vao = this.quadVAO = gl.createVertexArray();
-        gl.bindVertexArray(vao);
-    
-        const quadArray = gl.createBuffer();
-    
-        gl.bindBuffer(gl.ARRAY_BUFFER, quadArray);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            -1, +1,
-            -1, -1,
-            +1, -1,
-            -1, +1,
-            +1, -1,
-            +1, +1,
-        ]), gl.STATIC_DRAW);
-    
-        {
-            const size = 2;
-            const type = gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
-            gl.enableVertexAttribArray(0);
-        }
+        gl.bindVertexArray(this.nameVAO = gl.createVertexArray());
+
+        // 4 bytes per float * 2 triangles * 3 vertices per triangle * 2 floats per vertex = 48
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("name_data_buffer"));
+        gl.bufferData(gl.ARRAY_BUFFER, this.nameBuffer, gl.DYNAMIC_DRAW);
+        
+        const size = 2;
+        const type = gl.FLOAT;
+        const normalize = false;
+        const stride = 0;
+        const offset = 0;
+        gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+        gl.enableVertexAttribArray(0);
     }
 
     generateMassVAO() {
         const gl = this.gl;
-
-        const vao = this.massVAO = gl.createVertexArray();
-        gl.bindVertexArray(vao);
-    
-        const massArray = this.allocBuffer("mass_buffer");
-    
-        gl.bindBuffer(gl.ARRAY_BUFFER, massArray);
+        gl.bindVertexArray(this.massVAO = gl.createVertexArray());
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("mass_buffer"));
         gl.bufferData(gl.ARRAY_BUFFER, this.massBuffer, gl.DYNAMIC_DRAW);
 
-        // x|y|size|character|uv.x|uv.y
-    
-        // a_position
-        {
-            const size = 4;
-            const type = gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
-            gl.enableVertexAttribArray(0);
-        }
+        // |x|y|uv_index|
+        const size = 3;
+        const type = gl.FLOAT;
+        const normalize = false;
+        const stride = 0;
+        const offset = 0;
+        gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+        gl.enableVertexAttribArray(0);
     }
 
-    generateSpriteVAO() {
+    generateBorderVAO() {
+        const gl = this.gl;
+        gl.bindVertexArray(this.borderVAO = gl.createVertexArray());
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("border_buffer"));
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, +1,
+            -1, -1,
+            +1, -1,
+            -1, +1,
+            +1, -1,
+            +1, +1,
+        ]), gl.STATIC_DRAW);
+
+        const size = 2;
+        const type = gl.FLOAT;
+        const normalize = false;
+        const stride = 0;
+        const offset = 0;
+        gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+        gl.enableVertexAttribArray(0);
+    }
+
+    generateDeadcellTexture() {
         const gl = this.gl;
 
-        const vao = this.spriteVAO = gl.createVertexArray();
-        gl.bindVertexArray(vao);
-    
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("sprite_pos_buffer"));
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            +1, +1,
-            +1, -1,
-            -1, -1,
-            +1, +1,
-            -1, -1,
-            -1, +1,
-        ]), gl.STATIC_DRAW);
-    
-        // a_position
-        {
-            const size = 2;
-            const type = gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
-            gl.enableVertexAttribArray(0);
-        }
+        gl.bindTexture(gl.TEXTURE_2D, this.deadCellTexture = gl.createTexture());
+
+        const CIRCLE_RADIUS = this.state.circle_radius;
+        const temp = new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
+        const temp_ctx = temp.getContext("2d");
+        temp_ctx.fillStyle = `rgb(255, 255, 255)`;
+        temp_ctx.globalAlpha = 0.1;
+        temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+        temp_ctx.fill();
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     }
 
     generateCircleTexture() {
         const gl = this.gl;
         // Create circle texture on texture unit 10
-        const circle_texture = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE10);
-        gl.bindTexture(gl.TEXTURE_2D, circle_texture);
-        // Generate circle
-        {
-            const CIRCLE_RADIUS = this.state.circle_radius;
-            // console.log(`Generating ${CIRCLE_RADIUS << 1}x${CIRCLE_RADIUS << 1} circle texture`);
-            const temp = self.window ? document.createElement("canvas") : new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
-            if (self.window) temp.width = temp.height = CIRCLE_RADIUS << 1;
-            const temp_ctx = temp.getContext("2d");
-            temp_ctx.fillStyle = "white";
+        gl.activeTexture(gl.TEXTURE0);
+
+        if (this.circleTextures.length) {
+            this.circleTextures.forEach(t => gl.deleteTexture(t));
+            this.circleTextures = [];
+        }
+
+        const CIRCLE_RADIUS = this.state.circle_radius;
+        const temp = new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
+        const temp_ctx = temp.getContext("2d");
+
+        // Generate circles
+        for (const [r, g, b] of COLORS) {
+            const tex = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            this.circleTextures.push(tex);
+
+            temp_ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            temp_ctx.clearRect(0, 0, temp.width, temp.height);
             temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
             temp_ctx.fill();
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
-                
             gl.generateMipmap(gl.TEXTURE_2D);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
         }
+
+        const UVS = new Float32Array([
+            0, 1,
+            1, 1,
+            0, 0,
+            1, 1,
+            0, 0,
+            1, 0,
+        ]);
+
+        gl.useProgram(this.main_prog);
+        gl.uniform2fv(this.getUniform(this.main_prog, "u_uvs"), UVS);
     }
 
     generateMassTextures() {
@@ -688,7 +471,7 @@ class Renderer {
                 temp_ctx.strokeText(char, temp.width >> 1, temp.height >> 1);
                 temp_ctx.fillText(char, temp.width >> 1, temp.height >> 1);
                 const w = (temp_ctx.measureText(char).width + 20) / temp.width;
-                this.massWidthsTable.set(char, w);
+                this.massWidths[char.charCodeAt(0)] = w;
                 gl.texSubImage3D(
                     gl.TEXTURE_2D_ARRAY,
                     0,
@@ -719,33 +502,16 @@ class Renderer {
                 UVS[8 * index + 6] = x1;
                 UVS[8 * index + 7] = y1;
             }
+
             gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
         
-            gl.useProgram(this.peel_prog3);
-            gl.uniform2fv(this.getUniform(this.peel_prog3, "u_uvs"), UVS);
+            gl.useProgram(this.mass_prog);
+            gl.uniform2fv(this.getUniform(this.mass_prog, "u_uvs"), UVS);
         }
-    }
-
-    async generateMouseTexture() {
-        const gl = this.gl;
-        // Create mouse texture on texture 14
-        gl.activeTexture(gl.TEXTURE14);
-        gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
-
-        const res = await fetch("/static/img/cursor.png");
-        const buffer = await res.blob();
-        const bitmap = await createImageBitmap(buffer);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, bitmap.width, bitmap.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
-        bitmap.close();
     }
 
     screenToWorld(out = vec3.create(), x = 0, y = 0) {
@@ -778,7 +544,7 @@ class Renderer {
             v.b = y - hh, v.t = y + hh, 0, 1);
     }
 
-    checkViewport() {
+    checkResolution() {
         const gl = this.gl;
         const r = this.state.resolution;
         if (gl.canvas.width != r[0] || gl.canvas.height != r[1]) {
@@ -787,156 +553,79 @@ class Renderer {
         }
     }
 
-    drawCells(firstPass) {
-        const gl = this.gl;
-
-        gl.bindVertexArray(this.quadVAO);
-        gl.activeTexture(gl.TEXTURE11);
-
-        if (!this.state.skin) {
-            gl.bindTexture(gl.TEXTURE_2D, this.empty_texture);
-        }
-
-        for (let i = 1; i < CELL_TYPES; i++) {
-            let begin = this.cellTypesTable[i - 1];
-            let end   = this.cellTypesTable[i];
-            if (begin == end) continue;
-            if (!end) end = 65536;
-
-            const begin_offset = this.cellBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
-            const buff = new Float32Array(this.core.buffer, begin_offset, (end - begin) * 3);
-
-            if (i == 253) { // virus
-                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0, 0, 0, 0);    
-            } else if (i == 251) { // dead
-                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), 0.5, 0.5, 0.5, 0.5);
-            } else {
-                const color = getColor(i);
-                gl.uniform4f(this.getUniform(this.peel_prog1, "u_circle_color"), color[0], color[1], color[2], 1);    
-            }
-
-            const T = this.store.get(this.playerData[i] && this.playerData[i].skin);
-            const use_empty = !(this.state.skin || i > 250) || !T || !T.tex;
-            gl.bindTexture(gl.TEXTURE_2D, use_empty ? this.empty_texture : T.tex);
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
-            gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
-            gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-            const count = (end - begin) * 2;
-            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
-        }
-    }
-
-    drawNames(firstPass) {
-        const gl = this.gl;
-
-        gl.bindVertexArray(this.quadVAO);
-        gl.activeTexture(gl.TEXTURE12);
-
-        for (let i = 1; i < CELL_TYPES; i++) {
-
-            if (!this.playerData[i]) continue;
-            let begin = this.nameTypesTable[i - 1];
-            let end   = this.nameTypesTable[i];
-            if (begin == end) continue;
-            if (!end) end = 65536;
-
-            const T = this.store.get(this.playerData[i] && this.playerData[i].name);
-            if (!T || !T.tex) continue;
-            if (this.state.name && i <= 250) gl.bindTexture(gl.TEXTURE_2D, T ? T.tex : this.empty_texture);
-
-            const begin_offset = this.nameBufferOffset + begin * this.BYTES_PER_RENDER_CELL;
-            const buff = new Float32Array(this.core.buffer, begin_offset, (end - begin) * 3);
-
-            gl.uniform4f(this.getUniform(this.peel_prog2, "u_dim"), 
-                T.dim[0] / 512, T.dim[1] / 512, NAME_SCALE, NAME_Y_OFFSET);
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
-            gl.bufferSubData(gl.ARRAY_BUFFER, 0, buff);
-            gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-            const count = (end - begin) * 2;
-            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
-        }
-    }
-
-    drawMass(firstPass) {
-        const count = (this.renderMassBuffer.length >> 2);
-        if (count % 3 || !count) return;
-        
-        const gl = this.gl;
-        gl.bindVertexArray(this.massVAO);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("mass_buffer"));
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.renderMassBuffer);
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-        gl.drawArrays(gl.TRIANGLES, 0, this.renderMassBuffer.length >> 2);
-    }
-
-    /** @param {Float32Array} buffer */
-    buildMassBuffer(buffer) {
-        // TODO: make this function in wasm
+    /** @param {Uint32Array} indices_buffer */
+    buildMassVertexBuffer(indices_buffer) {
         let write_offset = 0;
 
-        for (let o = 0; o < buffer.length; o += 4) { // 4 floats per render mass
-            const x = buffer[o];
-            const y = buffer[o + 1];
-            const size = buffer[o + 2];
-            // mass = 1 is short, 2 is long
-            const mass = this.state.mass - 1 ? Math.floor(buffer[o + 3]).toString() : 
-                buffer[o + 3] > 1000 ? (buffer[o + 3] / 1000).toFixed(1) + "k" : Math.round(buffer[o + 3]).toString();
+        const indices = indices_buffer;
+        const buffer = this.core.HEAPF32;
+        const counts = this.massCounts;
+        const widths = this.massWidths;
+        const mass_buffer = this.massBuffer;
+
+        // mass = 1 is short, 2 is long
+        const long_mass = this.state.mass === 2;
+
+        for (let i = 0; i < indices.length; i++) {
+
+            const float_offset = (indices[i] * this.BYTES_PER_CELL_DATA) >> 2;
+
+            const x = buffer[float_offset + 4];
+            const y = buffer[float_offset + 5];
+            const s = buffer[float_offset + 6];
+
+            const mass = long_mass ? Math.round(s).toString() : 
+                s > 1000 ? (s / 1000).toFixed(1) + "k" : Math.round(s).toString();
             
+            // Save the char length to another array
+            counts[i] = mass.length;
+
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
 
-            for (let i = 0; i < mass.length; i++) 
-                width += MASS_SCALE * this.massWidthsTable.get(mass[i]);
+            for (let j = 0; j < mass.length; j++) 
+                width += MASS_SCALE * widths[mass.charCodeAt(j)];
 
             let w = -width / 2;
-            for (let i = 0; i < mass.length; i++) {
-                const char_uv_offset = mass[i] == "." ? 10 : (mass[i] == "k" ? 11 : ~~mass[i]);
-                const char_width = this.massWidthsTable.get(mass[i]);
+            for (let j = 0; j < mass.length; j++) {
+                const char_code = mass.charCodeAt(j);
+                // 46 is . 107 is k
+                const char_uv_offset = char_code === 46 ? 10 : (char_code === 107 ? 11 : char_code - 48);
+                const char_width = widths[char_code];
 
-                const x0 = w * size;
-                const x1 = x0 + MASS_SCALE * char_width * size;
-                const y0 = (+0.5 * MASS_SCALE + MASS_Y_OFFSET) * size;
-                const y1 = (-0.5 * MASS_SCALE + MASS_Y_OFFSET) * size;
+                const x0 = w * s;
+                const x1 = x0 + MASS_SCALE * char_width * s;
+                const y0 = (+0.5 * MASS_SCALE + MASS_Y_OFFSET) * s;
+                const y1 = (-0.5 * MASS_SCALE + MASS_Y_OFFSET) * s;
 
                 w += MASS_SCALE * char_width + MASS_GAP;
 
-                this.massBuffer[write_offset++] = x + x0;
-                this.massBuffer[write_offset++] = y + y0;
-                this.massBuffer[write_offset++] = size;
-                this.massBuffer[write_offset++] = 4 * char_uv_offset + 0;
+                mass_buffer[write_offset++] = x + x0;
+                mass_buffer[write_offset++] = y + y0;
+                mass_buffer[write_offset++] = (char_uv_offset << 2) + 0;
 
-                this.massBuffer[write_offset++] = x + x1;
-                this.massBuffer[write_offset++] = y + y0;
-                this.massBuffer[write_offset++] = size;
-                this.massBuffer[write_offset++] = 4 * char_uv_offset + 1;
+                mass_buffer[write_offset++] = x + x1;
+                mass_buffer[write_offset++] = y + y0;
+                mass_buffer[write_offset++] = (char_uv_offset << 2) + 1;
 
-                this.massBuffer[write_offset++] = x + x0;
-                this.massBuffer[write_offset++] = y + y1;
-                this.massBuffer[write_offset++] = size;
-                this.massBuffer[write_offset++] = 4 * char_uv_offset + 2;
+                mass_buffer[write_offset++] = x + x0;
+                mass_buffer[write_offset++] = y + y1;
+                mass_buffer[write_offset++] = (char_uv_offset << 2) + 2;
                 
-                this.massBuffer[write_offset++] = x + x1;
-                this.massBuffer[write_offset++] = y + y0;
-                this.massBuffer[write_offset++] = size;
-                this.massBuffer[write_offset++] = 4 * char_uv_offset + 1;
+                mass_buffer[write_offset++] = x + x1;
+                mass_buffer[write_offset++] = y + y0;
+                mass_buffer[write_offset++] = (char_uv_offset << 2) + 1;
 
-                this.massBuffer[write_offset++] = x + x0;
-                this.massBuffer[write_offset++] = y + y1;
-                this.massBuffer[write_offset++] = size;
-                this.massBuffer[write_offset++] = 4 * char_uv_offset + 2;
+                mass_buffer[write_offset++] = x + x0;
+                mass_buffer[write_offset++] = y + y1;
+                mass_buffer[write_offset++] = (char_uv_offset << 2) + 2;
 
-                this.massBuffer[write_offset++] = x + x1;
-                this.massBuffer[write_offset++] = y + y1;
-                this.massBuffer[write_offset++] = size;
-                this.massBuffer[write_offset++] = 4 * char_uv_offset + 3;
+                mass_buffer[write_offset++] = x + x1;
+                mass_buffer[write_offset++] = y + y1;
+                mass_buffer[write_offset++] = (char_uv_offset << 2) + 3;
             }
         }
-        this.renderMassBuffer = this.massBuffer.subarray(0, write_offset);
+
+        return mass_buffer.subarray(0, write_offset);
     }
 
     /** @param {number} now */
@@ -949,110 +638,43 @@ class Renderer {
 
         this.fps++;
         const delta = now - this.lastTimestamp;
-        this.protocol.replay.update(delta);
         this.lastTimestamp = now;
-        
-        this.cellTypesTable.fill(0);
-        this.nameTypesTable.fill(0);
+
+        this.protocol.replay.update(delta);
 
         const lerp = this.protocol.lastPacket ? (now - this.protocol.lastPacket) / this.state.draw : 0;
 
-        const cell_count = this.core.instance.exports.draw_cells(0, 
-            this.cellTypesTableOffset, 
-            this.cellBufferOffset, lerp,
-            this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r, 
-            this.protocol.pid, this.stats.mycells);
-        
-        this.updateTarget();
+        const { t, b, l, r } = this.viewbox;
 
-        this.shouldTP ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw);
-        this.checkViewport();
+        const skip = !this.state.visible && !this.protocol.replay.requestPreview;
 
-        if (!this.state.visible && !this.protocol.replay.requestPreview) {
-            this.updateTextures();
-            return;
-        }
-
-        let text_count = 0;
-        const gl = this.gl;
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        this.rellocPeelingBuffers(gl.drawingBufferWidth, gl.drawingBufferHeight);
-        const NUM_PASS = 2;
-        let offsetBack;
-        this.clearPeelingBuffers();
-
-        const progs = [this.peel_prog1];
-        const funcs = [this.drawCells];
-
-        // Configurable if we want to draw mass
-        if (this.state.mass || this.state.name) {
-            text_count = this.core.instance.exports.draw_text(0,
-                this.cellTypesTableOffset, // end of cell buffer
-                this.cellBufferEnd,  // table offset
-                this.nameBufferOffset, // name buffer offset
-                this.nameBufferEnd, // mass buffer offset
-                NAME_MASS_MIN,
-                this.viewbox.t, this.viewbox.b, this.viewbox.l, this.viewbox.r);
-
-            if (this.state.name) {
-                progs.push(this.peel_prog2);
-                funcs.push(this.drawNames);
-            }
-
-            if (this.state.mass) {
-                this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
-                progs.push(this.peel_prog3);
-                funcs.push(this.drawMass);
-            }
-        }
-
-        offsetBack = this.depthPeelRender(NUM_PASS, progs, funcs);
+        const cell_count = this.wasm.update_cells(0, this.INDICES_OFFSET, lerp, t, b, l, r, skip);
 
         this.stats.cells = cell_count;
-        this.stats.text  = text_count;
         
-        // Background and final prog
+        this.updateTarget();
+        this.camera.tp ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw);
+        this.checkResolution();
+
+        if (skip) return this.updateTextures();
+
+        const gl = this.gl;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        
+        // Background
         this.clearScreen();
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-        gl.bindVertexArray(this.quadVAO);
-
+        // Draw background
         if (this.protocol.map) {
-            gl.useProgram(this.border_prog);
-            gl.uniform2f(this.getUniform(this.border_prog, "u_map"), this.protocol.map.hw, this.protocol.map.hh);
-            gl.uniformMatrix4fv(this.getUniform(this.border_prog, "u_proj"), false, this.proj);
-
-            // Draw background
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-
-        gl.useProgram(this.final_prog);
-        gl.uniform1i(this.getUniform(this.final_prog, "u_front_color"), offsetBack + 1);
-
-        // Blend back
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        if (this.state.mouse_sync) {
-            gl.useProgram(this.sprite_prog);
-            gl.uniformMatrix4fv(this.getUniform(this.sprite_prog, "u_proj"), false, this.proj);
-
-            const [x, y] = this.cursor.position;
-            gl.uniform2f(this.getUniform(this.sprite_prog, "u_pos"), x, y);
-
-            gl.bindVertexArray(this.spriteVAO);
-
-            // Draw sync mouse texture
+            gl.useProgram(this.brdr_prog);
+            gl.bindVertexArray(this.borderVAO);
+            gl.uniform2f(this.getUniform(this.brdr_prog, "u_map"), this.protocol.map.hw, this.protocol.map.hh);
+            gl.uniformMatrix4fv(this.getUniform(this.brdr_prog, "u_proj"), false, this.proj);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
         
-        // FXAA prog
-        // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        // gl.clearColor(0, 0, 0, 1);
-        // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        // gl.useProgram(fxaaProg);
-        // gl.bindVertexArray(vao);
-        // gl.drawArrays(gl.TRIANGLES, 0, 6);
-        // this.stop();
+        // Draw the rest
+        this.draw(cell_count);
 
         this.protocol.replay.savePreview();
         
@@ -1060,9 +682,90 @@ class Renderer {
         this.lastDraw = now;
     }
 
+    /** @param {number} cell_count */
+    draw(cell_count) {
+
+        const indices = new Uint16Array(this.core.buffer, this.INDICES_OFFSET, cell_count);
+        const types_ptr = this.INDICES_OFFSET + (cell_count << 1);
+        const types = this.core.HEAPU8.subarray(types_ptr, types_ptr + cell_count);
+
+        let vert_ptr = types_ptr + cell_count;
+        while (vert_ptr & 3) vert_ptr++;
+
+        const end = this.wasm.draw_cells(0, this.INDICES_OFFSET, cell_count, vert_ptr);
+        const expect = vert_ptr + cell_count * 48;
+        console.assert(end === expect, `Expecting end pointer to be ${expect}, but got ${end}`);
+
+        let text_index = cell_count;
+
+        // Configurable if we want to draw mass
+        if (this.state.mass || this.state.name) {
+            
+            const { l, r, t, b } = this.viewbox;
+            const w = r - l;
+            const h = t - b;
+            const cutoff = (w < h ? w : h) * NAME_MASS_MIN;
+
+            text_index = this.wasm.find_text_index(0, this.INDICES_OFFSET, cell_count, cutoff);
+
+            // if (this.state.name) {
+            //     progs.push(this.peel_prog2);
+            //     funcs.push(this.drawNames);
+            // }
+
+            // if (this.state.mass) {
+            //     this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
+            //     progs.push(this.peel_prog3);
+            //     funcs.push(this.drawMass);
+            // }
+        }
+
+        const gl = this.gl;
+        const circles = this.circleTextures;
+        const dead = this.deadCellTexture;
+        const L = circles.length;
+        // 12 floats per cell
+        const VB = new Float32Array(this.core.buffer, vert_ptr, 12 * cell_count);
+
+        const render_skin = this.state.skin;
+        const skins = this.playerData.map(d => {
+            if (!d) return null;
+            const w = this.textures.get(d.skin);
+            return w ? w.tex : null;
+        });
+
+        const render_name = this.state.name;
+        
+        const render_mass = this.state.mass;
+
+        gl.useProgram(this.main_prog);
+        gl.uniformMatrix4fv(this.getUniform(this.main_prog, "u_proj"), false, this.proj);
+
+        gl.bindVertexArray(this.cellVAO);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, VB);
+
+        gl.activeTexture(gl.TEXTURE0);
+
+        for (let i = 0; i < cell_count; i++) {
+            const t = types[i];
+
+            if (t !== 253) {
+                gl.bindTexture(gl.TEXTURE_2D, t === 254 ? circles[indices[i] % L] : 
+                    t === 251 ? dead : circles[t % L]);
+                gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
+            }
+
+            if (render_skin && skins[t] || t === 253) {
+                gl.bindTexture(gl.TEXTURE_2D, skins[t]);
+                gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
+            }
+        }
+    }
+
     serializeState() {
-        return this.core.buffer.slice(this.cellBufferOffset, 
-            this.core.instance.exports.serialize_state(0, this.cellDataBufferLength, this.cellBufferOffset));
+        return this.core.buffer.slice(this.INDICES_OFFSET, 
+            this.wasm.serialize_state(0, this.INDICES_OFFSET));
     }
 
     updateTextures() {
@@ -1074,70 +777,12 @@ class Renderer {
                 const { id, skin: skin_bitmap, name: name_bitmap } = this.updates.pop();
                 const p = this.playerData[id];
                 if (p) {
-                    this.store.setData(p.skin, skin_bitmap);
-                    this.store.setData(p.name, name_bitmap);
+                    this.textures.setData(p.skin, skin_bitmap);
+                    this.textures.setData(p.name, name_bitmap);
                 }
                 if (++limit > 2) break;
             }
         }
-    }
-
-    /**  @param {WebGLProgram[]} progs @param {(() => void)[]} funcs */
-    depthPeelRender(passes = 4, progs, funcs) {
-        const gl = this.gl;
-
-        for (let i in progs) {
-            gl.useProgram(progs[i]);
-            gl.uniformMatrix4fv(this.getUniform(progs[i], "u_proj"), false, this.proj);
-            funcs[i](true);
-        }
-
-        let readId, writeId;
-        let offsetRead, offsetBack;
-
-        // Dual depth peeling passes
-        for (let pass = 0; pass < passes; pass++) {
-            readId = pass % 2;
-            writeId = 1 - readId;  // ping-pong: 0 or 1
-            
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_colors")[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("peel_depths")[writeId]);
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
-            gl.blendEquation(gl.MAX);
-
-            // update texture uniform
-            offsetRead = readId * 3;
-            
-            for (let i in progs) {
-                gl.useProgram(progs[i]);
-                gl.uniform1i(this.getUniform(progs[i], "u_depth"), offsetRead);
-                gl.uniform1i(this.getUniform(progs[i], "u_front_color"), offsetRead + 1);
-                // draw geometry
-                funcs[i]();
-            }
-
-            // blend back color separately
-            offsetBack = writeId * 3;
-            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fbo.get("blend_back"));
-            gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-            gl.blendEquation(gl.FUNC_ADD);
-            gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            gl.useProgram(this.blend_prog);
-            gl.uniform1i(this.getUniform(this.blend_prog, "u_back_color"), offsetBack + 2);
-            gl.bindVertexArray(this.quadVAO);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-
-        return offsetBack;
     }
 
     clearScreen() {

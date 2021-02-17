@@ -1,4 +1,4 @@
-const { getColor } = require("./util");
+const { COLORS } = require("./util");
 const Stats = require("./stats");
 const Mouse = require("./mouse");
 const State = require("./state");
@@ -233,7 +233,7 @@ module.exports = class HUD {
             .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
 
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
-            gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "localhost:6969" });
+            gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "192.168.1.167:6969" });
             window.hud = this;
         }
 
@@ -295,8 +295,8 @@ module.exports = class HUD {
                     const server = data.servers[id];
                     let elem = servers.get(server.uid);
                     
-                    const [r, g, b] = getColor(5 * id + init);
-                    const color = `rgb(${~~(255 * r)}, ${~~(255 * g)}, ${~~(255 * b)})`;
+                    const [r, g, b] = COLORS[(5 * id + init) % COLORS.length];
+                    const color = `rgb(${r}, ${g}, ${b})`;
 
                     if (!elem) {
                         elem = document.createElement("p");
@@ -354,6 +354,7 @@ module.exports = class HUD {
         this.pingElem = document.getElementById("ping");
         this.fpsElem = document.getElementById("fps");
         this.bwElem = document.getElementById("bandwidth");
+        // this.renderCellElem = document.getElementById("cells");
         this.mycellsElem = document.getElementById("mycells");
         this.linelockElem = document.getElementById("linelock");
         this.scoreElem = document.getElementById("score");
@@ -363,6 +364,7 @@ module.exports = class HUD {
             this.fpsElem.innerText = this.stats.fps;
             const kbs = this.stats.bandwidth / 1024;
             this.bwElem.innerText = kbs < 1024 ? `${~~kbs}KBs` : `${(kbs / 1024).toFixed(1)}MBs`;
+            // this.renderCellElem.innerText = this.stats.cells;
             const c = this.mycellsElem.innerText = this.stats.mycells;
             this.linelockElem.innerText = this.stats.linelocked ? "LOCKED" : "UNLOCKED";
             this.stats.linelocked ? this.linelockElem.classList.add("text-danger") : this.linelockElem.classList.remove("text-danger");

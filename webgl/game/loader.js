@@ -13,6 +13,9 @@ const { serialize } = require("./custom-bson");
     loaded = true;
 })();
 
+const temp = new OffscreenCanvas(10, 10);
+const temp_ctx = temp.getContext("2d");
+
 /** @type {SharedArrayBuffer} */
 let pool;
 
@@ -65,13 +68,26 @@ onmessage = async evt => {
     
             const res = await fetch(data.skin);
             const blob = await res.blob();
-            const skin_bitmap = await createImageBitmap(blob, {
-                premultiplyAlpha: "none",
-                resizeQuality: "high",
-                resizeWidth: data.skin_dim,
-                resizeHeight: data.skin_dim
-            });
-            postMessage({ id: data.id, skin: skin_bitmap }, [skin_bitmap]);
+            const skin_bitmap = await createImageBitmap(blob);
+            
+            const Q = ~~data.quality || 512;
+
+            temp.width = Q;
+            temp.height = Q;
+
+            temp_ctx.clearRect(0, 0, Q, Q);
+            temp_ctx.imageSmoothingEnabled = true;
+            temp_ctx.imageSmoothingQuality = "high";
+            
+            temp_ctx.beginPath();
+            temp_ctx.arc(Q >> 1, Q >> 1, Q >> 1, 0, 2 * Math.PI, false);
+            temp_ctx.clip();
+
+            temp_ctx.drawImage(skin_bitmap, 0, 0, Q, Q);
+
+            const result = await createImageBitmap(temp);
+
+            postMessage({ id: data.id, skin: result }, [result]);
         } catch (e) {
             console.log(`Failed to load skin: "${data.skin}" (pid: ${data.id})`, e);
         }

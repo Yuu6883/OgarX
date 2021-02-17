@@ -49,7 +49,7 @@ class ReplaySystem {
         this.protocol = protocol;
         this.renderer = renderer;
 
-        this.source = new Uint8Array(renderer.core.buffer, 0, renderer.cellDataBufferLength);
+        this.source = new Uint8Array(renderer.core.buffer, 0, renderer.INDICES_OFFSET);
         this.snapshots = Array.from({ length: length * REPLAY_PREVIEW_FPS }, _ => new ReplaySnapshot(this.source.byteLength));
         
         const pool = this.sharedArrayBuffer = new SharedArrayBuffer(this.snapshots.length * PREVIEW_WIDTH * PREVIEW_HEIGHT * 4);
@@ -205,8 +205,8 @@ class ReplaySystem {
         if (!this.t) {
             this.source.fill(0);
             const core = this.renderer.core;
-            core.HEAPU8.set(this.curr.initial, this.renderer.cellBufferOffset);                 
-            core.instance.exports.deserialize(0, this.renderer.cellBufferOffset);
+            core.HEAPU8.set(this.curr.initial, this.renderer.INDICES_OFFSET);                 
+            core.instance.exports.deserialize(0, this.renderer.INDICES_OFFSET);
         }
         // "Receive" packet
         while (this.curr.timestamps[this.i] < this.t)
@@ -220,7 +220,7 @@ class ReplaySystem {
     resetTrack() {
         this.i = 0;
         this.t = 0;
-        this.renderer.shouldTP = true;
+        this.renderer.camera.tp = true;
     }
 }
 
@@ -432,7 +432,7 @@ module.exports = class Protocol extends EventEmitter {
 
         const prev = this.renderer.stats.mycells;
         const curr = header.getUint16(0, true);
-        if (this.replaying && !prev && curr) r.shouldTP = true;
+        if (this.replaying && !prev && curr) r.camera.tp = true;
         r.stats.mycells = curr;
         r.stats.linelocked = header.getUint8(2);
         r.stats.score = header.getFloat32(3, true);
@@ -441,8 +441,8 @@ module.exports = class Protocol extends EventEmitter {
         r.target.position[0] = header.getFloat32(15, true);
         r.target.position[1] = header.getFloat32(19, true);
         
-        core.HEAPU8.set(new Uint8Array(buffer, 24), r.cellTypesTableOffset);                 
-        core.instance.exports.deserialize(0, r.cellTypesTableOffset);
+        core.HEAPU8.set(new Uint8Array(buffer, 24), r.INDICES_OFFSET);                 
+        core.instance.exports.deserialize(0, r.INDICES_OFFSET);
     }
 
     /** @param {Reader} reader */

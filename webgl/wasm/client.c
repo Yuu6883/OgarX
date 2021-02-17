@@ -13,20 +13,15 @@ typedef struct {
     float netX;
     float netY;
     float netSize;
+    void* next;
 } CellData;
 
 typedef struct {
+    unsigned int flags;
     float x;
     float y;
     float size;
 } RenderCell;
-
-typedef struct {
-    float x;
-    float y;
-    float size;
-    float mass;
-} RenderMass;
 
 typedef struct {
     unsigned short id;
@@ -54,20 +49,46 @@ typedef struct {
 
 unsigned int bytes_per_cell_data() { return sizeof(CellData); }
 unsigned int bytes_per_render_cell() { return sizeof(RenderCell); }
-unsigned int bytes_per_render_mass() { return sizeof(RenderMass); }
 
-extern void set_camera(float x, float y, float size);
+extern void log_add(unsigned short id);
+extern void print_list();
+extern void list(float f);
+extern void log_remove(unsigned int prev, unsigned int curr, unsigned int next);
 
 void deserialize(CellData data[], unsigned short* packet) {
+
+    CellData* curr = data->next;
+
     AddPacket* add_data = (AddPacket*) packet;
 
     while (add_data->id) {
-        data[add_data->id].type = add_data->type;
-        data[add_data->id].oldX = data[add_data->id].currX = data[add_data->id].netX = add_data->x;
-        data[add_data->id].oldY = data[add_data->id].currY = data[add_data->id].netY = add_data->y;
-        data[add_data->id].oldSize = data[add_data->id].currSize = data[add_data->id].netSize = add_data->size;
+        unsigned short id = add_data->id;
+        CellData* cell = &data[id];
+
+        cell->type = add_data->type;
+        cell->oldX = cell->currX = cell->netX = add_data->x;
+        cell->oldY = cell->currY = cell->netY = add_data->y;
+        cell->oldSize = cell->currSize = cell->netSize = add_data->size;
+
         add_data++;
+
+        // log_add(id);
+        // Append this node before curr and set curr to this node
+        if (!cell->next) {
+            cell->next = curr;
+            curr = cell;
+        }
     }
+
+    // Save the new head node to curr
+    data->next = curr;
+    
+    // CellData* node = curr;
+    // while (node) {
+    //     list(node - data);
+    //     node = node->next;
+    // }
+    // print_list();
 
     packet = (unsigned short*) add_data;
     packet++;
@@ -75,13 +96,15 @@ void deserialize(CellData data[], unsigned short* packet) {
     UpdatePacket* update_data = (UpdatePacket*) packet;
 
     while (update_data->id) {
-        data[update_data->id].oldX = data[update_data->id].currX;
-        data[update_data->id].oldY = data[update_data->id].currY;
-        data[update_data->id].oldSize = data[update_data->id].currSize;
+        unsigned short id = update_data->id;
 
-        data[update_data->id].netX = update_data->x;
-        data[update_data->id].netY = update_data->y;
-        data[update_data->id].netSize = update_data->size;
+        data[id].oldX = data[id].currX;
+        data[id].oldY = data[id].currY;
+        data[id].oldSize = data[id].currSize;
+        data[id].netX = update_data->x;
+        data[id].netY = update_data->y;
+        data[id].netSize = update_data->size;
+
         update_data++;
     }
 
@@ -100,7 +123,7 @@ void deserialize(CellData data[], unsigned short* packet) {
             data[eat_data->id].oldY = 0.0f;
             data[eat_data->id].netSize = 0.0f;
         } else {
-            memset(&data[eat_data->id], 0, sizeof(CellData));
+            data[eat_data->id].type = 0;
         }
 
         eat_data++;
@@ -112,166 +135,178 @@ void deserialize(CellData data[], unsigned short* packet) {
     DeletePacket* delete_data = (DeletePacket*) packet;
 
     while (delete_data->id) {
-        memset(&data[delete_data->id], 0, sizeof(CellData));
+        data[delete_data->id].type = 0;
         delete_data++;
     }
 }
 
-unsigned int draw_cells(CellData data_begin[], 
-    unsigned short offset_table[], 
-    RenderCell render_cells[], float lerp,
-    float t, float b, float l, float r, 
-    unsigned char mypid, unsigned short mycells) {
+void sort_indices(CellData cells[], unsigned short indices[], unsigned int n) {
+    if (!n) return;
+    
+    int t = 0;
+
+    // Build Max Heap
+    for (int i = 1; i < n; i++) { 
+        // if child is bigger than parent 
+        if (cells[indices[i]].currSize > cells[indices[(i - 1) / 2]].currSize) {
+            int j = i;
+            // swap child and parent until parent is bigger 
+            while (cells[indices[j]].currSize > cells[indices[(j - 1) / 2]].currSize) { 
+                t = indices[j];
+                indices[j] = indices[(j - 1) / 2];
+                indices[(j - 1) / 2] = t;
+                j = (j - 1) / 2; 
+            }
+        }
+    }
+
+    for (int i = n - 1; i > 0; i--) {
+        // swap value of first indexed  
+        // with last indexed  
+        t = indices[0];
+        indices[0] = indices[i];
+        indices[i] = t;
+        // maintaining heap property 
+        // after each swapping 
+        int j = 0, index;
+        do { 
+            index = (2 * j + 1); 
+              
+            // if left child is smaller than  
+            // right child point index variable  
+            // to right child 
+            if (cells[indices[index]].currSize < cells[indices[index + 1]].currSize && 
+                index < (i - 1)) index++; 
+          
+            // if parent is smaller than child  
+            // then swapping parent with child  
+            // having higher value 
+            if (cells[indices[j]].currSize < cells[indices[index]].currSize && index < i) {
+                t = indices[j];
+                indices[j] = indices[index];
+                indices[index] = t;
+            }
+            j = index; 
+        } while (index < i); 
+    }
+
+    // for (int i = 0; i < n; i++) list(cells[indices[i]].currSize);
+    // print_list();
+}
+
+unsigned int update_cells(
+    CellData data[],
+    unsigned short indices[],
+    float lerp, float t, float b, float l, float r, unsigned char skip) {
 
     lerp = lerp > 1 ? 1 : lerp < 0 ? 0 : lerp;
 
-    CellData* begin = data_begin;
-    while ((void*) begin < (void*) offset_table) {
-        if (begin->type) {
-            if (!begin->netSize) {
-                begin->currX = lerp * (begin->netX - begin->currX) + begin->currX;
-                begin->currY = lerp * (begin->netY - begin->currY) + begin->currY;
-                begin->currSize = lerp * (begin->netSize - begin->currSize) + begin->currSize;
+    unsigned int count = 0;
 
-                begin->oldX += lerp / 2.0f;
-                if (begin->oldX >= 2.0f) {
-                    begin->type = 0;
-                    begin++;
-                    continue;
-                }
+    // First node is always a placeholder
+    CellData* prev = data;
+    CellData* node = data->next;
+
+    while (node) {
+
+        if (node->type) {
+            if (!node->netSize) {
+                node->currX = lerp * (node->netX - node->currX) + node->currX;
+                node->currY = lerp * (node->netY - node->currY) + node->currY;
+                node->currSize = lerp * (node->netSize - node->currSize) + node->currSize;
+                node->oldX += lerp / 2.0f;
+                if (node->oldX >= 2.0f) node->type = 0;
             } else {
-                begin->currX = lerp * (begin->netX - begin->oldX) + begin->oldX;
-                begin->currY = lerp * (begin->netY - begin->oldY) + begin->oldY;
-                begin->currSize = lerp * (begin->netSize - begin->oldSize) + begin->oldSize;
+                node->currX = lerp * (node->netX - node->oldX) + node->oldX;
+                node->currY = lerp * (node->netY - node->oldY) + node->oldY;
+                node->currSize = lerp * (node->netSize - node->oldSize) + node->oldSize;
             }
 
-            if (begin->currX - begin->currSize < r &&
-                begin->currX + begin->currSize > l &&
-                begin->currY - begin->currSize < t &&
-                begin->currY + begin->currSize > b) {
-                offset_table[begin->type]++;
+            if (node->currX - node->currSize < r &&
+                node->currX + node->currSize > l &&
+                node->currY - node->currSize < t &&
+                node->currY + node->currSize > b) {
+                indices[count++] = node - data;
             }
         }
-        begin++;
-    }
-    
-    offset_table[0] = 0;
-
-    unsigned int count = 0;
-
-    for (unsigned short* ptr = offset_table; (void*) ptr < (void*) render_cells; ptr++)
-        *ptr = count = count + *ptr;
-
-    begin = data_begin;
-    while ((void*) begin < (void*) offset_table) {
-        if (begin->type &&
-            begin->currX - begin->currSize < r &&
-            begin->currX + begin->currSize > l &&
-            begin->currY - begin->currSize < t &&
-            begin->currY + begin->currSize > b) {
-            unsigned short offset = offset_table[begin->type - 1]++;
-            render_cells[offset].x = begin->currX;
-            render_cells[offset].y = begin->currY;
-            render_cells[offset].size = begin->currSize;
-            if (begin->type == mypid && mycells == 1 && begin->netSize && begin->currSize < 1000) 
-                set_camera(begin->currX, begin->currY, begin->currSize);
-        }
-        begin++;
-    }
-
-    unsigned short* end = (unsigned short*) render_cells - 1;
-
-    while (end-- > offset_table)
-        end[1] = end[0];
         
-    end[1] = 0;
+        // log_remove(prev - data, node - data, (CellData*) node->next - data);
+
+        // Remove node
+        if (!node->type) {
+            void* temp = prev->next = node->next;
+            node->next = NULL;
+            node = temp;
+        } else {
+            prev = node;
+            node = node->next;
+        }
+    }
+
+    if (!skip) sort_indices(data, indices, count);
+
+    unsigned char* types = (unsigned char*) (indices + count);
+
+    for (unsigned int i = 0; i < count; i++)
+        *types++ = data[indices[i]].type;
 
     return count;
 }
 
-unsigned int draw_text(CellData data_begin[], 
-    CellData data_end[],
-    unsigned short offset_table[], 
-    RenderCell render_name[], RenderMass render_mass[], 
-    float minScale,
-    float t, float b, float l, float r) {
+float* draw_cells(CellData data[], unsigned short indices[], unsigned int n, float* out) {
+    for (unsigned int i = 0; i < n; i++) {
+        CellData* cell = &data[indices[i]];
+        float x = cell->currX;
+        float y = cell->currY;
+        float r = cell->currSize;
 
-    float w = r - l;
-    float h = t - b;
-    float sizeCutoff = (w < h ? w : h) * minScale;
+        float x0 = x - r;
+        float x1 = x + r;
+        float y0 = y - r;
+        float y1 = y + r;
 
-    unsigned int mass_offset = 0;
+        // Triangle 1
+        *out++ = x0;
+        *out++ = y0;
+        *out++ = x1;
+        *out++ = y0;
+        *out++ = x0;
+        *out++ = y1;
 
-    CellData* begin = data_begin;
-    while (begin < data_end) {
-        if (begin->type && begin->type <= 250 && 
-            begin->currSize > sizeCutoff &&
-            begin->currX - begin->currSize < r &&
-            begin->currX + begin->currSize > l &&
-            begin->currY - begin->currSize < t &&
-            begin->currY + begin->currSize > b) {
-            offset_table[begin->type]++;
-
-            unsigned short o = mass_offset++;
-            render_mass[o].x = begin->currX;
-            render_mass[o].y = begin->currY;
-            render_mass[o].size = begin->currSize + 0.2f;
-            render_mass[o].mass = begin->currSize * begin->currSize / 100.f;
-        }
-        begin++;
+        // Triangle 2
+        *out++ = x1;
+        *out++ = y0;
+        *out++ = x0;
+        *out++ = y1;
+        *out++ = x1;
+        *out++ = y1;
     }
-    
-    offset_table[0] = 0;
-
-    unsigned int count = 0;
-
-    for (unsigned short* ptr = offset_table; (void*) ptr < (void*) render_name; ptr++)
-        *ptr = count = count + *ptr;
-
-    begin = data_begin;
-    while (begin < data_end) {
-        if (begin->type && begin->type <= 250 && 
-            begin->currSize > sizeCutoff &&
-            begin->currX - begin->currSize < r &&
-            begin->currX + begin->currSize > l &&
-            begin->currY - begin->currSize < t &&
-            begin->currY + begin->currSize > b) {
-            unsigned short offset = offset_table[begin->type - 1]++;
-            render_name[offset].x = begin->currX;
-            render_name[offset].y = begin->currY;
-            render_name[offset].size = begin->currSize + 0.1f;
-        }
-        begin++;
-    }
-
-    unsigned short* end = (unsigned short*) render_name - 1;
-
-    while (end-- > offset_table)
-        end[1] = end[0];
-        
-    end[1] = 0;
-
-    return count;
+    return out;
 }
 
-// extern void debug();
+unsigned int find_text_index(CellData data[], unsigned short indices[], unsigned int n, float cutoff) {
+    for (unsigned int i = 0; i < n; i ++) {
+        if (data[indices[i]].currSize > cutoff) return i;
+    }
+    return n;
+}
 
-void* serialize_state(CellData data_begin[], CellData data_end[],
-    AddPacket* packet) {
+unsigned short* serialize_state(CellData data[], AddPacket* packet) {
 
-    CellData* ptr = data_begin;
-    while (ptr < data_end) {
-        if (ptr->type && ptr->netSize) {
-            packet->id = ptr - data_begin;
-            packet->type = ptr->type;
-            packet->x = ptr->currX;
-            packet->y = ptr->currY;
-            packet->size = ptr->currSize;
+    CellData* node = data->next;
+    while (node) {
+        if (node->type && node->netSize) {
+            packet->id = node - data;
+            packet->type = node->type;
+            packet->x = node->currX;
+            packet->y = node->currY;
+            packet->size = node->currSize;
             packet++;
         }
-        ptr++;
+        node = node->next;
     }
 
+    // Add padding 0 bytes for a valid packet
     unsigned short* end = (unsigned short*) packet;
     *end++ = 0;
     *end++ = 0;

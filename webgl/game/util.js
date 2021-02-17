@@ -30,7 +30,7 @@ module.exports.makeProgram = (gl, vs_src, fs_src) => {
    return prog;
 }
 
-const COLORS = [
+module.exports.COLORS = [
     [255,0,0],
     [255,128,0],
     [255,255,0],
@@ -41,6 +41,4 @@ const COLORS = [
     [0,128,255],
     [127,0,255],
     [255,0,255],
-    [255,0,127]].map(rgb => rgb.map(c => c / 255));
-
-module.exports.getColor = id => COLORS[id % COLORS.length];
+    [255,0,127]];

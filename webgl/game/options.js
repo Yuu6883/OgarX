@@ -6,9 +6,9 @@ const DEFAULT = {
     draw: 120,
     quality: 0,
     auto_respawn: 0,
-    skin_quality: 0,
-    text_quality: 0,
-    circle_quality: 0,
+    skin_quality: 1,
+    text_quality: 1,
+    circle_quality: 1,
     ignore_skin: 0,
     mouse_sync: 0
 };
