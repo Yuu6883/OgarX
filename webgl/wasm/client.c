@@ -17,13 +17,6 @@ typedef struct {
 } CellData;
 
 typedef struct {
-    unsigned int flags;
-    float x;
-    float y;
-    float size;
-} RenderCell;
-
-typedef struct {
     unsigned short id;
     unsigned short type;
     short x;
@@ -48,7 +41,6 @@ typedef struct {
 } DeletePacket;
 
 unsigned int bytes_per_cell_data() { return sizeof(CellData); }
-unsigned int bytes_per_render_cell() { return sizeof(RenderCell); }
 
 extern void log_add(unsigned short id);
 extern void print_list();

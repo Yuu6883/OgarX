@@ -17,22 +17,14 @@ const {
 
 const NAME_MASS_MIN = 0.03;
 const NAME_SCALE = 0.25;
-const NAME_Y_OFFSET = -0.03;
+const NAME_Y_OFFSET = 0;
 
 const MASS_GAP = 0;
 const MASS_SCALE = 0.25;
 const MASS_Y_OFFSET = -0.33;
 
 // Constants
-const CELL_TYPES = 256;
 const CELL_LIMIT = 1 << 16; // 65536
-const MIN_SIZE = 30;
-const SIZE_RANGE = 200;
-const POS_RANGE = 65536;
-
-const DEPTH_CLEAR_VALUE = -99999.0;
-const MIN_DEPTH = 0.0;
-const MAX_DEPTH = 1.0;
 
 const MASS_CHARS       = "0123456789.k".split("");
 const MASS_CHARS_COUNT = MASS_CHARS.length;
@@ -113,7 +105,7 @@ class Renderer {
     }
 
     initLoader() {
-        this.loader = new Worker(self.window ? "js/loader.min.js" : "loader.min.js");
+        this.loader = new Worker("loader.min.js");
         /** @param {{ data: { id: number, skin?: ImageBitmap, name?: ImageBitmap }}} e */
         this.loader.onmessage = e => {
             if (!e.data) return;
@@ -174,16 +166,15 @@ class Renderer {
         this.SKIN_DIM = this.state.skin_dim;
 
         this.BYTES_PER_CELL_DATA = this.wasm.bytes_per_cell_data();
-        this.BYTES_PER_RENDER_CELL = this.wasm.bytes_per_render_cell();
         this.INDICES_OFFSET = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
        
-        // name text vertex cpu buffer
+        // name text vertex cpu buffers
         this.nameWidths = new Float32Array(256);
+        this.nameFlags  = new Uint8Array(CELL_LIMIT);
         this.nameBuffer = new Float32Array(new ArrayBuffer(6 * CELL_LIMIT));
 
-        // ASCII
+        // mass text vertex cpu buffers
         this.massWidths = new Float32Array(256);
-        // mass text vertex cpu buffer
         this.massCounts = new Uint8Array(CELL_LIMIT);
         this.massBuffer = new Float32Array(new ArrayBuffer(128 * CELL_LIMIT));
 
@@ -217,12 +208,15 @@ class Renderer {
         this.generateBorderVAO();
 
         this.generateDeadcellTexture();
-        this.generateCircleTexture();
+        this.generateCircleTextures();
         this.generateMassTextures();
 
         const c = 12 / 255;
         gl.useProgram(brdr_prog);
         gl.uniform4f(this.getUniform(brdr_prog, "u_color"), c, c, c, 1);
+
+        gl.useProgram(mass_prog);
+        gl.uniform1i(this.getUniform(mass_prog, "u_mass_char"), 1);
 
         this.loadPlayerData({ id: 253, skin: `/static/img/virus-${this.SKIN_DIM}.png`, persist: true });
         this.start();
@@ -306,7 +300,7 @@ class Renderer {
         gl.bindVertexArray(this.nameVAO = gl.createVertexArray());
 
         // 4 bytes per float * 2 triangles * 3 vertices per triangle * 2 floats per vertex = 48
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("name_data_buffer"));
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("name_buffer"));
         gl.bufferData(gl.ARRAY_BUFFER, this.nameBuffer, gl.DYNAMIC_DRAW);
         
         const size = 2;
@@ -376,10 +370,8 @@ class Renderer {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     }
 
-    generateCircleTexture() {
+    generateCircleTextures() {
         const gl = this.gl;
-        // Create circle texture on texture unit 10
-        gl.activeTexture(gl.TEXTURE0);
 
         if (this.circleTextures.length) {
             this.circleTextures.forEach(t => gl.deleteTexture(t));
@@ -422,96 +414,88 @@ class Renderer {
     }
 
     generateMassTextures() {
-        // console.log("Generating mass characters");
-
         const gl = this.gl;
-        // Create mass texture on texture 13
-        const mass_texture_array = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE13);
-        gl.bindTexture(gl.TEXTURE_2D_ARRAY, mass_texture_array);
+
+        // Generate mass char on texture unit 1
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, gl.createTexture());
 
         const MASS_FONT_WIDTH  = 320;
         const MASS_FONT_HEIGHT = 320;
 
-        {
-            gl.texImage3D(
+        gl.texImage3D(
+            gl.TEXTURE_2D_ARRAY,
+            0,
+            gl.RGBA,
+            MASS_FONT_WIDTH,
+            MASS_FONT_HEIGHT,
+            MASS_CHARS_COUNT,
+            0,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            null
+        );
+
+        const temp = new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
+        
+        const temp_ctx = temp.getContext("2d");
+
+        temp_ctx.font = "bold 280px Lato";
+        temp_ctx.fillStyle = "white";
+        temp_ctx.strokeStyle = "black";
+        temp_ctx.textAlign = "center";
+        temp_ctx.lineWidth = 30;
+        temp_ctx.textBaseline = "middle";
+
+        // uv array (4 uv per char, 2 float per uv)
+        const UVS = new Float32Array(MASS_CHARS_COUNT * 4 * 2); 
+        
+        for (let index = 0; index < MASS_CHARS_COUNT; index++) {
+            const char = MASS_CHARS[index];
+            temp_ctx.clearRect(0, 0, temp.width, temp.height);
+            temp_ctx.strokeText(char, temp.width >> 1, temp.height >> 1);
+            temp_ctx.fillText(char, temp.width >> 1, temp.height >> 1);
+            const w = (temp_ctx.measureText(char).width + 20) / temp.width;
+            this.massWidths[char.charCodeAt(0)] = w;
+            gl.texSubImage3D(
                 gl.TEXTURE_2D_ARRAY,
                 0,
-                gl.RGBA,
+                0,
+                0,
+                index,
                 MASS_FONT_WIDTH,
                 MASS_FONT_HEIGHT,
-                MASS_CHARS_COUNT,
-                0,
+                1,
                 gl.RGBA,
                 gl.UNSIGNED_BYTE,
-                null
-            );
-
-            const temp = self.window ? document.createElement("canvas") : new OffscreenCanvas(MASS_FONT_WIDTH, MASS_FONT_HEIGHT);
-            if (self.window) {
-                temp.width = MASS_FONT_WIDTH;
-                temp.height = MASS_FONT_HEIGHT;
-            }
+                temp);
             
-            const temp_ctx = temp.getContext("2d");
+            const x0 = 0.5 - w / 2;
+            const x1 = 0.5 + w / 2;
+            const y0 = 0;
+            const y1 = 1;
 
-            temp_ctx.font = "bold 280px Lato";
-            temp_ctx.fillStyle = "white";
-            temp_ctx.strokeStyle = "black";
-            temp_ctx.textAlign = "center";
-            temp_ctx.lineWidth = 30;
-            temp_ctx.textBaseline = "middle";
+            UVS[8 * index + 0] = x0;
+            UVS[8 * index + 1] = y0;
 
-            // uv array (4 uv per char, 2 float per uv)
-            const UVS = new Float32Array(MASS_CHARS_COUNT * 4 * 2); 
-            
-            for (let index = 0; index < MASS_CHARS_COUNT; index++) {
-                const char = MASS_CHARS[index];
-                temp_ctx.clearRect(0, 0, temp.width, temp.height);
-                temp_ctx.strokeText(char, temp.width >> 1, temp.height >> 1);
-                temp_ctx.fillText(char, temp.width >> 1, temp.height >> 1);
-                const w = (temp_ctx.measureText(char).width + 20) / temp.width;
-                this.massWidths[char.charCodeAt(0)] = w;
-                gl.texSubImage3D(
-                    gl.TEXTURE_2D_ARRAY,
-                    0,
-                    0,
-                    0,
-                    index,
-                    MASS_FONT_WIDTH,
-                    MASS_FONT_HEIGHT,
-                    1,
-                    gl.RGBA,
-                    gl.UNSIGNED_BYTE,
-                    temp);
-                
-                const x0 = 0.5 - w / 2;
-                const x1 = 0.5 + w / 2;
-                const y0 = 0;
-                const y1 = 1;
+            UVS[8 * index + 2] = x1;
+            UVS[8 * index + 3] = y0;
 
-                UVS[8 * index + 0] = x0;
-                UVS[8 * index + 1] = y0;
+            UVS[8 * index + 4] = x0;
+            UVS[8 * index + 5] = y1;
 
-                UVS[8 * index + 2] = x1;
-                UVS[8 * index + 3] = y0;
-
-                UVS[8 * index + 4] = x0;
-                UVS[8 * index + 5] = y1;
-
-                UVS[8 * index + 6] = x1;
-                UVS[8 * index + 7] = y1;
-            }
-
-            gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        
-            gl.useProgram(this.mass_prog);
-            gl.uniform2fv(this.getUniform(this.mass_prog, "u_uvs"), UVS);
+            UVS[8 * index + 6] = x1;
+            UVS[8 * index + 7] = y1;
         }
+
+        gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    
+        gl.useProgram(this.mass_prog);
+        gl.uniform2fv(this.getUniform(this.mass_prog, "u_uvs"), UVS);
     }
 
     screenToWorld(out = vec3.create(), x = 0, y = 0) {
@@ -553,12 +537,88 @@ class Renderer {
         }
     }
 
-    /** @param {Uint32Array} indices_buffer */
-    buildMassVertexBuffer(indices_buffer) {
+    /** 
+     * @param {Uint16Array} indices_buffer
+     * @param {Uint8Array} types_buffer
+     */
+    buildNameVertexBuffer(indices_buffer, types_buffer) {
+        let write_offset = 0;
+        
+        const indices = indices_buffer;
+        const types = types_buffer;
+        
+        const f32 = this.core.HEAPF32;
+
+        const flags  = this.nameFlags;
+        const widths = this.nameWidths;
+        const name_buffer = this.nameBuffer;
+
+        for (const i in this.playerData) {
+            const p = this.playerData[i];
+            if (!i || i > 250 || !p || !p.name) continue;
+            const w = this.textures.get(p.name);
+            if (!w || !w.tex) continue;
+            widths[i] = w.dim[0] / w.dim[1];
+        }
+
+        for (let i = 0; i < indices.length; i++) {
+
+            const type = types[i];
+            const offset = (indices[i] * this.BYTES_PER_CELL_DATA) >> 2;
+
+            if (!widths[type]) {
+                flags[i] = 0;
+                continue;
+            };
+            
+            flags[i] = 1;
+
+            const x = f32[offset + 4];
+            const y = f32[offset + 5];
+            const s = f32[offset + 6];
+
+            const x1 = NAME_SCALE * widths[type] * s;
+            const x0 = -x1;
+
+            const y0 = (NAME_Y_OFFSET - NAME_SCALE) * s;
+            const y1 = (NAME_Y_OFFSET + NAME_SCALE) * s;
+
+            if (self.debug) console.log(`Text type: ${type} at: ${x}, ${y}`);
+
+            name_buffer[write_offset++] = x + x0;
+            name_buffer[write_offset++] = y + y0;
+
+            name_buffer[write_offset++] = x + x1;
+            name_buffer[write_offset++] = y + y0;
+
+            name_buffer[write_offset++] = x + x0;
+            name_buffer[write_offset++] = y + y1;
+            
+            name_buffer[write_offset++] = x + x1;
+            name_buffer[write_offset++] = y + y0;
+
+            name_buffer[write_offset++] = x + x0;
+            name_buffer[write_offset++] = y + y1;
+
+            name_buffer[write_offset++] = x + x1;
+            name_buffer[write_offset++] = y + y1;
+        }
+
+        return write_offset;
+    }
+
+    /** 
+     * @param {Uint16Array} indices_buffer
+     * @param {Uint8Array} types_buffer
+     */
+    buildMassVertexBuffer(indices_buffer, types_buffer) {
         let write_offset = 0;
 
         const indices = indices_buffer;
-        const buffer = this.core.HEAPF32;
+        const types = types_buffer;
+        
+        const f32 = this.core.HEAPF32;
+
         const counts = this.massCounts;
         const widths = this.massWidths;
         const mass_buffer = this.massBuffer;
@@ -568,16 +628,25 @@ class Renderer {
 
         for (let i = 0; i < indices.length; i++) {
 
-            const float_offset = (indices[i] * this.BYTES_PER_CELL_DATA) >> 2;
+            const offset = (indices[i] * this.BYTES_PER_CELL_DATA) >> 2;
 
-            const x = buffer[float_offset + 4];
-            const y = buffer[float_offset + 5];
-            const s = buffer[float_offset + 6];
+            const type = types[i];
 
-            const mass = long_mass ? Math.round(s).toString() : 
-                s > 1000 ? (s / 1000).toFixed(1) + "k" : Math.round(s).toString();
+            if (!type || type > 250) {
+                counts[i] = 0;
+                continue;
+            };
+
+            const x = f32[offset + 4];
+            const y = f32[offset + 5];
+            const s = f32[offset + 6];
+            const m = s * s * 0.01;
+
+            const mass = long_mass ? Math.round(m).toString() : 
+                m > 1000 ? (m / 1000).toFixed(1) + "k" : Math.round(m).toString();
             
-            // Save the char length to another array
+            if (self.debug) console.log(i, mass, mass.length);
+            // Save the char length to count array
             counts[i] = mass.length;
 
             let width = (mass.length - 1) * MASS_GAP * MASS_SCALE;
@@ -625,7 +694,7 @@ class Renderer {
             }
         }
 
-        return mass_buffer.subarray(0, write_offset);
+        return write_offset;
     }
 
     /** @param {number} now */
@@ -685,6 +754,8 @@ class Renderer {
     /** @param {number} cell_count */
     draw(cell_count) {
 
+        const gl = this.gl;
+        
         const indices = new Uint16Array(this.core.buffer, this.INDICES_OFFSET, cell_count);
         const types_ptr = this.INDICES_OFFSET + (cell_count << 1);
         const types = this.core.HEAPU8.subarray(types_ptr, types_ptr + cell_count);
@@ -698,8 +769,12 @@ class Renderer {
 
         let text_index = cell_count;
 
-        // Configurable if we want to draw mass
-        if (this.state.mass || this.state.name) {
+        // Configurable if we want to draw skin/name/mass
+        const render_skin = this.state.skin;
+        const render_name = this.state.name;
+        const render_mass = this.state.mass;
+
+        if (render_name || render_mass) {
             
             const { l, r, t, b } = this.viewbox;
             const w = r - l;
@@ -708,35 +783,49 @@ class Renderer {
 
             text_index = this.wasm.find_text_index(0, this.INDICES_OFFSET, cell_count, cutoff);
 
-            // if (this.state.name) {
-            //     progs.push(this.peel_prog2);
-            //     funcs.push(this.drawNames);
-            // }
+            const text_indices = indices.subarray(text_index, indices.length);
+            const text_types = types.subarray(text_index, types.length);
 
-            // if (this.state.mass) {
-            //     this.buildMassBuffer(new Float32Array(this.core.buffer, this.nameBufferEnd, text_count * 4));
-            //     progs.push(this.peel_prog3);
-            //     funcs.push(this.drawMass);
-            // }
+            if (render_name) {
+                const end = this.buildNameVertexBuffer(text_indices, text_types);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("name_buffer"));
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.nameBuffer.subarray(0, end));
+            }
+            
+            if (render_mass) {
+                const end = this.buildMassVertexBuffer(text_indices, text_types);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("mass_buffer"));
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.massBuffer.subarray(0, end));
+
+                if (self.debug) console.log(end);
+            }
         }
 
-        const gl = this.gl;
         const circles = this.circleTextures;
         const dead = this.deadCellTexture;
+        const name_flags = this.nameFlags;
+        const mass_count = this.massCounts;
+
         const L = circles.length;
         // 12 floats per cell
         const VB = new Float32Array(this.core.buffer, vert_ptr, 12 * cell_count);
 
-        const render_skin = this.state.skin;
         const skins = this.playerData.map(d => {
             if (!d) return null;
             const w = this.textures.get(d.skin);
             return w ? w.tex : null;
         });
 
-        const render_name = this.state.name;
-        
-        const render_mass = this.state.mass;
+        const names = render_name ? this.playerData.map(d => {
+            if (!d) return null;
+            const w = this.textures.get(d.name);
+            return w ? w.tex : null;
+        }) : [];
+
+        gl.useProgram(this.mass_prog);
+        gl.uniformMatrix4fv(this.getUniform(this.mass_prog, "u_proj"), false, this.proj);
 
         gl.useProgram(this.main_prog);
         gl.uniformMatrix4fv(this.getUniform(this.main_prog, "u_proj"), false, this.proj);
@@ -746,6 +835,11 @@ class Renderer {
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, VB);
 
         gl.activeTexture(gl.TEXTURE0);
+
+        if (self.debug) console.log(`Cell count: ${cell_count}, text index: ${text_index}`);
+
+        let name_draw_offset = 0;
+        let mass_draw_offset = 0;
 
         for (let i = 0; i < cell_count; i++) {
             const t = types[i];
@@ -760,7 +854,33 @@ class Renderer {
                 gl.bindTexture(gl.TEXTURE_2D, skins[t]);
                 gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
             }
+
+            const ti = i - text_index;
+
+            if (ti >= 0) {
+                if (name_flags[ti]) {
+                    gl.bindVertexArray(this.nameVAO);
+                    gl.bindTexture(gl.TEXTURE_2D, names[t]);
+                    gl.drawArrays(gl.TRIANGLES, name_draw_offset, 6);
+                    name_draw_offset += 6;
+                }
+
+                const mass_chars = mass_count[ti];
+                if (mass_chars) {
+                    gl.useProgram(this.mass_prog);
+                    gl.bindVertexArray(this.massVAO);
+                    const draw_count = 6 * mass_chars;
+                    if (self.debug) console.log(`Mass vertex ${draw_count} at text index: ${ti}`);
+                    gl.drawArrays(gl.TRIANGLES, mass_draw_offset, draw_count);
+                    mass_draw_offset += draw_count;
+                    gl.useProgram(this.main_prog);
+                }
+                
+                gl.bindVertexArray(this.cellVAO);
+            }
         }
+        
+        self.debug = false;
     }
 
     serializeState() {
@@ -793,32 +913,30 @@ class Renderer {
     }
 }
 
-if (!self.window) {
-    self.addEventListener("message", async function(e) {
-        const { data } = e;
-        const renderer = self.r = new Renderer(data.offscreen);
-        renderer.stats.setBuffer(data.stats);
-        renderer.mouse.setBuffer(data.mouse);
-        renderer.state.setBuffer(data.state);
-        renderer.viewport.setBuffer(data.viewport);
-        await renderer.initEngine();
-    
-        self.addEventListener("message", e => {
-            const p = renderer.protocol;
-            if (e.data.connect && !p.connecting) {
-                p.connect(e.data.connect, e.data.name, e.data.skin);
-            }
-            if (e.data.spawn) {
-                if (p.connecting) {
-                    p.once("protocol", () => p.spawn(e.data.name, e.data.skin));
-                } else p.spawn(e.data.name, e.data.skin);
-            }
-            if (e.data.chat) p.sendChat(e.data.chat);
-            if (e.data.replay) p.startReplay(e.data.replay);
-        });
-    
-        self.postMessage({ event: "ready" });
-    }, { once: true });
-} else self.Renderer = Renderer;
+self.addEventListener("message", async e => {
+    const { data } = e;
+    const renderer = self.r = new Renderer(data.offscreen);
+    renderer.stats.setBuffer(data.stats);
+    renderer.mouse.setBuffer(data.mouse);
+    renderer.state.setBuffer(data.state);
+    renderer.viewport.setBuffer(data.viewport);
+    await renderer.initEngine();
+
+    self.addEventListener("message", e => {
+        const p = renderer.protocol;
+        if (e.data.connect && !p.connecting) {
+            p.connect(e.data.connect, e.data.name, e.data.skin);
+        }
+        if (e.data.spawn) {
+            if (p.connecting) {
+                p.once("protocol", () => p.spawn(e.data.name, e.data.skin));
+            } else p.spawn(e.data.name, e.data.skin);
+        }
+        if (e.data.chat) p.sendChat(e.data.chat);
+        if (e.data.replay) p.startReplay(e.data.replay);
+    });
+
+    self.postMessage({ event: "ready" });
+}, { once: true });
 
 module.exports = Renderer;

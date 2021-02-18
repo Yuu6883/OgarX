@@ -233,7 +233,7 @@ module.exports = class HUD {
             .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
 
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
-            gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "192.168.1.167:6969" });
+            gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "192.168.3.38:6969" });
             window.hud = this;
         }
 
