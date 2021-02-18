@@ -5,7 +5,7 @@ module.exports = {
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_AUTOSPLIT_SIZE: 0,
     PLAYER_MERGE_TIME: 3,
-    VIRUS_COUNT: 100,
+    VIRUS_COUNT: 40,
     VIRUS_SIZE: 200,
     VIRUS_MONOTONE_POP: true,
     EJECT_SIZE: 38,

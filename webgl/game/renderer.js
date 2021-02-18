@@ -143,7 +143,6 @@ class Renderer {
         if (!gl) return console.error("WebGL2 Not Supported");
 
         gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         // console.log("Loading WASM...");
         await this.core.load();
@@ -358,8 +357,8 @@ class Renderer {
         const CIRCLE_RADIUS = this.state.circle_radius;
         const temp = new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
         const temp_ctx = temp.getContext("2d");
-        temp_ctx.fillStyle = `rgb(255, 255, 255)`;
-        temp_ctx.globalAlpha = 0.1;
+        temp_ctx.globalAlpha = 0.75;
+        temp_ctx.fillStyle = `rgb(75, 75, 75)`;
         temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
         temp_ctx.fill();
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
@@ -583,8 +582,6 @@ class Renderer {
             const y0 = (NAME_Y_OFFSET - NAME_SCALE) * s;
             const y1 = (NAME_Y_OFFSET + NAME_SCALE) * s;
 
-            if (self.debug) console.log(`Text type: ${type} at: ${x}, ${y}`);
-
             name_buffer[write_offset++] = x + x0;
             name_buffer[write_offset++] = y + y0;
 
@@ -645,7 +642,6 @@ class Renderer {
             const mass = long_mass ? Math.round(m).toString() : 
                 m > 1000 ? (m / 1000).toFixed(1) + "k" : Math.round(m).toString();
             
-            if (self.debug) console.log(i, mass, mass.length);
             // Save the char length to count array
             counts[i] = mass.length;
 
@@ -774,6 +770,14 @@ class Renderer {
         const render_name = this.state.name;
         const render_mass = this.state.mass;
 
+        const circles = this.circleTextures;
+        const dead = this.deadCellTexture;
+        const name_flags = this.nameFlags;
+        const mass_count = this.massCounts;
+
+        name_flags.fill(0);
+        mass_count.fill(0);
+        
         if (render_name || render_mass) {
             
             const { l, r, t, b } = this.viewbox;
@@ -798,15 +802,8 @@ class Renderer {
                 
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("mass_buffer"));
                 gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.massBuffer.subarray(0, end));
-
-                if (self.debug) console.log(end);
             }
         }
-
-        const circles = this.circleTextures;
-        const dead = this.deadCellTexture;
-        const name_flags = this.nameFlags;
-        const mass_count = this.massCounts;
 
         const L = circles.length;
         // 12 floats per cell
@@ -836,18 +833,24 @@ class Renderer {
 
         gl.activeTexture(gl.TEXTURE0);
 
-        if (self.debug) console.log(`Cell count: ${cell_count}, text index: ${text_index}`);
-
         let name_draw_offset = 0;
         let mass_draw_offset = 0;
+
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         for (let i = 0; i < cell_count; i++) {
             const t = types[i];
 
             if (t !== 253) {
-                gl.bindTexture(gl.TEXTURE_2D, t === 254 ? circles[indices[i] % L] : 
-                    t === 251 ? dead : circles[t % L]);
-                gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
+                if (t === 251) {
+                    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                    gl.bindTexture(gl.TEXTURE_2D, dead);
+                    gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
+                    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                } else {
+                    gl.bindTexture(gl.TEXTURE_2D, t === 254 ? circles[indices[i] % L] : circles[t % L]);
+                    gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
+                }
             }
 
             if (render_skin && skins[t] || t === 253) {
@@ -870,7 +873,6 @@ class Renderer {
                     gl.useProgram(this.mass_prog);
                     gl.bindVertexArray(this.massVAO);
                     const draw_count = 6 * mass_chars;
-                    if (self.debug) console.log(`Mass vertex ${draw_count} at text index: ${ti}`);
                     gl.drawArrays(gl.TRIANGLES, mass_draw_offset, draw_count);
                     mass_draw_offset += draw_count;
                     gl.useProgram(this.main_prog);
@@ -879,8 +881,8 @@ class Renderer {
                 gl.bindVertexArray(this.cellVAO);
             }
         }
-        
-        self.debug = false;
+
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     }
 
     serializeState() {
