@@ -16,7 +16,7 @@ module.exports = class State {
     get resolution() { return [[1920, 1080], [1280, 720], [854, 480]][this.quality] || [1920, 1080]; }
 
     get spectate() { return Atomics.load(this.buffer, 0); }
-    set spectate(v) { Atomics.store(this.buffer, 0, v) }
+    set spectate(v) { Atomics.store(this.buffer, 0, v); }
 
     get splits() { return Atomics.load(this.buffer, 1); }
     set splits(v) { Atomics.add(this.buffer, 1, v); }
@@ -78,15 +78,17 @@ module.exports = class State {
     get quality() { return Atomics.load(this.buffer, 19); }
     set quality(v) { Atomics.store(this.buffer, 19, v); }
 
+    set clicked(v) { Atomics.store(this.buffer, 20, v); }
+
     exchange() {
         return {
-            spectate: Atomics.exchange(this.buffer, 0, 0),
             splits: Atomics.exchange(this.buffer, 1, 0),
             ejects: Atomics.exchange(this.buffer, 2, 0),
             macro: this.macro,
             respawn: Atomics.exchange(this.buffer, 4, 0),
             lineLock: Atomics.exchange(this.buffer, 6, 0),
-            clip: Atomics.exchange(this.buffer, 13, 0)
+            clip: Atomics.exchange(this.buffer, 13, 0),
+            clicked: Atomics.exchange(this.buffer, 20, 0)
         }
     }
 }

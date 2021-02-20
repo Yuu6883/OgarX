@@ -94,9 +94,6 @@ onmessage = async evt => {
     }
 
     if (data.replay) {
-
-        // self.postMessage({ event: "replay", state: "starting" });
-
         const id = Date.now();
 
         const w = data.replay.PREVIEW_WIDTH, h = data.replay.PREVIEW_HEIGHT;
@@ -110,15 +107,11 @@ onmessage = async evt => {
         const buffers = [];
         gif.on("data", chunk => buffers.push(chunk.buffer));
         gif.on("end", () => {
-
             console.log(`GIF took ${((Date.now() - id) / 1000).toFixed(1)} seconds to encode`);
             const s = serialize(data.replay);
 
             const thumbnail = new Blob(buffers, { type: "image/gif" });
-            const meta = {
-                thumbnail,
-                size: s.byteLength + thumbnail.size
-            };
+            const meta = { thumbnail, size: s.byteLength + thumbnail.size };
 
             const tx = db.transaction(["replay-meta", "replay-data"], "readwrite");
             const metaStore = tx.objectStore("replay-meta");

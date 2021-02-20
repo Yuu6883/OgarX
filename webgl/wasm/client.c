@@ -282,6 +282,28 @@ float* draw_pellets(CellData data[], unsigned short indices[], unsigned int n, f
     return out;
 }
 
+unsigned char get_clicked_type(CellData data[], float x, float y) {
+    
+    CellData* end = &data[65536];
+    CellData* node = data;
+
+    unsigned char click_type = 0;
+    float max_size = 0;
+
+    while (node < end) {
+        if (node->type && node->type <= 250 && 
+            node->currSize > max_size &&
+            (node->currX - x) * (node->currX - x) + 
+                (node->currY - y) * (node->currY - y) < node->currSize * node->currSize) {
+            max_size = node->currSize;
+            click_type = node->type;
+        }
+        node++;
+    }
+
+    return click_type;
+}
+
 unsigned int find_text_index(CellData data[], unsigned short indices[], unsigned int n, float cutoff) {
     for (unsigned int i = 0; i < n; i ++)
         if (data[indices[i]].currSize > cutoff) return i;

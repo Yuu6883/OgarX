@@ -51,14 +51,8 @@ module.exports = class Keyboard {
             keys.appendChild(b);
             this.labels.push(b);
 
-            b.addEventListener("mouseenter", _ => {
-                this.hovered = b;
-            });
-
-            b.addEventListener("mouseleave", _ => {
-                this.hovered = null;
-            });
-
+            b.addEventListener("mouseenter", _ => this.hovered = b);
+            b.addEventListener("mouseleave", _ => this.hovered = null);
             b.addEventListener("click", e => {
                 this.setKey(b, `MOUSE ${e.button}`);
                 e.preventDefault();

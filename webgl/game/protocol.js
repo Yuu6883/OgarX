@@ -322,7 +322,15 @@ module.exports = class Protocol extends EventEmitter {
 
             const currState = state.exchange();
 
-            writer.writeUInt8(currState.spectate);
+            let spectate = 0;
+            if (state.spectate) {
+                state.spectate = 0;
+                spectate = 255;
+            } else if (currState.clicked) {
+                spectate = this.renderer.getClickedPlayerID();
+            }
+
+            writer.writeUInt8(spectate);
             writer.writeUInt8(currState.splits);
             writer.writeUInt8(currState.ejects);
             writer.writeUInt8(currState.macro);

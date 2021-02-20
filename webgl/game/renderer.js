@@ -967,6 +967,10 @@ class Renderer {
             this.wasm.serialize_state(0, this.INDICES_OFFSET));
     }
 
+    getClickedPlayerID() {
+        return this.wasm.get_clicked_type(0, this.cursor.position[0], this.cursor.position[1]);
+    }
+
     updateTextures() {
         const gl = this.gl;
         if (this.updates.length) {

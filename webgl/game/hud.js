@@ -66,24 +66,11 @@ module.exports = class HUD {
                 if (data.event === "error") this.onError(data.message || "Unknown Error");
                 if (data.event === "warning") this.onWarning(data.message || "Unknown Warning");
             }
-        } else if (navigator.userAgent.includes("Firefox")) {
-            fetch("js/renderer.min.js")
-                .then(res => res.text())
-                .then(code => {
-                    eval(code);
-
-                    /** @type {import("./renderer")} */
-                    this.renderer = new Renderer(this.canvas);
-                    this.renderer.stats = this.stats;
-                    this.renderer.mouse = this.mouse;
-                    this.renderer.state = this.state;
-                    this.renderer.viewport = this.viewport;
-                })
-                .then(() => this.renderer.initEngine());
         }
     }
 
     show(elem = this.hudElem) {
+        if (elem == this.hudElem) this.hide(this.gameoverElem);
         elem.classList.add("fade-in");
         elem.classList.remove("fade-out");
         elem.hidden = false;
@@ -146,10 +133,12 @@ module.exports = class HUD {
             this.mouse.y = ~~(4096 * dy);
         });
 
-        canvas.addEventListener("wheel", e => {
+        this.canvas.addEventListener("wheel", e => {
             if (e.ctrlKey) return;
             this.mouse.updateScroll(e.deltaY);
         }, { passive: true });
+
+        this.canvas.addEventListener("click", _ => this.state.clicked = 1);
     }
 
     updateSkin(ignoreError = false) {
@@ -192,6 +181,10 @@ module.exports = class HUD {
         });
         // TODO
         this.spectateButton = document.getElementById("spectate");
+        this.spectateButton.addEventListener("click", () => {
+            this.state.spectate = 1;
+            this.hide();
+        });
         this.respawnButton = document.getElementById("respawn-button");
         this.respawnButton.addEventListener("click", () => this.state.respawn = 1);
 

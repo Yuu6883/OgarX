@@ -14,6 +14,8 @@ module.exports = class Bot extends Handle {
         this.controller.skin = pick(BOTS.skins);
 
         this.__nextActionTick = 0;
+
+        this.game.emit("join", this.controller);
     };
 
     get myCellIDs() { return this.game.engine.counters[this.controller.id]; }

@@ -37,7 +37,6 @@ module.exports = class Game extends EventEmitter {
         // Prevent connection spam (can be done in client AND with kernel)?
         // handle.controller.lastSpawnTick = this.engine.__now;
         this.handles++;
-        this.emit("join", handle.controller);
     }
 
     /** @param {import("./handle")} handle */
