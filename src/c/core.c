@@ -65,9 +65,7 @@ unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
 unsigned char  get_cell_type(Cell ptr[], unsigned short id) { return ptr[id].type; };
 unsigned short get_cell_eatenby(Cell ptr[], unsigned short id) { return ptr[id].eatenBy; };
 
-void clear_cell(Cell cells[], unsigned short id) {
-    memset(&cells[id], 0, sizeof(Cell));
-}
+void clear_cell(Cell cells[], unsigned short id) { memset(&cells[id], 0, sizeof(Cell)); }
 
 void update(Cell cells[], unsigned short* ptr, float dt,
     unsigned int eject_max_age,

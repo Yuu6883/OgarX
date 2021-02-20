@@ -23,7 +23,7 @@ module.exports.makeProgram = (gl, vs_src, fs_src) => {
 
    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
         console.error(`vs info-log: ${gl.getShaderInfoLog(vs)}\n` +
-                     `info-log: ${gl.getShaderInfoLog(fs)}`);
+                      `info-log: ${gl.getShaderInfoLog(fs)}`);
         throw new Error(`prog link failed: ${gl.getProgramInfoLog(prog)}`);
    }
 

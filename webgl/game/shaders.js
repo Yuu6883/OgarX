@@ -1,4 +1,3 @@
-
 module.exports.SPRITE_VERT_SHADER_SOURCE = 
 `#version 300 es
 precision highp float;
@@ -27,6 +26,42 @@ out vec4 color;
 
 void main() {
     color = texture(u_texture, uv);
+}
+`;
+
+module.exports.PARTICLE_VERT_SHADER_SOURCE = 
+`#version 300 es
+precision highp float;
+
+uniform mat4 u_proj;
+uniform vec2 u_uvs[6];
+uniform vec3 u_colors[$colors$];
+
+layout(location=0) in vec3 pos;
+
+out vec2 uv;
+out vec3 fill;
+
+void main() {
+    gl_Position = u_proj * vec4(pos.xy, 0.0f, 1.0f);
+    fill = u_colors[int(pos.z) % $colors$];
+    uv = u_uvs[gl_VertexID % 6];
+}
+`;
+
+module.exports.PARTICLE_FRAG_SHADER_SOURCE =
+`#version 300 es
+precision highp float;
+
+uniform sampler2D u_texture;
+
+in vec2 uv;
+in vec3 fill;
+
+out vec4 color;
+
+void main() {
+    color = vec4(fill, texture(u_texture, uv).a);
 }
 `;
 

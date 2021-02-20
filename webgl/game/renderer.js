@@ -11,6 +11,7 @@ const TextureStore = require("./texture-store");
 const { makeProgram, COLORS } = require("./util");
 const {
    SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE,
+   PARTICLE_VERT_SHADER_SOURCE, PARTICLE_FRAG_SHADER_SOURCE,
    MASS_VERT_SHADER_SOURCE, MASS_FRAG_PEELING_SHADER_SOURCE,
    BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE
 } = require("./shaders");
@@ -134,7 +135,9 @@ class Renderer {
     }
 
     async initEngine() {
+
         const gl = this.gl = this.canvas.getContext("webgl2", { 
+            depth: false,
             premultipliedAlpha: false, 
             powerPreference: "high-performance",
             preserveDrawingBuffer: true
@@ -166,6 +169,7 @@ class Renderer {
 
         this.BYTES_PER_CELL_DATA = this.wasm.bytes_per_cell_data();
         this.INDICES_OFFSET = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
+        this.PELLETS_OFFSET = this.INDICES_OFFSET + CELL_LIMIT * 3;
        
         // name text vertex cpu buffers
         this.nameWidths = new Float32Array(256);
@@ -188,6 +192,7 @@ class Renderer {
         const main_prog = this.main_prog = makeProgram(gl, SPRITE_VERT_SHADER_SOURCE, SPRITE_FRAG_SHADER_SOURCE);
         const mass_prog = this.mass_prog = makeProgram(gl, MASS_VERT_SHADER_SOURCE,   MASS_FRAG_PEELING_SHADER_SOURCE);
         const brdr_prog = this.brdr_prog = makeProgram(gl, BORDER_VERT_SHADER_SOURCE, BORDER_FRAG_SHADER_SOURCE);
+        const prtl_prog = this.prtl_prog = makeProgram(gl, PARTICLE_VERT_SHADER_SOURCE.replace(/\$colors\$/g, COLORS.length), PARTICLE_FRAG_SHADER_SOURCE);
 
         this.loadUniform(main_prog, "u_proj");
         this.loadUniform(main_prog, "u_uvs");
@@ -201,6 +206,12 @@ class Renderer {
         this.loadUniform(brdr_prog, "u_proj");
         this.loadUniform(brdr_prog, "u_color");
 
+        this.loadUniform(prtl_prog, "u_proj");
+        this.loadUniform(prtl_prog, "u_uvs");
+        this.loadUniform(prtl_prog, "u_colors");
+        this.loadUniform(prtl_prog, "u_texture");
+
+        this.generatePelletVAO();
         this.generateCellVAO();
         this.generateNameVAO();
         this.generateMassVAO();
@@ -275,13 +286,31 @@ class Renderer {
         this.fbo.delete(name);
     }
 
+    generatePelletVAO() {
+        const gl = this.gl;
+
+        gl.bindVertexArray(this.pelletVAO = gl.createVertexArray());
+
+        // 4 bytes per float * 2 triangles * 3 vertices per triangle * 3 floats per vertex = 48
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("pellet_buffer"));
+        gl.bufferData(gl.ARRAY_BUFFER, this.core.HEAPU8.subarray(0, 72 * CELL_LIMIT), gl.DYNAMIC_DRAW);
+        
+        const size = 3;
+        const type = gl.FLOAT;
+        const normalize = false;
+        const stride = 0;
+        const offset = 0;
+        gl.vertexAttribPointer(0, size, type, normalize, stride, offset);
+        gl.enableVertexAttribArray(0);
+    }
+
     generateCellVAO() {
         const gl = this.gl;
 
         gl.bindVertexArray(this.cellVAO = gl.createVertexArray());
 
         // 4 bytes per float * 2 triangles * 3 vertices per triangle * 2 floats per vertex = 48
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("cell_data_buffer"));
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.allocBuffer("cell_buffer"));
         gl.bufferData(gl.ARRAY_BUFFER, this.core.HEAPU8.subarray(0, 48 * CELL_LIMIT), gl.DYNAMIC_DRAW);
         
         const size = 2;
@@ -410,6 +439,13 @@ class Renderer {
 
         gl.useProgram(this.main_prog);
         gl.uniform2fv(this.getUniform(this.main_prog, "u_uvs"), UVS);
+        
+        gl.useProgram(this.prtl_prog);
+        gl.uniform2fv(this.getUniform(this.prtl_prog, "u_uvs"), UVS);
+
+        const U_COLORS = new Float32Array(COLORS.length * 3);
+        for (const i in COLORS) U_COLORS.set(COLORS[i].map(v => v / 255), i * 3);
+        gl.uniform3fv(this.getUniform(this.prtl_prog, "u_colors"), U_COLORS);
     }
 
     generateMassTextures() {
@@ -713,9 +749,19 @@ class Renderer {
 
         const skip = !this.state.visible && !this.protocol.replay.requestPreview;
 
-        const cell_count = this.wasm.update_cells(0, this.INDICES_OFFSET, lerp, t, b, l, r, skip);
+        let cell_count = 0;
+        let pellet_count = 0;
+        
+        try {
+            const number = this.wasm.update_cells(0, this.INDICES_OFFSET, this.PELLETS_OFFSET,
+                lerp, t, b, l, r, skip);
+            cell_count   = number >> 16;
+            pellet_count = number & 0xFFFF;
+        } catch (e) {
+            console.error(e);
+        }
 
-        this.stats.cells = cell_count;
+        this.stats.cells = cell_count + pellet_count;
         
         this.updateTarget();
         this.camera.tp ? this.teleportCamera() : this.lerpCamera(delta / this.state.draw);
@@ -728,18 +774,12 @@ class Renderer {
         
         // Background
         this.clearScreen();
-
-        // Draw background
-        if (this.protocol.map) {
-            gl.useProgram(this.brdr_prog);
-            gl.bindVertexArray(this.borderVAO);
-            gl.uniform2f(this.getUniform(this.brdr_prog, "u_map"), this.protocol.map.hw, this.protocol.map.hh);
-            gl.uniformMatrix4fv(this.getUniform(this.brdr_prog, "u_proj"), false, this.proj);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-        
+        // Map
+        this.drawMap();
+        // Draw pellets
+        this.drawPellets(pellet_count);        
         // Draw the rest
-        this.draw(cell_count);
+        this.drawCells(cell_count);
 
         this.protocol.replay.savePreview();
         
@@ -747,8 +787,45 @@ class Renderer {
         this.lastDraw = now;
     }
 
+    drawMap() {
+        const gl = this.gl;
+        if (this.protocol.map) {
+            gl.useProgram(this.brdr_prog);
+            gl.bindVertexArray(this.borderVAO);
+            gl.uniform2f(this.getUniform(this.brdr_prog, "u_map"), this.protocol.map.hw, this.protocol.map.hh);
+            gl.uniformMatrix4fv(this.getUniform(this.brdr_prog, "u_proj"), false, this.proj);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+    }
+    
     /** @param {number} cell_count */
-    draw(cell_count) {
+    drawPellets(pellet_count) {
+        if (!pellet_count) return;
+
+        const gl = this.gl;
+        
+        let vert_ptr = this.PELLETS_OFFSET + (pellet_count << 1);
+        while (vert_ptr & 3) vert_ptr++;
+
+        const end = this.wasm.draw_pellets(0, this.PELLETS_OFFSET, pellet_count, vert_ptr);
+        const expect = vert_ptr + pellet_count * 72;
+        const data = new Float32Array(this.core.buffer, vert_ptr, (end - vert_ptr) >> 2);
+
+        console.assert(end === expect, `Expecting pellet end pointer to be ${expect}, but got ${end}`);
+        
+        gl.useProgram(this.prtl_prog);
+        gl.uniformMatrix4fv(this.getUniform(this.prtl_prog, "u_proj"), false, this.proj);
+
+        gl.bindVertexArray(this.pelletVAO);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("pellet_buffer"));
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
+        gl.bindTexture(gl.TEXTURE_2D, this.circleTextures[0]);
+        gl.drawArrays(gl.TRIANGLES, 0, pellet_count * 6);
+    }
+
+    /** @param {number} cell_count */
+    drawCells(cell_count) {
+        if (!cell_count) return;
 
         const gl = this.gl;
         
@@ -761,7 +838,7 @@ class Renderer {
 
         const end = this.wasm.draw_cells(0, this.INDICES_OFFSET, cell_count, vert_ptr);
         const expect = vert_ptr + cell_count * 48;
-        console.assert(end === expect, `Expecting end pointer to be ${expect}, but got ${end}`);
+        console.assert(end === expect, `Expecting cell end pointer to be ${expect}, but got ${end}`);
 
         let text_index = cell_count;
 
@@ -828,7 +905,7 @@ class Renderer {
         gl.uniformMatrix4fv(this.getUniform(this.main_prog, "u_proj"), false, this.proj);
 
         gl.bindVertexArray(this.cellVAO);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_data_buffer"));
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("cell_buffer"));
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, VB);
 
         gl.activeTexture(gl.TEXTURE0);
