@@ -9,7 +9,7 @@ module.exports = {
     VIRUS_SIZE: 200,
     VIRUS_MONOTONE_POP: true,
     EJECT_SIZE: 38,
-    EJECT_LOSS: 38.4,
+    EJECT_LOSS: 38,
     EJECT_DELAY: 100,
     BOTS: 50,
     BOT_SPAWN_SIZE: 1000,
