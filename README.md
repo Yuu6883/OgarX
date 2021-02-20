@@ -23,7 +23,7 @@ You can not use this server as a substiture for OgarII or any clones since I've 
  - [x]  Game chat
  - [x] Leaderboard
  - [x]  Display stats (FPS, net delay, etc)
- - [ ] Better shader (performance & correctness issues)
+ - [x] Better shader (performance & correctness issues)
  - [ ] Commands (some form of authentication needed)
  - [ ] ~~Configurable local server~~ (some options should not be modifiable)
  - [ ] ~~Peer-to-peer connection~~ (WebRTC API is terrible)
