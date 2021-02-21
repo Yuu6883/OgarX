@@ -33,7 +33,9 @@ module.exports = class SharedWorkerServer {
                     else ws.p = new Protocol(this.game, ws, message);
                 } else {
                     port.lastMessage = Date.now();
-                    ws.p.onMessage(new DataView(message));
+                    try {
+                        ws.p.onMessage(new DataView(message));
+                    } catch(e) {};
                 }
             }
 

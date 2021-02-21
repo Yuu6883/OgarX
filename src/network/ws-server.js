@@ -90,7 +90,9 @@ module.exports = class SocketServer {
                         if (!Protocol) ws.end(1003, "Ambiguous protocol");
                         else ws.p = new Protocol(this.game, ws, message);
                     } else {
-                        ws.p.onMessage(new DataView(message));
+                        try {
+                            ws.p.onMessage(new DataView(message));
+                        } catch (e) {}
                     }
                 },
                 drain: ws => ws.p && ws.p.onDrain(),
