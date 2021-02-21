@@ -183,7 +183,7 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     onSpawn(c) {
-        if (this.dual.controller == c) this.switchTo(c);
+        if (this.dual && this.dual.controller == c) this.switchTo(c);
     }
 
     /** @param {import("../../game/controller")[]} controllers */
