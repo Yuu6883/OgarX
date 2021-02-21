@@ -1,6 +1,7 @@
 const Protocol = require("../protocol");
 const Reader = require("../reader");
 const Writer = require("../writer");
+const DualHandle = require("../../game/dual");
 
 module.exports = class OgarXProtocol extends Protocol {
 
@@ -17,7 +18,7 @@ module.exports = class OgarXProtocol extends Protocol {
         this.Module = await WebAssembly.compile(buffer);
     }
 
-    /** 
+    /**
      * @param {import("../../game")} game
      * @param {import("uWebSockets.js").WebSocket} ws 
      * @param {ArrayBuffer} initMessage
@@ -49,23 +50,35 @@ module.exports = class OgarXProtocol extends Protocol {
         this.view = new DataView(this.memory.buffer);
 
         this.join();
-        this.sendInitPacket();
         
         const reader = new Reader(new DataView(initMessage));
         reader.skip(3); // Skip handshake bytes
 
         this.controller.showOnMinimap = true;
+        this.controller.showonLeaderboard = true;
         this.controller.name = reader.readUTF16String();
         this.controller.skin = reader.readUTF16String();
         this.game.emit("join", this.controller);
+
+        this.pids = [this.controller.id];
+
+        if (this.game.options.DUAL_ENABLED) {
+            this.dual = new DualHandle(this);
+            this.dual.controller.name = this.controller.name;
+            this.dual.controller.skin = reader.readUTF16String();
+            this.pids.push(this.dual.controller.id);
+            this.game.emit("join", this.dual.controller);
+        }
+        this.sendInitPacket();
     }
 
     sendInitPacket() {
         const writer = new Writer();
         writer.writeUInt8(1);
-        writer.writeUInt16(this.controller.id);
-        writer.writeUInt16(this.game.engine.options.MAP_HW);
-        writer.writeUInt16(this.game.engine.options.MAP_HH);
+        writer.writeUInt8(this.controller.id);
+        writer.writeUInt8(this.dual ? this.dual.controller.id : 0);
+        writer.writeUInt16(this.game.options.MAP_HW);
+        writer.writeUInt16(this.game.options.MAP_HH);
         writer.writeUTF16String(this.game.name);
         this.ws.send(writer.finalize(), true);
     }
@@ -89,40 +102,44 @@ module.exports = class OgarXProtocol extends Protocol {
             case 1:
                 controller.name = reader.readUTF16String();
                 controller.skin = reader.readUTF16String();
+                if (this.dual) this.dual.controller.skin = reader.readUTF16String();
                 controller.requestSpawn();
                 break;
-            case 2:
-                if (controller.alive) return;
-                // TODO: spectate a target
             case 3:
-                const mx = reader.readFloat32();
-                const my = reader.readFloat32();
-                if (this.game.engine.options.SOCKET_MOUSE_SYNC) {
-                    for (const c of this.game.controls) {
-                        if (c.handle instanceof OgarXProtocol && c.handle.ws.ip == this.ws.ip) {
-                            c.mouseX = mx;
-                            c.mouseY = my;
-                        }
-                    }
-                } else {
-                    controller.mouseX = mx;
-                    controller.mouseY = my;
-                }
+                controller.mouseX = reader.readFloat32();
+                controller.mouseY = reader.readFloat32();
                 const spectate = reader.readUInt8();
-                if (controller.alive) {
+                if ((this.dual && (controller.alive || this.dual.controller.alive)) 
+                    || (!this.dual && controller.alive)) {
                     const splits = reader.readUInt8();
                     const ejects = reader.readUInt8();
                     const macro  = reader.readUInt8();
                     const lock   = reader.readUInt8();
+                    const s_tab  = reader.readUInt8();
                     controller.splitAttempts += splits;
                     controller.ejectAttempts += ejects;
                     controller.ejectMarco = Boolean(macro);
                     if (lock) controller.toggleLock();
-                } else {
+                    if (s_tab) {
+                        if (!this.dual) return;
+                        if (!controller.alive && !this.dual.controller.alive) {
+                            controller.requestSpawn();
+                        } else {
+                            if (!controller.alive) {
+                                controller.requestSpawn();
+                            } else if (!this.dual.controller.alive) {
+                                this.dual.controller.requestSpawn();
+                            } else {
+                                this.switchTo(this.dual.controller);                  
+                            }
+                        }
+                    }
+                } else if ((this.dual && 
+                    !controller.alive && !this.dual.controller.alive)
+                    || (!this.dual && !controller.alive)) {
+
                     if (spectate && spectate <= 250) {
                         controller.spectate = this.game.controls[spectate];
-                        console.log(`${controller.name} requested to spectate player#${spectate} ` +
-                            `(${controller.spectate.name})`);
                     } else if (spectate === 255) {
                         let score = 0;
                         let toSpec = null;
@@ -132,11 +149,7 @@ module.exports = class OgarXProtocol extends Protocol {
                                 toSpec = c;
                             } 
                         }
-                        if (toSpec) {
-                            this.controller.spectate = toSpec;
-                            console.log(`${controller.name} requested to spectate biggest player ` +
-                                `(${controller.spectate.name})`);
-                        }
+                        if (toSpec) this.controller.spectate = toSpec;
                     }
                 }
                 break;
@@ -155,6 +168,22 @@ module.exports = class OgarXProtocol extends Protocol {
             default:
                 console.warn(`Unknown OP: ${OP}`);
         }
+    }
+
+    /** @param {import("../../game/controller")} c */
+    switchTo(c) {
+        if (!this.dual) return;
+        if (this.controller === c) return;
+
+        this.controller.focused = false;
+        c.focused = true;
+
+        this.dual.controller = this.controller;     
+        this.controller = c;
+    }
+
+    onSpawn(c) {
+        if (this.dual.controller == c) this.switchTo(c);
     }
 
     /** @param {import("../../game/controller")[]} controllers */
@@ -192,9 +221,19 @@ module.exports = class OgarXProtocol extends Protocol {
 
         const engine = this.game.engine;
 
-        if (this.controller.dead) {
-            this.controller.dead = false;
-            this.sendStats();
+        if (this.dual) {
+            if (this.controller.dead && !this.dual.controller.dead) this.switchTo(this.dual.controller);
+            if (!this.controller.dead && this.dual.controller.dead) this.switchTo(this.controller);
+            if (this.controller.dead && this.dual.controller.dead) {
+                this.controller.dead = false;
+                this.dual.controller.dead = false;
+                this.sendStats();
+            }
+        } else {
+            if (this.controller.dead) {
+                this.controller.dead = false;
+                this.sendStats();
+            }
         }
 
         // Backpressure higher than watermark
@@ -202,9 +241,12 @@ module.exports = class OgarXProtocol extends Protocol {
 
         const target = this.controller.spectate || this.controller;
 
+        const vx = this.controller.viewportX;
+        const vy = this.controller.viewportY;
+
         // Query visible cells from the controller
         const vlist = engine.query(target);
-        this.processVisibleList(vlist, target);
+        this.processVisibleList(vlist, vx, vy, target);
 
         for (const c of this.game.controls) {
             if (c.alive &&
@@ -212,13 +254,13 @@ module.exports = class OgarXProtocol extends Protocol {
                 c.spectate === this.controller && 
                 c.handle instanceof OgarXProtocol &&
                 c.handle.ws.getBufferedAmount() > engine.options.SOCKET_WATERMARK) {
-                c.handle.processVisibleList(vlist, this.controller);
+                c.handle.processVisibleList(vlist, vx, vy, this.controller);
             }
         }
     }
 
     /** @param {Uint16Array} vlist */
-    processVisibleList(vlist, controller = this.controller) {
+    processVisibleList(vlist, vx = 0, vy = 0, controller = this.controller) {
         // Step 1
         this.wasm.exports.move_hashtable();
         // Step 2
@@ -245,16 +287,14 @@ module.exports = class OgarXProtocol extends Protocol {
         const E_count = this.view.getUint32(AUED_table_ptr + 8,  true);
         const D_count = this.view.getUint32(AUED_table_ptr + 12, true);
 
-        const vx = controller.viewportX;
-        const vy = controller.viewportY;
         const mx = controller.mouseX;
         const my = controller.mouseY;
 
-        // 1 byte OP + 2 bytes cell count + 1 byte linelocked + 
-        // 4 bytes score + 8 bytes mouse + 8 bytes viewport + 4 * 2 bytes 0 padding = 24 bytes
+        // 1 byte OP + 1 byte pid + 2 bytes cell count + 1 byte linelocked + 
+        // 4 bytes score + 8 bytes mouse + 8 bytes viewport + 4 * 2 bytes 0 padding = 33 bytes
         // We don't have to calculate this because serialize returns the write end
         // But this is a good way to verify it wrote as expect
-        const buffer_length = 32 + 10 * A_count + 8 * U_count + 4 * E_count + 2 * D_count;
+        const buffer_length = 33 + 10 * A_count + 8 * U_count + 4 * E_count + 2 * D_count;
         
         const mem_check = AUED_end_ptr + buffer_length - this.memory.buffer.byteLength;
         if (mem_check > 0) {
@@ -265,14 +305,15 @@ module.exports = class OgarXProtocol extends Protocol {
                 `memory for controller(${this.controller.name})`);
         }
 
-        const o = this.game.engine.options;
+        const o = this.game.options;
         // Step 4 serialize
         const buffer_end = this.wasm.exports.serialize(
+            controller.id,
             this.game.engine.counters[controller.id].size,
             controller.lockDir,
             controller.score,
             mx, my,
-            vx, vy, 
+            vx, vy,
             AUED_table_ptr, AUED_table_ptr + 16, AUED_end_ptr,
             -o.MAP_HW, o.MAP_HW, o.MAP_HH, -o.MAP_HH);
         
@@ -286,9 +327,16 @@ module.exports = class OgarXProtocol extends Protocol {
         if (!this.controller.maxScore) return;
         const writer = new Writer();
         writer.writeUInt8(7);
-        writer.writeUInt32(this.controller.kills);
-        writer.writeFloat32(this.controller.maxScore);
-        writer.writeFloat32(this.controller.surviveTime);
+        if (this.dual) {
+            writer.writeUInt32(this.controller.kills + this.dual.controller.kills);
+            // TODO
+            writer.writeFloat32(0);
+            writer.writeFloat32(0);
+        } else {
+            writer.writeUInt32(this.controller.kills);
+            writer.writeFloat32(this.controller.maxScore);
+            writer.writeFloat32(this.controller.surviveTime);
+        }
         this.ws.send(writer.finalize(), true);
     }
 
@@ -308,6 +356,8 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onLeave(controller) {
+        if (controller != this.dual.controller) this.dual.off();
+        if (controller == this.controller) return;
         // Bye bye to same protocol
         if (controller.handle instanceof OgarXProtocol)
             this.onChat(null, `${controller.name} left the game`);

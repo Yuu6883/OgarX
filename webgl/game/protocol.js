@@ -250,7 +250,7 @@ module.exports = class Protocol extends EventEmitter {
         this.replay.resetTrack();
     }
 
-    connect(urlOrPort, name = "", skin = "") {
+    connect(urlOrPort, name = "", skin1 = "", skin2 = "") {
 
         this.disconnect();
         const currWs = this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
@@ -263,7 +263,8 @@ module.exports = class Protocol extends EventEmitter {
             writer.writeUInt8(69);
             writer.writeInt16(420);
             writer.writeUTF16String(name);
-            writer.writeUTF16String(skin);
+            writer.writeUTF16String(skin1);
+            writer.writeUTF16String(skin2);
             this.ws.send(writer.finalize());
             this.emit("open");
 
@@ -280,8 +281,9 @@ module.exports = class Protocol extends EventEmitter {
         this.ws.onclose = e => {
             this.bandwidth = 0;
             delete this.ping;
+            delete this.dualIDs;
             delete this.lastName;
-            delete this.lastSkin;
+            delete this.lastSkins;
 
             this.emit("close");
 
@@ -335,6 +337,7 @@ module.exports = class Protocol extends EventEmitter {
             writer.writeUInt8(currState.ejects);
             writer.writeUInt8(currState.macro);
             writer.writeUInt8(currState.lineLock);
+            writer.writeUInt8(currState.switch_tab);
 
             this.send(writer.finalize());
 
@@ -356,7 +359,9 @@ module.exports = class Protocol extends EventEmitter {
         switch (OP) {
             case 1:
                 this.HANDSHAKE_PACKET = e.data;
-                this.pid = reader.readUInt16();
+                const pid1 = reader.readUInt8();
+                const pid2 = reader.readUInt8();
+                if (pid2) this.dualIDs = [pid1, pid2];
                 this.map.hw = reader.readUInt16();
                 this.map.hh = reader.readUInt16();
                 console.log(`Map Dimension: ${this.map.hw << 1}x${this.map.hh << 1}`);
@@ -436,20 +441,20 @@ module.exports = class Protocol extends EventEmitter {
 
         const r = this.renderer;
         const core = this.renderer.core;
-        const header = new DataView(buffer, 1, 23);
-
+        const header = new DataView(buffer, 1, 24);
+        this.pid = header.getUint8(0);
         const prev = this.renderer.stats.mycells;
-        const curr = header.getUint16(0, true);
+        const curr = header.getUint16(1, true);
         if (this.replaying && !prev && curr) r.camera.tp = true;
         r.stats.mycells = curr;
-        r.stats.linelocked = header.getUint8(2);
-        r.stats.score = header.getFloat32(3, true);
-        r.syncMouse.x = header.getFloat32(7, true);
-        r.syncMouse.y = header.getFloat32(11, true);
-        r.target.position[0] = header.getFloat32(15, true);
-        r.target.position[1] = header.getFloat32(19, true);
+        r.stats.linelocked = header.getUint8(3);
+        r.stats.score = header.getFloat32(4, true);
+        r.syncMouse.x = header.getFloat32(8, true);
+        r.syncMouse.y = header.getFloat32(12, true);
+        r.target.position[0] = header.getFloat32(16, true);
+        r.target.position[1] = header.getFloat32(20, true);
         
-        core.HEAPU8.set(new Uint8Array(buffer, 24), r.INDICES_OFFSET);                 
+        core.HEAPU8.set(new Uint8Array(buffer, 25), r.INDICES_OFFSET);                 
         core.instance.exports.deserialize(0, r.INDICES_OFFSET);
     }
 
@@ -493,14 +498,19 @@ module.exports = class Protocol extends EventEmitter {
      * @param {string} name 
      * @param {string} skin 
      */
-    spawn(name = this.lastName, skin = this.lastSkin) {
+    spawn(name = this.lastName, skin1, skin2) {
         this.lastName = name;
-        this.lastSkin = skin;
+        if (this.lastSkins) {
+            skin1 = this.lastSkins[0];
+            skin2 = this.lastSkins[1];
+        }
+        this.lastSkins = [skin1, skin2];
 
         const writer = new Writer();
         writer.writeUInt8(1);
         writer.writeUTF16String(name);
-        writer.writeUTF16String(skin);
+        writer.writeUTF16String(skin1);
+        writer.writeUTF16String(skin2);
         this.send(writer.finalize());
     }
 

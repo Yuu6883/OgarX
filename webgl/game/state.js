@@ -80,6 +80,8 @@ module.exports = class State {
 
     set clicked(v) { Atomics.store(this.buffer, 20, v); }
 
+    set s_tab(v) { Atomics.store(this.buffer, 21, v); }
+
     exchange() {
         return {
             splits: Atomics.exchange(this.buffer, 1, 0),
@@ -88,7 +90,8 @@ module.exports = class State {
             respawn: Atomics.exchange(this.buffer, 4, 0),
             lineLock: Atomics.exchange(this.buffer, 6, 0),
             clip: Atomics.exchange(this.buffer, 13, 0),
-            clicked: Atomics.exchange(this.buffer, 20, 0)
+            clicked: Atomics.exchange(this.buffer, 20, 0),
+            switch_tab: Atomics.exchange(this.buffer, 21, 0)
         }
     }
 }

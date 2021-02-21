@@ -94,7 +94,7 @@ module.exports = class SocketServer {
                     }
                 },
                 drain: ws => ws.p && ws.p.onDrain(),
-                close: (ws, code, message) => ws.p.off()
+                close: (ws, code, message) => ws.p && ws.p.off()
             })
             .get("/restart/:token", (res, req) => {
                 const authorization = req.getParameter(0);

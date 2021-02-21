@@ -26,6 +26,8 @@ module.exports = class Game extends EventEmitter {
         this.on("restart", () => this.emit("chat", null, "Restarting Server..."));
     }
 
+    get options() { return this.engine.options; }
+
     /** @param {import("./handle")} handle */
     addHandler(handle) {
         if (this.isFull) handle.onError("Server full");
@@ -44,10 +46,10 @@ module.exports = class Game extends EventEmitter {
         if (!handle.controller) return;
         const c = handle.controller;
         this.engine.delayKill(c.id, true);
+        this.emit("leave", c);
         c.reset();
         handle.controller = null;
         this.handles--;
-        this.emit("leave", c);
     }
 
     get isFull() { return this.handles == MAX_PLAYER; }

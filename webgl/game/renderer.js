@@ -166,6 +166,7 @@ class Renderer {
         
         this.IGNORE_SKIN = this.state.ignore_skin;
         this.SKIN_DIM = this.state.skin_dim;
+        this.CIRCLE_RADIUS = this.state.circle_radius;
 
         this.BYTES_PER_CELL_DATA = this.wasm.bytes_per_cell_data();
         this.INDICES_OFFSET = CELL_LIMIT * this.BYTES_PER_CELL_DATA;
@@ -218,6 +219,7 @@ class Renderer {
         this.generateBorderVAO();
 
         this.generateDeadcellTexture();
+        this.generateDualTextures("rgb(87, 121, 221)", "rgb(230, 76, 166)");
         this.generateCircleTextures();
         this.generateMassTextures();
 
@@ -383,13 +385,50 @@ class Renderer {
 
         gl.bindTexture(gl.TEXTURE_2D, this.deadCellTexture = gl.createTexture());
 
-        const CIRCLE_RADIUS = this.state.circle_radius;
-        const temp = new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
+        const R = this.CIRCLE_RADIUS;
+        const temp = new OffscreenCanvas(R << 1, R << 1);
         const temp_ctx = temp.getContext("2d");
         temp_ctx.globalAlpha = 0.75;
         temp_ctx.fillStyle = `rgb(75, 75, 75)`;
-        temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+        temp_ctx.arc(R, R, R, 0, 2 * Math.PI, false);
         temp_ctx.fill();
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    }
+
+    generateDualTextures(color1 = "", color2 = "") {
+        const gl = this.gl;
+        if (!this.dualTextures) this.dualTextures = [gl.createTexture(), gl.createTexture()];
+
+        const R = this.CIRCLE_RADIUS;
+        const r = R * 0.95;
+        const temp = new OffscreenCanvas(R << 1, R << 1);
+        const temp_ctx = temp.getContext("2d");
+
+        const path = new Path2D();
+        path.arc(R, R, R, 0, 2 * Math.PI, false);
+        path.arc(R, R, r, 0, 2 * Math.PI, false);
+        
+        temp_ctx.fillStyle = color1;
+        temp_ctx.fill(path, "evenodd");
+
+        gl.bindTexture(gl.TEXTURE_2D, this.dualTextures[0]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+
+        temp_ctx.clearRect(0, 0, temp.width, temp.height);
+        temp_ctx.fillStyle = color2;
+        temp_ctx.fill(path, "evenodd");
+
+        gl.bindTexture(gl.TEXTURE_2D, this.dualTextures[1]);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -406,8 +445,8 @@ class Renderer {
             this.circleTextures = [];
         }
 
-        const CIRCLE_RADIUS = this.state.circle_radius;
-        const temp = new OffscreenCanvas(CIRCLE_RADIUS << 1, CIRCLE_RADIUS << 1);
+        const R = this.CIRCLE_RADIUS;
+        const temp = new OffscreenCanvas(R << 1, R << 1);
         const temp_ctx = temp.getContext("2d");
 
         // Generate circles
@@ -418,7 +457,7 @@ class Renderer {
 
             temp_ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
             temp_ctx.clearRect(0, 0, temp.width, temp.height);
-            temp_ctx.arc(CIRCLE_RADIUS, CIRCLE_RADIUS, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+            temp_ctx.arc(R, R, R, 0, 2 * Math.PI, false);
             temp_ctx.fill();
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
             gl.generateMipmap(gl.TEXTURE_2D);
@@ -852,6 +891,9 @@ class Renderer {
         const name_flags = this.nameFlags;
         const mass_count = this.massCounts;
 
+        const pid = this.protocol.pid;
+        const border_tex = this.protocol.dualIDs ? this.dualTextures[this.protocol.dualIDs.indexOf(this.protocol.pid)] : null;
+
         name_flags.fill(0);
         mass_count.fill(0);
         
@@ -914,6 +956,7 @@ class Renderer {
         let mass_draw_offset = 0;
 
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        let e = 0;
 
         for (let i = 0; i < cell_count; i++) {
             const t = types[i];
@@ -925,13 +968,18 @@ class Renderer {
                     gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
                     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                 } else {
-                    gl.bindTexture(gl.TEXTURE_2D, t === 254 ? circles[indices[i] % L] : circles[t % L]);
+                    gl.bindTexture(gl.TEXTURE_2D, circles[t % L]);
                     gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
                 }
             }
 
             if (render_skin && skins[t] || t === 253) {
                 gl.bindTexture(gl.TEXTURE_2D, skins[t]);
+                gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
+            }
+            
+            if (t === pid && border_tex) {
+                gl.bindTexture(gl.TEXTURE_2D, border_tex);
                 gl.drawArrays(gl.TRIANGLES, 6 * i, 6);
             }
 
@@ -958,7 +1006,6 @@ class Renderer {
                 gl.bindVertexArray(this.cellVAO);
             }
         }
-
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     }
 
@@ -1008,15 +1055,16 @@ self.addEventListener("message", async e => {
     self.addEventListener("message", e => {
         const p = renderer.protocol;
         if (e.data.connect && !p.connecting) {
-            p.connect(e.data.connect, e.data.name, e.data.skin);
+            p.connect(e.data.connect, e.data.name, e.data.skin1, e.data.skin2);
         }
         if (e.data.spawn) {
             if (p.connecting) {
-                p.once("protocol", () => p.spawn(e.data.name, e.data.skin));
-            } else p.spawn(e.data.name, e.data.skin);
+                p.once("protocol", () => p.spawn(e.data.name, e.data.skin1, e.data.skin2));
+            } else p.spawn(e.data.name, e.data.skin1, e.data.skin2);
         }
         if (e.data.chat) p.sendChat(e.data.chat);
         if (e.data.replay) p.startReplay(e.data.replay);
+        if (e.data.dual) renderer.generateDualTextures(...e.data.dual);
     });
 
     self.postMessage({ event: "ready" });

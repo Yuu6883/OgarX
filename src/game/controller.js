@@ -31,6 +31,7 @@ module.exports = class Controller {
         this.score = 0;
         this.surviveTime = 0;
         this.showOnMinimap = false;
+        this.showonLeaderboard = false;
 
         this.box = { l: 0, r: 0, b: 0, t: 0 };
 
@@ -67,7 +68,8 @@ module.exports = class Controller {
 
     lock() {
         if (this.engine.counters[this.id].size != 1) return false;
-        const x1 = this.mouseX, y1 = this.mouseY, x2 = this.viewportX, y2 = this.viewportY;
+        const cell = this.engine.cells[[...this.engine.counters[this.id]][0]];
+        const x1 = this.mouseX, y1 = this.mouseY, x2 = cell.x, y2 = cell.y;
         this.linearEquation[0] = y1 - y2;
         this.linearEquation[1] = x2 - x1;
         this.linearEquation[2] = x1 * y2 - x2 * y1;
@@ -106,6 +108,7 @@ module.exports = class Controller {
         this.surviveTime = 0;
         this.box = { l: 0, r: 0, b: 0, t: 0 };
         this.showOnMinimap = false;
+        this.showonLeaderboard = false;
     }
 
     afterSpawn() {

@@ -20,14 +20,16 @@ module.exports = class Skins {
             urls.push(oldSkin);
         } else if (!urls.length) urls.push("");
 
-        let index = Math.min(~~localStorage.getItem("ogarx-skin-index") || 0, urls.length - 1);
+        const index1 = Math.min(~~localStorage.getItem("ogarx-skin-index-1") || 0, urls.length - 1);
+        const index2 = Math.min(~~localStorage.getItem("ogarx-skin-index-2") || 0, urls.length - 1);
+
         this.listElem = document.getElementById("skins");
 
         document.getElementById("prev-skin").addEventListener("click", () => this.prev());
         document.getElementById("next-skin").addEventListener("click", () => this.next());
 
         /** @type {HTMLImageElement} */
-        this.selectedImg = null;
+        this.selectedImg1 = null;
         /** @type {HTMLImageElement[]} */
         this.elems = [];
 
@@ -43,9 +45,13 @@ module.exports = class Skins {
             this.elems.push(img);
         }
 
-        this.selectedImg = this.elems[index];
-        this.selectedImg.classList.add("selected");
-        this.selectedImg.addEventListener("load", () => this.sync(), { once: true });
+        this.selectedImg1 = this.elems[index1];
+        this.selectedImg1.classList.add("selected-1");
+        this.selectedImg1.addEventListener("load", () => this.sync(), { once: true });
+
+        this.selectedImg2 = this.elems[index2];
+        this.selectedImg2.classList.add("selected-2");
+        this.selectedImg2.addEventListener("load", () => this.sync(), { once: true });
 
         document.getElementById("add-skin").addEventListener("click", () => this.addSlot());
         document.getElementById("delete-skin").addEventListener("click", () => this.delete());
@@ -55,14 +61,20 @@ module.exports = class Skins {
 
     /** @param {HTMLImageElement} img */
     initImg(img) {
-        img.onclick = () => {
-            if (img.classList.contains("selected")) return;
-            this.selectedImg.classList.remove("selected");
-            img.classList.add("selected");
-            this.selectedImg = img;
-            this.sync();
-            this.saveIndex();
-        }
+        img.onmouseup = e => this.select(img, [0, null, 1][e.button]);
+    }
+
+    /** @param {HTMLImageElement} img */
+    select(img, index = 0) {
+        if (!(index === 0) && !(index === 1)) return;
+        const elemName = `selectedImg${index + 1}`;
+        const className = `selected-${index + 1}`;
+        if (img.classList.contains(className)) return;
+        this[elemName].classList.remove(className);
+        img.classList.add(className);
+        this[elemName] = img;
+        this.sync();
+        this.saveIndex();
     }
 
     addSlot() {
@@ -77,66 +89,96 @@ module.exports = class Skins {
         this.save();
     }
 
-    delete() {
+    swap() {
+        const img1 = this.selectedImg1;
+        const img2 = this.selectedImg2;
+        this.select(img1, 1);
+        this.select(img2, 0);
+        this.sync();
+        this.saveIndex();
+    }
+
+    delete(index = 0) {
         if (this.elems.length === 1) {
-            this.selectedImg.src = "/static/img/skin.png";
+            this.selectedImg1.src = "/static/img/skin.png";
             this.sync();
             this.save();
             return;
         }
 
-        const currentIndex = this.index;
-        this.selectedImg.parentNode.remove();
+        const index1 = this.index1;
+        const index2 = this.index2;
+
+        const currentIndex = this[`index${index + 1}`];
+        const elemName = `selectedImg${index + 1}`;
+        this[elemName].parentNode.remove();
         this.elems.splice(currentIndex, 1);
+
         if (this.elems[currentIndex]) {
-            this.elems[currentIndex].click();
+            this.select(this.elems[currentIndex], index);
             this.save();
-        } else {
-            this.elems[currentIndex - 1].click();
+        }
+
+        if (!this.elems[index1]) {
+            this.select(this.elems[index1 - 1], 0);
+            this.save();
+        }
+
+        if (!this.elems[index2]) {
+            this.select(this.elems[index2 - 1], 1);
             this.save();
         }
     }
 
-    get index() {
-        return this.elems.indexOf(this.selectedImg);
+    get index1() { return this.elems.indexOf(this.selectedImg1); }
+    get index2() { return this.elems.indexOf(this.selectedImg2); }
+
+    set current1(v) {
+        if (this.current[0] != v) {
+            this.selectedImg1.src = v;
+            this.save();
+        }
     }
 
-    set current(v) {
-        if (this.current != v) {
-            this.selectedImg.src = v;
+    set current2(v) {
+        if (this.current[1] != v) {
+            this.selectedImg2.src = v;
             this.save();
         }
     }
 
     get current() {
-        return this.getUrl(this.selectedImg.src); 
+        return [
+            this.getUrl(this.selectedImg1.src),
+            this.getUrl(this.selectedImg2.src)
+        ]; 
     }
 
     getUrl(s) { return s.endsWith("/static/img/skin.png") ? "" : s; }
 
-    prev() {
+    prev(index = 0) {
         if (this.elems.length <= 1) return;
-        this.elems[(this.index - 1 + this.elems.length) % this.elems.length].click();
+        this.select(this.elems[(this[`index${index + 1}`] - 1 + this.elems.length) % this.elems.length], index);
         this.sync();
         this.saveIndex();
     }
 
-    next() {
+    next(index = 0) {
         if (this.elems.length <= 1) return;
-        this.elems[(this.index + 1) % this.elems.length].click();
+        this.select(this.elems[(this[`index${index + 1}`] + 1) % this.elems.length], index);
         this.sync();
         this.saveIndex();
     }
 
     sync() {
-        if (this.hud.skin != this.current) {
-            this.hud.skinInput.value = this.current;
-            this.hud.updateSkin();
-        }
+        const [skin1, skin2] = this.current;
+        this.hud.updateSkin(skin1, 0);
+        this.hud.updateSkin(skin2, 1);
     }
 
     saveIndex() {
-        localStorage.setItem("ogarx-skin-index", this.index);
+        localStorage.setItem("ogarx-skin-index-1", this.index1);
+        localStorage.setItem("ogarx-skin-index-2", this.index2);
     }
 
     save() {

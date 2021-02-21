@@ -1,5 +1,5 @@
-const events = ["Feed", "Split", "Double Split", "Triple Split", "Quad Split", "Line Lock", "Respawn", "Clip"];
-const defaultKeys = ["w", " ", "g", "z", "q", "f", "n", "r"];
+const events = ["Feed", "Split", "Double Split", "Triple Split", "Quad Split", "Line Lock", "Respawn", "Clip", "Switch Tab"];
+const defaultKeys = ["w", " ", "g", "z", "q", "f", "n", "r", "tab"];
 const KeyNameMap = { " ": "SPACE" };
 
 module.exports = class Keyboard {
@@ -94,6 +94,7 @@ module.exports = class Keyboard {
             case "Line Lock":    state.lineLock = 1; break;
             case "Respawn":      state.respawn  = 1; break;
             case "Clip":         state.clip     = 1; break;
+            case "Switch Tab":   state.s_tab    = 1; break;
         }
     }
 

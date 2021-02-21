@@ -72,8 +72,14 @@ body {
     height: 100%;
     border-radius: 50%;
 }
-.skin-item .selected {
-    border: solid 5px #93a7e1;
+.skin-item .selected-1 {
+    border: solid 5px #5779dd;
+}
+.skin-item .selected-2 {
+    border: solid 5px #e64ca6;
+}
+.skin-item .selected-1.selected-2 {
+    border: solid 5px #ffffff;
 }
 .key-value * {
     padding: 8px;
@@ -289,10 +295,21 @@ h1, h2, h3, h4, h5, h6 {
 #chat p {
     margin: 4px;
 }
-#skin {
+#skin-1, #skin-2 {
     width: 200px;
     height: 200px;
     border-radius: 50%;
+    margin: auto;
+}
+#swap-skin {
+    padding: 5px;
+    background-color: #00000044;
+}
+#skin-1 {
+    transform: translateX(-150px);
+}
+#skin-2 {
+    transform: translateX(150px);
 }
 #skin-tab {
     min-width: 300px;
@@ -333,7 +350,6 @@ input[type="text"], #server-input, .servers {
     appearance: none;
     -moz-appearance: none;
     -webkit-appearance: none;
-    cursor: pointer;
 }
 input[type="text"]:focus, #server-input:hover, .servers:hover {
     color: #eee;

@@ -141,26 +141,32 @@ module.exports = class HUD {
         this.canvas.addEventListener("click", _ => this.state.clicked = 1);
     }
 
-    updateSkin(ignoreError = false) {
+    updateSkin(src = "", index = 0, ignoreError = false) {
 
-        if (!this.skin) {
-            this.skinElem.src = "/static/img/skin.png";
+        if (this[`skinElem${index + 1}`].src == src) return;
+        if (!src) {
+            this[`skinElem${index + 1}`].src = "/static/img/skin.png";
             return;
-        } // else console.log(`Loading skin from ${this.skin}`);
+        } // else console.log(`Setting skin[${index}] to ${src}`);
 
         const img = new Image();
-        img.onload = () => this.skins.current = this.skinElem.src = this.skin;
+        img.onload = () => {
+            if (!index) this.skinText = src;
+            this.skins[`current${index + 1}`] = this[`skinElem${index + 1}`].src = src;
+        }
         ignoreError || (img.onerror = () => {
-            this.onError(`Failed to load skin "${this.skin}"`);
-            this.skinElem.src = "/static/img/skin.png";
+            this.onError(`Failed to load skin "${src}"`);
+            this[`skinElem${index + 1}`].src = "/static/img/skin.png";
         });
-        img.src = this.skin;
+        img.src = src;
     }
 
     initUIComponents() {
         this.hudElem = document.getElementById("hud");
-        this.skinElem = document.getElementById("skin");
+        this.skinElem1 = document.getElementById("skin-1");
+        this.skinElem2 = document.getElementById("skin-2");
         this.skinInput = document.getElementById("skin-input");
+        this.swapElem = document.getElementById("swap-skin");
         this.serverInput = document.getElementById("server-input");
         this.nameInput = document.getElementById("name-input");
 
@@ -169,9 +175,11 @@ module.exports = class HUD {
 
         this.minimap = new Minimap(this);
         this.skins = new Skins(this);
-        this.skinInput.value = this.skins.current;
 
-        this.skinInput.addEventListener("blur", () => this.updateSkin());
+        this.skinText = this.skins.current[0];
+        this.skinInput.addEventListener("blur", () => this.updateSkin(this.skinText, 0));
+
+        this.swapElem.addEventListener("click", () => this.skins.swap());
 
         this.playButton = document.getElementById("play");
         this.playButton.addEventListener("click", () => {
@@ -216,7 +224,9 @@ module.exports = class HUD {
         this.skinInput.autocomplete = Math.random();
         this.serverTab = UIkit.offcanvas("#server-menu-offcanvas");
 
-        this.updateSkin(true);
+        const [skin1, skin2] = this.skins.current;
+        this.updateSkin(skin1, 0, true);
+        this.updateSkin(skin2, 1, true);
 
         this.chatInput.addEventListener("blur", () => this.hide(this.chatInput));
 
@@ -429,8 +439,9 @@ module.exports = class HUD {
         }
     }
 
-    get skin() { return this.skinInput.value; }
-    get name() { return this.nameInput.value; }
+    get skinText() { return this.skinInput.value; }
+    set skinText(v) { this.skinInput.value = v; }
+    get nameText() { return this.nameInput.value; }
 
     connect(server) {
         server = server.trim();
@@ -516,34 +527,21 @@ module.exports = class HUD {
     }
 
     spawn() {
-        const name = this.name;
-        const skin = this.skin;
+        const name = this.nameText;
+        const [skin1, skin2] = this.skins.current;
         
         localStorage.setItem("ogarx-name", name);
-
-        if (this.worker) {
-            this.worker.postMessage({ spawn: true, name, skin });
-        } else {
-            const p = this.renderer.protocol;
-            p.once("open", () => p.spawn(name, skin));
-        }
+        this.worker.postMessage({ spawn: true, name, skin1, skin2 });
     }
 
     connectToLocal() {
         this.sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
-        if (this.worker) {
-            this.worker.postMessage({ connect: this.sw.port, name: this.name, skin: this.skin }, [this.sw.port]);
-        } else {
-            const p = this.renderer.protocol;
-            p.connect(sw.port, this.name, this.skin);
-        }
+        const [skin1, skin2] = this.skins.current;
+        this.worker.postMessage({ connect: this.sw.port, name: this.nameText, skin1, skin2 }, [this.sw.port]);
     }
 
     connectToURL(url) {
-        if (this.worker) {
-            this.worker.postMessage({ connect: url, name: this.name, skin: this.skin });
-        } else {
-            this.renderer.protocol.connect(url, this.name, this.skin);
-        }
+        const [skin1, skin2] = this.skins.current;
+        this.worker.postMessage({ connect: url, name: this.nameText, skin1, skin2 });
     }
 }
