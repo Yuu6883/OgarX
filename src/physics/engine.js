@@ -412,15 +412,6 @@ module.exports = class Engine {
                 }
             }
 
-            // Idle spectate
-            // if (!this.counters[id].size && !controller.spawn) {
-            //     controller.viewportX = 0;
-            //     controller.viewportY = 0;
-            //     controller.viewportHW = 1920 / 2;
-            //     controller.viewportHH = 1080 / 2;
-            //     continue;
-            // }
-
             if (controller.alive) {
                 // Update viewport
                 let size = 0, size_x = 0, size_y = 0;
