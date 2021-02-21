@@ -11,7 +11,7 @@ module.exports = class Bot extends Handle {
         super(game);
         this.join();
         this.controller.name = `[BOT] ${pick(BOTS.names)}`;
-        this.controller.skin = pick(BOTS.skins);
+        this.controller.skin = BOTS.skins.length ? pick(BOTS.skins) : "";
 
         this.__nextActionTick = 0;
 
