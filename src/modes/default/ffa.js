@@ -21,5 +21,6 @@ module.exports = {
     PLAYER_SPAWN_DELAY: 1500,
     DECAY_MIN: 1000,
     MAP_HW: 20000,
-    MAP_HH: 20000
+    MAP_HH: 20000,
+    DUAL_ENABLED: true
 };

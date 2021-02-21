@@ -19,5 +19,6 @@ module.exports = {
     PLAYER_SPAWN_SIZE: 500,
     PLAYER_SPAWN_DELAY: 1500,
     MAP_HW: 32767,
-    MAP_HH: 32767
+    MAP_HH: 32767,
+    DUAL_ENABLED: true
 };
