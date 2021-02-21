@@ -356,7 +356,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onLeave(controller) {
-        if (controller != this.dual.controller) this.dual.off();
+        if (this.dual && controller != this.dual.controller) this.dual.off();
         if (controller == this.controller) return;
         // Bye bye to same protocol
         if (controller.handle instanceof OgarXProtocol)
