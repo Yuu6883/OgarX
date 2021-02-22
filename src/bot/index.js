@@ -56,18 +56,21 @@ module.exports = class Bot extends Handle {
                 c.mouseY = c.viewportY;
 
                 this.nextAction = 1; // 1 sec
-                // console.log("BOT SF");
             } else {
                 
-                if (this.myCellIDs.size < 20 && Math.random() < 0.1) {
-                    // Solotrick to random direction
-                    c.ejectMarco = true;
-                    c.splitAttempts = 7;
+                if (Math.random() < 0.1) {
+                    if (this.myCellIDs.size < 20 && this.controller.score < 40000) {
+                        // Solotrick to random direction
+                        c.ejectMarco = true;
+                        c.splitAttempts = 7;
+                    } else {
+                        c.splitAttempts = ~~(1 + Math.random() * 3);
+                    }
+                    
                     const a = Math.random() * Math.PI * 2;
-                    c.mouseX = c.viewportX + 1000 * Math.sin(a);
-                    c.mouseY = c.viewportY + 1000 * Math.cos(a);
+                    c.mouseX = c.viewportX + 5000 * Math.sin(a);
+                    c.mouseY = c.viewportY + 5000 * Math.cos(a);
                     this.nextAction = 5;
-                    // console.log("BOT SOLOTRICK");
                 } else {
                     // Idle
                     c.ejectMarco = false;

@@ -232,11 +232,24 @@ module.exports = class HUD {
 
         this.lbElem = document.getElementById("leaderboard-data");
 
+        document.querySelector('[server="local"]').addEventListener("click", () => this.connectToLocal());
+
+        this.gameoverElem = document.getElementById("game-over");
+        this.respawnSpinner = document.getElementById("respawn-spinner");
+        this.pingElem = document.getElementById("ping");
+        this.fpsElem = document.getElementById("fps");
+        this.bwElem = document.getElementById("bandwidth");
+        this.renderCellElem = document.getElementById("cells");
+        this.mycellsElem = document.getElementById("mycells");
+        this.linelockElem = document.getElementById("linelock");
+        this.scoreElem = document.getElementById("score");
+
         const gateways = [...document.querySelectorAll('[gateway]').values()]
             .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
 
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
             gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "localhost:6969" });
+            this.mycellsElem.parentElement.hidden = false;
             window.hud = this;
         }
 
@@ -349,18 +362,6 @@ module.exports = class HUD {
                 }
             });
         }
-
-        document.querySelector('[server="local"]').addEventListener("click", () => this.connectToLocal());
-
-        this.gameoverElem = document.getElementById("game-over");
-        this.respawnSpinner = document.getElementById("respawn-spinner");
-        this.pingElem = document.getElementById("ping");
-        this.fpsElem = document.getElementById("fps");
-        this.bwElem = document.getElementById("bandwidth");
-        this.renderCellElem = document.getElementById("cells");
-        this.mycellsElem = document.getElementById("mycells");
-        this.linelockElem = document.getElementById("linelock");
-        this.scoreElem = document.getElementById("score");
 
         this.updateInterval = setInterval(() => {
             this.pingElem.innerText = this.stats.ping;

@@ -62,6 +62,7 @@ out vec4 color;
 
 void main() {
     color = vec4(fill, texture(u_texture, uv).a);
+    // color = vec4(uv, 1.0f, 1.0f);
 }
 `;
 

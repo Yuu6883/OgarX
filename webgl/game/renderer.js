@@ -164,8 +164,8 @@ class Renderer {
         this.camera = { position: vec3.create(), scale: 10, tp: false };
         this.proj = mat4.create();
         
-        this.IGNORE_SKIN = this.state.ignore_skin;
         this.SKIN_DIM = this.state.skin_dim;
+        this.IGNORE_SKIN = this.state.ignore_skin;
         this.CIRCLE_RADIUS = this.state.circle_radius;
 
         this.BYTES_PER_CELL_DATA = this.wasm.bytes_per_cell_data();
@@ -852,12 +852,14 @@ class Renderer {
 
         console.assert(end === expect, `Expecting pellet end pointer to be ${expect}, but got ${end}`);
         
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.useProgram(this.prtl_prog);
         gl.uniformMatrix4fv(this.getUniform(this.prtl_prog, "u_proj"), false, this.proj);
 
         gl.bindVertexArray(this.pelletVAO);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get("pellet_buffer"));
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
+        gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.circleTextures[0]);
         gl.drawArrays(gl.TRIANGLES, 0, pellet_count * 6);
     }
@@ -956,7 +958,6 @@ class Renderer {
         let mass_draw_offset = 0;
 
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        let e = 0;
 
         for (let i = 0; i < cell_count; i++) {
             const t = types[i];
@@ -1006,7 +1007,6 @@ class Renderer {
                 gl.bindVertexArray(this.cellVAO);
             }
         }
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     }
 
     serializeState() {

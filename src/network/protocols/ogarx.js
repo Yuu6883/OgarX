@@ -60,16 +60,19 @@ module.exports = class OgarXProtocol extends Protocol {
         this.controller.skin = reader.readUTF16String();
         this.game.emit("join", this.controller);
 
-        this.pids = [this.controller.id];
-
         if (this.game.options.DUAL_ENABLED) {
             this.dual = new DualHandle(this);
             this.dual.controller.name = this.controller.name;
             this.dual.controller.skin = reader.readUTF16String();
-            this.pids.push(this.dual.controller.id);
+            this.pids.add(this.dual.controller.id);
             this.game.emit("join", this.dual.controller);
         }
         this.sendInitPacket();
+    }
+
+    off() {
+        super.off();
+        if (this.dual) this.dual.off();
     }
 
     sendInitPacket() {
@@ -104,6 +107,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.skin = reader.readUTF16String();
                 if (this.dual) this.dual.controller.skin = reader.readUTF16String();
                 controller.requestSpawn();
+                controller.lastSpawnTick = this.game.engine.__now;
                 break;
             case 3:
                 controller.mouseX = reader.readFloat32();
@@ -220,18 +224,24 @@ module.exports = class OgarXProtocol extends Protocol {
             this.controller.spectate instanceof OgarXProtocol) return; // Spectating someone
 
         const engine = this.game.engine;
+        const c1 = this.controller;
 
         if (this.dual) {
-            if (this.controller.dead && !this.dual.controller.dead) this.switchTo(this.dual.controller);
-            if (!this.controller.dead && this.dual.controller.dead) this.switchTo(this.controller);
-            if (this.controller.dead && this.dual.controller.dead) {
-                this.controller.dead = false;
-                this.dual.controller.dead = false;
+            const c2 = this.dual.controller;
+
+            if (!c1.alive && c2.alive) this.switchTo(c2);
+            if (c1.alive && !c2.alive) this.switchTo(c1);
+            if (c1.dead && c2.dead) {
+                c1.surviveTime = c2.surviveTime = engine.__now - c1.lastSpawnTick;
+                c1.lastSpawnTick = c2.lastSpawnTick = engine.__now;
+                c1.dead = c2.dead = false;
                 this.sendStats();
             }
         } else {
-            if (this.controller.dead) {
-                this.controller.dead = false;
+            if (c1.dead) {
+                c1.surviveTime = engine.__now - c1.lastSpawnTick;
+                c1.lastSpawnTick = engine.__now;
+                c1.dead = false;
                 this.sendStats();
             }
         }
@@ -241,12 +251,9 @@ module.exports = class OgarXProtocol extends Protocol {
 
         const target = this.controller.spectate || this.controller;
 
-        const vx = this.controller.viewportX;
-        const vy = this.controller.viewportY;
-
         // Query visible cells from the controller
         const vlist = engine.query(target);
-        this.processVisibleList(vlist, vx, vy, target);
+        this.processVisibleList(vlist, target);
 
         for (const c of this.game.controls) {
             if (c.alive &&
@@ -254,13 +261,13 @@ module.exports = class OgarXProtocol extends Protocol {
                 c.spectate === this.controller && 
                 c.handle instanceof OgarXProtocol &&
                 c.handle.ws.getBufferedAmount() > engine.options.SOCKET_WATERMARK) {
-                c.handle.processVisibleList(vlist, vx, vy, this.controller);
+                c.handle.processVisibleList(vlist, this.controller);
             }
         }
     }
 
     /** @param {Uint16Array} vlist */
-    processVisibleList(vlist, vx = 0, vy = 0, controller = this.controller) {
+    processVisibleList(vlist, controller = this.controller) {
         // Step 1
         this.wasm.exports.move_hashtable();
         // Step 2
@@ -287,9 +294,6 @@ module.exports = class OgarXProtocol extends Protocol {
         const E_count = this.view.getUint32(AUED_table_ptr + 8,  true);
         const D_count = this.view.getUint32(AUED_table_ptr + 12, true);
 
-        const mx = controller.mouseX;
-        const my = controller.mouseY;
-
         // 1 byte OP + 1 byte pid + 2 bytes cell count + 1 byte linelocked + 
         // 4 bytes score + 8 bytes mouse + 8 bytes viewport + 4 * 2 bytes 0 padding = 33 bytes
         // We don't have to calculate this because serialize returns the write end
@@ -306,14 +310,17 @@ module.exports = class OgarXProtocol extends Protocol {
         }
 
         const o = this.game.options;
+        let score = controller.score;
+        this.dual && (score += this.dual.controller.score);
+
         // Step 4 serialize
         const buffer_end = this.wasm.exports.serialize(
             controller.id,
             this.game.engine.counters[controller.id].size,
             controller.lockDir,
-            controller.score,
-            mx, my,
-            vx, vy,
+            score,
+            controller.mouseX, controller.mouseY,
+            controller.viewportX, controller.viewportY,
             AUED_table_ptr, AUED_table_ptr + 16, AUED_end_ptr,
             -o.MAP_HW, o.MAP_HW, o.MAP_HH, -o.MAP_HH);
         
@@ -323,18 +330,22 @@ module.exports = class OgarXProtocol extends Protocol {
         this.ws.send(this.memory.buffer.slice(AUED_end_ptr, buffer_end), true);
     }
 
+    get maxScore() {
+        if (this.dual) return Math.max(this.controller.maxScore, this.dual.controller.maxScore);
+        else return this.controller.maxScore;
+    }
+
     sendStats() {
-        if (!this.controller.maxScore) return;
+        if (!this.maxScore) return;
         const writer = new Writer();
         writer.writeUInt8(7);
         if (this.dual) {
             writer.writeUInt32(this.controller.kills + this.dual.controller.kills);
-            // TODO
-            writer.writeFloat32(0);
-            writer.writeFloat32(0);
+            writer.writeFloat32(this.maxScore);
+            writer.writeFloat32(this.game.engine.__now - this.controller.lastSpawnTick);
         } else {
             writer.writeUInt32(this.controller.kills);
-            writer.writeFloat32(this.controller.maxScore);
+            writer.writeFloat32(this.maxScore);
             writer.writeFloat32(this.controller.surviveTime);
         }
         this.ws.send(writer.finalize(), true);
@@ -356,7 +367,6 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {import("../../game/controller")} controller */
     onLeave(controller) {
-        if (this.dual && controller != this.dual.controller) this.dual.off();
         if (controller == this.controller) return;
         // Bye bye to same protocol
         if (controller.handle instanceof OgarXProtocol)

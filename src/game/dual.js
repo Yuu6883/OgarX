@@ -10,4 +10,7 @@ module.exports = class DualHandle extends Handle {
         this.join();
         this.controller.showOnMinimap = true;
     }
+
+    // Do nothing
+    calculateViewport() {};
 };

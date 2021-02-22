@@ -419,7 +419,10 @@ module.exports = class Protocol extends EventEmitter {
             this.replay.recordPacket(e.data);
     }
 
-    get player() { return this.renderer.playerData[this.pid]; }
+    get player() { 
+        if (Array.isArray(this.dualIDs)) return this.renderer.playerData[this.dualIDs[0]];
+        return this.renderer.playerData[this.pid]; 
+    }
 
     /** @param {ArrayBuffer} buffer */
     parsePlayers(buffer) {
@@ -521,8 +524,8 @@ module.exports = class Protocol extends EventEmitter {
         this.send(writer.finalize());
 
         if (this.pid) self.postMessage({ 
-            event: "chat", 
-            pid: this.pid, 
+            event: "chat",
+            pid: Array.isArray(this.dualIDs) ? this.dualIDs[0] : this.pid, 
             player: this.player, 
             message 
         });

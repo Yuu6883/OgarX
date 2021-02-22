@@ -348,6 +348,9 @@ module.exports = class Engine {
             const controller = this.game.controls[id];
             if (!controller.handle) continue;
             
+            // Update viewport
+            controller.handle.calculateViewport();
+
             const MULTI = this.options.NORMALIZE_THRESH_MASS ? 
                 Math.max(Math.sqrt(controller.score / this.options.NORMALIZE_THRESH_MASS), 1) : 1;
             const MIN_SPLIT_SIZE = MULTI * this.options.PLAYER_MIN_SPLIT_SIZE;
@@ -417,84 +420,6 @@ module.exports = class Engine {
                     }
     
                     controller.lastEjectTick = this.__now + ejected * this.options.EJECT_DELAY;
-                }
-            }
-
-            if (controller.alive) {
-
-                // Update viewport
-                let size = 0, size_x = 0, size_y = 0;
-                let x = 0, y = 0, score = 0, factor = 0;
-                let min_x = this.options.MAP_HW, max_x = -this.options.MAP_HW;
-                let min_y = this.options.MAP_HH, max_y = -this.options.MAP_HH;
-
-                let iter = [...this.counters[id]];
-
-                if (controller.handle.owner) continue;
-
-                if (Array.isArray(controller.handle.pids)) {
-                    for (const pid of controller.handle.pids) {
-                        if (pid == id) continue;
-                        iter = iter.concat(...this.counters[pid]); 
-                    }
-                }
-
-                for (const cell_id of iter) {
-                    const cell = this.cells[cell_id];
-                    const sqr = cell.r * cell.r;
-                    let cell_x = cell.x, cell_y = cell.y;
-                    x += cell_x * sqr;
-                    y += cell_y * sqr;
-                    min_x = cell_x < min_x ? cell_x : min_x;
-                    max_x = cell_x > max_x ? cell_x : max_x;
-                    min_y = cell_y < min_y ? cell_y : min_y;
-                    max_y = cell_y > max_y ? cell_y : max_y;
-                    score += sqr * 0.01;
-                    size += sqr;
-                }
-
-                controller.box.l = min_x;
-                controller.box.r = max_x;
-                controller.box.b = min_y;
-                controller.box.t = max_y;
-
-                size = size || 1;
-                factor = Math.pow(iter.length + 50, 0.05);
-                controller.viewportX = x / size;
-                controller.viewportY = y / size;
-                size = (factor + 1) * Math.sqrt(score * 100);
-                size_x = size_y = Math.max(size, this.options.PLAYER_VIEW_MIN) * this.options.PLAYER_VIEW_SCALE;
-                size_x = Math.max(size_x, (controller.viewportX - min_x) * 1.75);
-                size_x = Math.max(size_x, (max_x - controller.viewportX) * 1.75);
-                size_y = Math.max(size_y, (controller.viewportY - min_y) * 1.75);
-                size_y = Math.max(size_y, (max_y - controller.viewportY) * 1.75);
-
-                controller.viewportHW = size_x;
-                controller.viewportHH = size_y;
-                controller.score = score;
-                controller.maxScore = score > controller.maxScore ? score : controller.maxScore;
-
-                if (Array.isArray(controller.handle.pids)) {
-                    for (const pid of controller.handle.pids) {
-                        if (pid == id) continue;
-                        const c = this.game.controls[pid];
-
-                        c.viewportX  = controller.viewportX;
-                        c.viewportY  = controller.viewportY;
-                        c.viewportHW = controller.viewportHW;
-                        c.viewportHH = controller.viewportHH;
-                        c.score      = controller.score;
-                        c.maxScore   = controller.maxScore;
-                    }
-                }
-
-                if (controller.score > this.options.MAP_HH * this.options.MAP_HW / 100 * this.options.WORLD_RESTART_MULT) {
-                    this.game.emit("oversize", controller);
-                    if (this.options.WORLD_KILL_OVERSIZE) {
-                        this.delayKill(id);
-                    } else {
-                        this.shouldRestart = true;
-                    }
                 }
             }
 
@@ -647,8 +572,6 @@ module.exports = class Engine {
         this.cellCount--;
         if (type <= 250 && !this.counters[type].size) {
             eatenBy && this.game.controls[eatenByType].kills++;
-            this.game.controls[type].surviveTime = this.__now - this.game.controls[type].lastSpawnTick;
-            this.game.controls[type].lastSpawnTick = this.__now;
             this.game.controls[type].dead = true;
             this.game.controls[type].score = 0;
         }
@@ -797,13 +720,17 @@ module.exports = class Engine {
         const safeRadius = s * this.options.PLAYER_SAFE_SPAWN_RADIUS;
 
         if (target) {
-            const xmin = target.box.l - this.options.PLAYER_VIEW_MIN;
-            const xmax = target.box.r + this.options.PLAYER_VIEW_MIN;
-            const ymin = target.box.b - this.options.PLAYER_VIEW_MIN;
-            const ymax = target.box.t + this.options.PLAYER_VIEW_MIN;
+            const { l, r, b, t } = target.box;
+            const min = this.options.PLAYER_VIEW_MIN;
             
-            let tries = this.options.SAFE_SPAWN_TRIES;
-            while (--tries) {
+            const tries = this.options.SAFE_SPAWN_TRIES;
+            let i = tries;
+            while (--i) {
+                const f = 0.1 + 0.9 * (i / tries) * min;
+                const xmin = l - f;
+                const xmax = r + f;
+                const ymin = b - f;
+                const ymax = t + f;
                 const [x, y] = this.randomPoint(s, xmin, xmax, ymin, ymax);
                 if (this.wasm.is_safe(0, x, y, safeRadius, this.treePtr, this.stackPtr, this.options.IGNORE_TYPE) > 0)
                     return [x, y, true];
