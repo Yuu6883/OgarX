@@ -73,12 +73,6 @@ const argv = yargs(hideBin(process.argv))
         fs.writeFileSync(RENDERER_OUT, minifier(code).code);
     }
 
-    if (argv.sharedworker || argv.all) {
-        console.log("Building sharedworker"); bundled++;
-        code = await streamToString(browserify(SW_IN).bundle());
-        fs.writeFileSync(SW_OUT, minifier(code).code);
-    }
-
     if (argv.main || argv.all) {
         console.log("Building main"); bundled++;
         code = await streamToString(browserify(MAIN_IN).bundle());
@@ -95,6 +89,15 @@ const argv = yargs(hideBin(process.argv))
         console.log("Building loader"); bundled++;
         code = await streamToString(browserify(LOADER_IN).bundle());
         fs.writeFileSync(LOADER_OUT, minifier(code).code);
+    }
+
+    if (argv.sharedworker || argv.all) {
+        console.log("Building sharedworker"); bundled++;
+        code = await streamToString(browserify(SW_IN).bundle());
+        fs.writeFileSync(SW_OUT, minifier(code, {
+            mangle: false,
+            evaluate: false
+        }).code);
     }
 
     if (!bundled) console.log("Nothing was bundled");
