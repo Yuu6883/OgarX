@@ -8,7 +8,6 @@ module.exports = class DualHandle extends Handle {
         super(owner.game);
         this.owner = owner;
         this.join();
-        this.controller.showOnMinimap = true;
     }
 
     // Do nothing

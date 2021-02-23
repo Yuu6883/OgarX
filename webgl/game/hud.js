@@ -309,6 +309,7 @@ module.exports = class HUD {
                 const init = ~~(Math.random() * 100);
                 for (const id in data.servers) {
                     const server = data.servers[id];
+                    if (!server.uid) continue;
                     let elem = servers.get(server.uid);
                     
                     const [r, g, b] = COLORS[(5 * id + init) % COLORS.length];

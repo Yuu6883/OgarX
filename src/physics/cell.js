@@ -60,11 +60,6 @@ module.exports = class Cell {
     remove() {
         this.view.setUint8(13, CELL_EXISTS | CELL_REMOVE);
     }
-    
-    resetFlag() {
-        if (this.isDead) this.view.setUint8(13, CELL_DEAD | CELL_EXISTS);
-        else this.view.setUint8(13, CELL_EXISTS);
-    }
 
     get exists() {
         return this.view.getUint8(13) & CELL_EXISTS;
@@ -83,28 +78,8 @@ module.exports = class Cell {
         value && this.view.setUint8(13, this.view.getUint8(13) | CELL_UPDATE);
     }
 
-    get isInside() {
-        this.view.getUint8(13) & CELL_INSIDE;
-    }
-
-    get isDead() {
-        return this.view.getUint8(13) & CELL_DEAD;
-    }
-
     get shouldAuto() {
         return this.view.getUint8(13) & CELL_AUTO;
-    }
-
-    get shouldRemove() {
-        return this.view.getUint8(13) & CELL_REMOVE;
-    }
-
-    set merge(value) {
-        value && this.view.setUint8(13, this.view.getUint8(13) | CELL_MERGE);
-    }
-
-    get popped() {
-        return this.view.getUint8(13) & CELL_POP;
     }
 
     get eatenBy() {
@@ -114,31 +89,8 @@ module.exports = class Cell {
     get age() {
         return this.view.getFloat32(16, true);
     }
-    
-    get boostX() {
-        return this.view.getFloat32(20, true);
-    }
 
-    set boostX(value) {
-        this.view.setFloat32(20, value, true);
-    }
-
-    get boostY() {
-        return this.view.getFloat32(24, true);
-    }
-
-    set boostY(value) {
-        this.view.setFloat32(24, value, true);
-    }
-
-    get boost() {
-        return this.view.getFloat32(28, true);
-    }
-
-    set boost(value) {
-        this.view.setFloat32(28, value, true);
-    }
-
+    /** DEBUG STUFF */
     get positionString() { return `Cell#${this.id}[x: ${this.x}, y: ${this.y}]` }
     get flagsString() { 
         const s = TYPES_TO_STRING[this.type];

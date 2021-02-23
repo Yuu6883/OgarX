@@ -30,10 +30,8 @@ module.exports = class Controller {
         this.kills = 0;
         this.score = 0;
         this.surviveTime = 0;
-        this.showOnMinimap = false;
-        this.showonLeaderboard = false;
 
-        this.box = { l: 0, r: 0, b: 0, t: 0 };
+        this.box = new Float32Array(4);
 
         /** @type {import("./handle")} */
         this.handle = null;
@@ -106,9 +104,7 @@ module.exports = class Controller {
         this.dead = false;
         this.autoRespawn = false;
         this.surviveTime = 0;
-        this.box = { l: 0, r: 0, b: 0, t: 0 };
-        this.showOnMinimap = false;
-        this.showonLeaderboard = false;
+        this.box.fill(0);
     }
 
     afterSpawn() {

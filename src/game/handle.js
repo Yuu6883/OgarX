@@ -28,6 +28,9 @@ module.exports = class Handle {
 
         /** @type {[string, Function][]} */
         this.extraEvents = [];
+
+        this.showonMinimap = false;
+        this.showonLeaderboard = false;
     };
     
     join() { 
@@ -59,14 +62,15 @@ module.exports = class Handle {
             cell_count += g.engine.counters[id].size;
             for (const cell_id of e.counters[id]) {
                 const cell = cells[cell_id];
-                const sqr = cell.r * cell.r;
-                let cell_x = cell.x, cell_y = cell.y;
+                const r = cell.r;
+                const sqr = r * r;
+                const cell_x = cell.x, cell_y = cell.y;
                 x += cell_x * sqr;
                 y += cell_y * sqr;
-                min_x = cell_x < min_x ? cell_x : min_x;
-                max_x = cell_x > max_x ? cell_x : max_x;
-                min_y = cell_y < min_y ? cell_y : min_y;
-                max_y = cell_y > max_y ? cell_y : max_y;
+                min_x = Math.min(min_x, cell_x - r);
+                max_x = Math.max(max_x, cell_x + r);
+                min_y = Math.min(min_y, cell_y - r);
+                max_y = Math.max(max_y, cell_y + r);
                 score += sqr * 0.01;
                 size += sqr;
             }
@@ -81,17 +85,14 @@ module.exports = class Handle {
         const factored_size = (factor + 1) * Math.sqrt(total_score * 100);
         const vx = x / size, vy = y / size;
         size_x = size_y = Math.max(factored_size, o.PLAYER_VIEW_MIN) * o.PLAYER_VIEW_SCALE;
-        size_x = Math.max(size_x, (vx - min_x) * 1.75);
-        size_x = Math.max(size_x, (max_x - vx) * 1.75);
-        size_y = Math.max(size_y, (vy - min_y) * 1.75);
-        size_y = Math.max(size_y, (max_y - vy) * 1.75);
+        size_x = Math.max(size_x, (vx - min_x) * 1.5);
+        size_x = Math.max(size_x, (max_x - vx) * 1.5);
+        size_y = Math.max(size_y, (vy - min_y) * 1.5);
+        size_y = Math.max(size_y, (max_y - vy) * 1.5);
 
         for (const id of this.pids) {
             const c = this.game.controls[id];
-            c.box.l = min_x;
-            c.box.r = max_x;
-            c.box.b = min_y;
-            c.box.t = max_y;
+            c.box.set([min_x, max_x, min_y, max_y]);
             c.viewportX = vx;
             c.viewportY = vy;
             c.viewportHW = size_x;

@@ -54,8 +54,6 @@ module.exports = class OgarXProtocol extends Protocol {
         const reader = new Reader(new DataView(initMessage));
         reader.skip(3); // Skip handshake bytes
 
-        this.controller.showOnMinimap = true;
-        this.controller.showonLeaderboard = true;
         this.controller.name = reader.readUTF16String();
         this.controller.skin = reader.readUTF16String();
         this.game.emit("join", this.controller);
@@ -68,6 +66,9 @@ module.exports = class OgarXProtocol extends Protocol {
             this.game.emit("join", this.dual.controller);
         }
         this.sendInitPacket();
+
+        this.showonMinimap = true;
+        this.showonLeaderboard = true;
     }
 
     off() {
@@ -178,11 +179,9 @@ module.exports = class OgarXProtocol extends Protocol {
     switchTo(c) {
         if (!this.dual) return;
         if (this.controller === c) return;
-
-        this.controller.focused = false;
-        c.focused = true;
-
+        // Swap controller
         this.dual.controller = this.controller;     
+        /** @type {import("../../game/controller")} somehow I have to type this again here vscode dumb */
         this.controller = c;
     }
 
@@ -220,8 +219,9 @@ module.exports = class OgarXProtocol extends Protocol {
 
     onTick() {
         if (!this.controller) return; // ??
-        if (this.controller.spectate && 
-            this.controller.spectate instanceof OgarXProtocol) return; // Spectating someone
+        if (this.controller.spectate && (
+            (this.controller.spectate instanceof OgarXProtocol) || 
+            (this.controller.spectate.handle instanceof DualHandle))) return; // Spectating someone
 
         const engine = this.game.engine;
         const c1 = this.controller;
@@ -276,8 +276,7 @@ module.exports = class OgarXProtocol extends Protocol {
         this.last_vlist_len = this.curr_vlist_len;
         this.curr_vlist_ptr = this.last_vlist_ptr + this.last_vlist_len * 2; // 2 bytes per index
         this.curr_vlist_len = vlist.length;
-        new Uint16Array(this.memory.buffer, this.curr_vlist_ptr, this.curr_vlist_len)
-            .set(vlist);
+        new Uint16Array(this.memory.buffer, this.curr_vlist_ptr, this.curr_vlist_len).set(vlist);
         
         const AUED_table_ptr = this.curr_vlist_ptr + this.curr_vlist_len * 2;
         

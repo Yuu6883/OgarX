@@ -65,7 +65,41 @@ unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
 unsigned char  get_cell_type(Cell ptr[], unsigned short id) { return ptr[id].type; };
 unsigned short get_cell_eatenby(Cell ptr[], unsigned short id) { return ptr[id].eatenBy; };
 
-void clear_cell(Cell cells[], unsigned short id) { memset(&cells[id], 0, sizeof(Cell)); }
+unsigned short new_cell(Cell cells[], unsigned short next_id, float x, float y, float size, float type, 
+    float boost_x, float boost_y, float boost) {
+    
+    while (!next_id || (cells[next_id].flags & EXIST_BIT)) next_id++;
+
+    Cell* cell = &cells[next_id];
+
+    cell->x = x;
+    cell->y = y;
+    cell->r = size;
+    cell->type = type;
+    cell->boostX = boost_x;
+    cell->boostY = boost_y;
+    cell->boost = boost;
+    cell->flags = EXIST_BIT;
+
+    return next_id;
+}
+
+unsigned short kill_cell(Cell cells[], unsigned short id, unsigned short next_id) {
+    
+    while (!next_id || (cells[next_id].flags & EXIST_BIT)) next_id++;
+
+    Cell* old_cell = &cells[id];
+    Cell* new_cell = &cells[next_id];
+
+    memcpy(new_cell, old_cell, sizeof(Cell));
+    memset(old_cell, 0, sizeof(Cell));
+
+    new_cell->type = 251;
+    new_cell->flags = EXIST_BIT;
+    new_cell->age = 0.0f;
+    
+    return next_id;
+}
 
 void update(Cell cells[], unsigned short* ptr, float dt,
     unsigned int eject_max_age,
@@ -96,13 +130,15 @@ void update(Cell cells[], unsigned short* ptr, float dt,
             cell->flags |= REMOVE_BIT;
 
         // Boost cell
-        if (cell->boost > 1) {
+        if (cell->boost > 1.0f) {
             float db = cell->boost * 0.0025f * dt;
             cell->x += cell->boostX * db;
             cell->y += cell->boostY * db;
             if (NOT_PLAYER(cell->type))
                 cell->flags |= UPDATE_BIT;
             cell->boost -= db;
+        } else {
+            cell->boost = 1.0f;
         }
 
         if (IS_PLAYER(cell->type)) {
@@ -294,11 +330,13 @@ void sort_indices(Cell cells[], unsigned short indices[], int n) {
     // Build Max Heap
     for (int i = 1; i < n; i++) { 
         // if child is bigger than parent 
-        if (cells[indices[i]].r < cells[indices[(i - 1) / 2]].r) {
+        if (cells[indices[i]].boost < cells[indices[(i - 1) / 2]].boost ||
+            cells[indices[i]].r  < cells[indices[(i - 1) / 2]].r) {
             int j = i;
             // swap child and parent until 
             // parent is smaller 
-            while (cells[indices[j]].r < cells[indices[(j - 1) / 2]].r) { 
+            while (cells[indices[j]].boost < cells[indices[(j - 1) / 2]].boost || 
+                   cells[indices[j]].r < cells[indices[(j - 1) / 2]].r) { 
                 t = indices[j];
                 indices[j] = indices[(j - 1) / 2];
                 indices[(j - 1) / 2] = t;
@@ -322,13 +360,15 @@ void sort_indices(Cell cells[], unsigned short indices[], int n) {
             // if left child is smaller than  
             // right child point index variable  
             // to right child 
-            if (cells[indices[index]].r > cells[indices[index + 1]].r && 
-                index < (i - 1)) index++; 
+            if ((cells[indices[index]].boost > cells[indices[index + 1]].boost || 
+                 cells[indices[index]].r > cells[indices[index + 1]].r) && index < (i - 1)) index++; 
           
             // if parent is smaller than child  
             // then swapping parent with child  
             // having higher value 
-            if (cells[indices[j]].r > cells[indices[index]].r && index < i) {
+            if ((cells[indices[j]].boost > cells[indices[index]].boost ||
+                 cells[indices[j]].r > cells[indices[index]].r) && index < i) {
+                    
                 t = indices[j];
                 indices[j] = indices[index];
                 indices[index] = t;

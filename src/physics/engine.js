@@ -36,7 +36,7 @@ const DefaultSettings = {
     QUADTREE_MAX_LEVEL: 16,
     MAP_HW: 20000, // MAX signed short = 32767
     MAP_HH: 20000,
-    SAFE_SPAWN_TRIES: 64,
+    SAFE_SPAWN_TRIES: 128,
     PLAYER_SAFE_SPAWN_RADIUS: 1.5,
     VIRUS_SAFE_SPAWN_RADIUS: 3,
     PELLET_COUNT: 1000,
@@ -215,14 +215,14 @@ module.exports = class Engine {
 
         this.lbDelay = 1000 / this.options.LEADERBOARD_TPS;
         this.leaderboardInterval = setInterval(() => {
-            const lb = this.game.controls.filter(c => c.showonLeaderboard && c.alive)
+            const lb = this.game.controls.filter(c => c.alive && c.handle && c.handle.showonLeaderboard)
                 .sort((a, b) => b.score - a.score);
             this.game.emit("leaderboard", lb);
         }, this.lbDelay);
 
         this.minimapDelay = 1000 / this.options.MINIMAP_TPS;
         this.minimapInterval = setInterval(() => {
-            const minimap = this.game.controls.filter(c => c.showOnMinimap && c.alive);
+            const minimap = this.game.controls.filter(c => c.alive && c.handle && c.handle.showonMinimap);
             this.game.emit("minimap", minimap);
         }, this.minimapDelay);
     }
@@ -322,17 +322,20 @@ module.exports = class Engine {
                 const [x, y, success] = this.getSafeSpawnPoint(this.options.BOT_SPAWN_SIZE * this.options.PLAYER_SAFE_SPAWN_RADIUS);
                 success && this.newCell(x, y, this.options.BOT_SPAWN_SIZE, id);
                 s = success;
-            } else {
+            } else if (c.handle) {
+                /** @type {Controller} */
                 let target = null;
 
-                if (this.options.DUAL_ENABLED) {
-                    if (c.handle.owner) target = c.handle.owner.controller;
-                    else target = c.handle.dual.controller;
-                }
+                for (const pid of c.handle.owner ? c.handle.owner.pids : c.handle.pids)
+                    if (this.game.controls[pid].alive) target = this.game.controls[pid];
 
-                const [x, y, success] = this.getPlayerSpawnPoint(target);
+                const [x, y, success, attempts] = this.getPlayerSpawnPoint(target);
                 success && this.newCell(x, y, this.options.PLAYER_SPAWN_SIZE, id);
+
+                // console.log(`Trying to spawn ${c.name}(P#${c.id}) target: ${target ? target.id : "null"}: ${success} ${attempts}`);
                 s = success;
+            } else {
+                s = true;
             }
 
             if (s) {
@@ -528,15 +531,13 @@ module.exports = class Engine {
      * @param {boolean} replace
      */
     kill(id, replace) {
+        const dead_set = this.counters[251];
         if (replace) {
             for (const cell_id of this.counters[id]) {
-                const cell = this.cells[cell_id];
-                const deadCell = this.newCell(cell.x, cell.y, cell.r, DEAD_CELL_TYPE, 
-                    cell.boostX, cell.boostY, cell.boost, false); // Don't insert it because we just swap it
-                this.tree.swap(cell, deadCell); // Swap it with current cell, no need to update the tree
-                this.wasm.clear_cell(0, cell_id); // 0 out memory of this cell because it's not needed anymore
+                const dead_cell_id = this.__next_cell_id = this.wasm.kill_cell(0, cell_id, this.__next_cell_id);
+                dead_set.add(dead_cell_id);
+                this.tree.swap(this.cells[cell_id], this.cells[dead_cell_id]); // Swap it with current cell, no need to update the tree
             }
-            this.game.controls[id].deadTick = true;
         } else {
             for (const cell_id of this.counters[id]) this.cells[cell_id].remove();
         }
@@ -664,39 +665,21 @@ module.exports = class Engine {
      * @param {number} type
      * @return {Cell}
      */
-    newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0, insert = true) {
+    newCell(x, y, size, type, boostX = 0, boostY = 0, boost = 0) {
         
         if (this.cellCount >= CELL_LIMIT - 1) {
-            this.stop();
-            return console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
+            this.shouldRestart = true;
+            return;
         }
 
-        let tries = 0;
-        while (this.cells[this.__next_cell_id].exists) {
-            this.__next_cell_id = ((this.__next_cell_id + 1) % CELL_LIMIT) || 1;
-            tries++;
-            if (tries >= 65536) {
-                console.log("CAN NOT SPAWN NEW CELL: " + this.cellCount);
-                process.exit(1);
-            }
-        }
-
-        const cell = this.cells[this.__next_cell_id];
-        cell.x = x;
-        cell.y = y;
-        cell.r = size;
-        cell.type = type;
-        cell.boostX = boostX;
-        cell.boostY = boostY;
-        cell.boost = boost;
-        cell.resetFlag();
+        const id = this.__next_cell_id = this.wasm.new_cell(0, this.__next_cell_id, 
+            x, y, size, type, boostX, boostY, boost);
         
-        if (insert) {
-            this.tree.insert(cell);
-            this.cellCount++;
-        }
-
-        this.counters[cell.type].add(cell.id);
+        const cell = this.cells[id];
+        
+        this.tree.insert(cell);
+        this.counters[cell.type].add(id);
+        this.cellCount++;
         return cell;
     }
 
@@ -714,28 +697,32 @@ module.exports = class Engine {
         return [range(xmin, xmax), range(ymin, ymax)];
     }
 
-    /** @returns {[number, number, boolean]} */
+    /** @returns {[number, number, boolean, number]} */
     getPlayerSpawnPoint(target = pick(this.alivePlayers)) {
         const s = this.options.PLAYER_SPAWN_SIZE;
         const safeRadius = s * this.options.PLAYER_SAFE_SPAWN_RADIUS;
 
         if (target) {
-            const { l, r, b, t } = target.box;
-            const min = this.options.PLAYER_VIEW_MIN;
+            const { viewportX: vx, viewportY: vy } = target;
+            const [bx_min, bx_max, by_min, by_max] = target.box;
             
             const tries = this.options.SAFE_SPAWN_TRIES;
-            let i = tries;
-            while (--i) {
-                const f = 0.1 + 0.9 * (i / tries) * min;
-                const xmin = l - f;
-                const xmax = r + f;
-                const ymin = b - f;
-                const ymax = t + f;
+            const f1 = Math.max(this.options.PLAYER_VIEW_MIN, 2 * (vx - bx_min));
+            const f2 = Math.max(this.options.PLAYER_VIEW_MIN, 2 * (bx_max - vx));
+            const f3 = Math.max(this.options.PLAYER_VIEW_MIN, 2 * (vy - by_min));
+            const f4 = Math.max(this.options.PLAYER_VIEW_MIN, 2 * (by_max - vy));
+            let i = 0;
+            while (++i < tries) {
+                const f = i / tries;
+                const xmin = vx - f * f1;
+                const xmax = vx + f * f2;
+                const ymin = vy - f * f3;
+                const ymax = vy + f * f4;
                 const [x, y] = this.randomPoint(s, xmin, xmax, ymin, ymax);
                 if (this.wasm.is_safe(0, x, y, safeRadius, this.treePtr, this.stackPtr, this.options.IGNORE_TYPE) > 0)
-                    return [x, y, true];
+                    return [x, y, true, i];
             }
-            return [0, 0, false];
+            return [0, 0, false, i];
         }
 
         return this.getSafeSpawnPoint(safeRadius);
