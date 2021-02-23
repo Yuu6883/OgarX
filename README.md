@@ -24,11 +24,12 @@ You can not use this server as a substiture for OgarII or any clones since I've 
  - [x] Leaderboard
  - [x]  Display stats (FPS, net delay, etc)
  - [x] Better shader (performance & correctness issues)
- - [ ] Commands (some form of authentication needed)
+ - [x] Dual mode
+ - [ ] ~~Commands~~ (lot of limitation on the engine already and there's not many commands to implement)
  - [ ] ~~Configurable local server~~ (some options should not be modifiable)
  - [ ] ~~Peer-to-peer connection~~ (WebRTC API is terrible)
 
 ## Demo
 **WARNING: only works with latest Chrome** and laptops have low fps due to the shader program<br>
 https://ogar69.yuu.dev<br>
-(Local server is implemented with a SharedWorker)
+(Local server is implemented with a SharedWorker and could be broken since the build fails on the script)
