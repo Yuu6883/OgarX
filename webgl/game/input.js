@@ -15,7 +15,7 @@ module.exports = class Keyboard {
                 throw new Error("Error parsing keybinds, resetting");
             if (keys.length > events.length) keys = keys.slice(0, events.length);
             else if (keys.length < events.length) keys = keys.concat(defaultKeys.slice(keys.length));
-            this.keys = keys;
+            this.keys = keys.map(k => k.toLowerCase());
         } catch (e) {
             console.error(e);
             this.keys = defaultKeys.concat([]);
