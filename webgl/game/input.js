@@ -64,7 +64,7 @@ module.exports = class Keyboard {
     setKey(element = this.hovered, key = "") {
         const index = this.labels.indexOf(element);
         element.innerText = (KeyNameMap[key] || key).toUpperCase();
-        this.keys[index] = key;
+        this.keys[index] = key.toLowerCase();
         this.save();
     }
 

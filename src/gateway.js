@@ -114,7 +114,7 @@ let token = process.env.OGARX_TOKEN;
         process.on("SIGINT", () => {
             server.close();
             uWS.us_listen_socket_close(sock);
-            clearInterval(interval);
+            clearTimeout(timeout);
             process.exit(0);
         });
         console.log((sock ? "Gateway Server listening" : "Gateway Server failed to listen") + 

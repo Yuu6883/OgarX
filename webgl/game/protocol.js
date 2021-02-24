@@ -479,7 +479,8 @@ module.exports = class Protocol extends EventEmitter {
             const pid = reader.readUInt8();
             const player = this.renderer.playerData[pid] || {};
             player.id = pid;
-            if (pid == this.pid) player.me = true;
+            if (Array.isArray(this.dualIDs) ? this.dualIDs.includes(pid) : 
+                this.pid == pid) player.me = true;
             const x = reader.readFloat32(), y = reader.readFloat32();
             player.x = x / (this.map.hw << 1) + 0.5;
             player.y = y / (this.map.hh << 1) + 0.5;
