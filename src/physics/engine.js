@@ -261,9 +261,11 @@ module.exports = class Engine {
         if (this.shouldRestart) this.restart();
 
         // Has player
-        if (this.game.handles > this.bots.length &&
-            this.bots.length < this.options.BOTS)
-            this.bots.push(new Bot(this.game));
+        if (this.game.handles > this.bots.length) {
+            if (this.bots.length < this.options.BOTS) {
+                this.bots.push(new Bot(this.game));
+            }
+        } else return;
 
         this.alivePlayers = this.game.controls.filter(c => c.alive && !(c.handle instanceof Bot));
 
