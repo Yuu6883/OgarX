@@ -117,6 +117,9 @@ module.exports = class Controller {
         this.spawn = false;
         this.autoRespawn = false;
         this.surviveTime = 0;
+        if (this.handle) {
+            this.handle.spectate = null;
+        }
     }
 
     get canSpawn() {
