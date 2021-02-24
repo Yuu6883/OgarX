@@ -77,7 +77,7 @@ module.exports = class Keyboard {
         if (this.pressing.has(e.key)) return;
         this.pressing.add(e.key);
 
-        const key = e.key;
+        const key = e.key.toLowerCase();
 
         if (this.hovered) this.setKey(this.hovered, key);
 
@@ -103,7 +103,7 @@ module.exports = class Keyboard {
         if (e.ctrlKey) return;
         this.pressing.delete(e.key);
 
-        const key = e.key;
+        const key = e.key.toLowerCase();
 
         const action = events[this.keys.indexOf(key)];
         if (!action) return;
