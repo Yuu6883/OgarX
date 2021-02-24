@@ -549,14 +549,16 @@ module.exports = class Engine {
         const VIRUS_MAX_SIZE = Math.sqrt(this.options.VIRUS_SIZE * this.options.VIRUS_SIZE +
             this.options.EJECT_SIZE * this.options.EJECT_SIZE * this.options.VIRUS_FEED_TIMES);
 
+        const o = this.options;
+
         // Magic goes here
         this.collisions = this.wasm.resolve(0,
             this.indicesPtr, this.counters[PELLET_TYPE].size,
             this.treePtr, this.stackPtr,
-            this.options.PLAYER_NO_MERGE_DELAY, this.options.PLAYER_NO_COLLI_DELAY,
-            this.options.EAT_OVERLAP, this.options.EAT_MULT, 
-            this.options.VIRUS_PUSH_BOOST, this.options.VIRUS_MAX_BOOST,
-            this.options.VIRUS_SIZE, VIRUS_MAX_SIZE, this.options.PLAYER_DEAD_DELAY);
+            o.PLAYER_NO_MERGE_DELAY, o.PLAYER_NO_COLLI_DELAY,
+            o.EAT_OVERLAP, o.EAT_MULT, 
+            o.VIRUS_PUSH ? o.VIRUS_PUSH_BOOST : 0, o.VIRUS_MAX_BOOST,
+            o.VIRUS_SIZE, VIRUS_MAX_SIZE, o.PLAYER_DEAD_DELAY);
     }
 
     /**

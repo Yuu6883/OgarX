@@ -392,11 +392,11 @@ extern void console_log(unsigned short id);
 
 unsigned int resolve(Cell cells[],
     unsigned short* ptr, unsigned short pellet_count,
-    QuadNode* root, QuadNode** sp, 
-    unsigned int noMergeDelay, unsigned int noColliDelay, 
-    float eatOverlap, float eatMulti, 
-    float virusBoost, float virusMaxBoost,
-    float virusSize, float virusMaxSize, unsigned int removeTick) {
+    QuadNode* root, QuadNode** sp,
+    unsigned int no_merge_delay, unsigned int no_colli_delay, 
+    float eat_overlap, float eat_multi, 
+    float virus_boost, float virus_max_boost,
+    float virus_size, float virus_max_size, unsigned int remove_tick) {
 
     unsigned int collisions = 0;
     unsigned short* ptr_copy = ptr;
@@ -419,7 +419,7 @@ unsigned int resolve(Cell cells[],
         if (IS_EJECTED(type) && !(flags & UPDATE_BIT)) continue; 
 
         if (IS_DEAD(type)) {
-            if (cell->age > removeTick) {
+            if (cell->age > remove_tick) {
                 cell->flags |= REMOVE_BIT;
                 cell->eatenBy = 0;
                 continue;
@@ -431,7 +431,7 @@ unsigned int resolve(Cell cells[],
 
         QuadNode* curr;
 
-        unsigned char colli = cell->age > noColliDelay;
+        unsigned char colli = cell->age > no_colli_delay;
         float x = cell->x;
         float y = cell->y;
         float r1 = cell->r;
@@ -484,7 +484,7 @@ unsigned int resolve(Cell cells[],
                     if (type == other->type) { // same player
                         if (flags & other_flags & MERGE_BIT) // Both merge bits are set
                             action = PHYSICS_EAT; // player merge
-                        else if (colli && other->age > noColliDelay) action = PHYSICS_COL; // player collide
+                        else if (colli && other->age > no_colli_delay) action = PHYSICS_COL; // player collide
                     } else action = PHYSICS_EAT; // player eats everything else
                 } else if (IS_VIRUS(type) && IS_EJECTED(other->type)) {
                     // Virus can only eat ejected cell
@@ -551,8 +551,8 @@ unsigned int resolve(Cell cells[],
 
                 } else if (action == PHYSICS_EAT) {
                     if ((type == other->type || 
-                        r1 > other->r * eatMulti) && 
-                        d < r1 - other->r / eatOverlap) {
+                        r1 > other->r * eat_multi) && 
+                        d < r1 - other->r / eat_overlap) {
 
                         a = r1 * r1 + r2 * r2;
                         r1 = sqrtf(a);
@@ -576,16 +576,16 @@ unsigned int resolve(Cell cells[],
                         if (IS_VIRUS(other->type)) // || IS_MOTHER_CELL(other->type))
                             cell->flags |= 0x80; // Mark this cell as popped
                         if (IS_VIRUS(type) && IS_EJECTED(other->type)) {
-                            if (virusMaxSize && r1 >= virusMaxSize) {
+                            if (virus_max_size && r1 >= virus_max_size) {
                                 cell->flags |= 0x80; // Mark this as virus to be split
                                 cell->boostX = other->boostX;
                                 cell->boostY = other->boostY;
                             }
-                            if (virusBoost) {
-                                float newBoost = cell->boost + virusBoost;
-                                newBoost = newBoost > virusMaxBoost ? virusMaxBoost : newBoost;
-                                cell->boostX = cell->boostX * cell->boost + other->boostX * virusBoost;
-                                cell->boostY = cell->boostY * cell->boost + other->boostY * virusBoost;
+                            if (virus_boost) {
+                                float newBoost = cell->boost + virus_boost;
+                                newBoost = newBoost > virus_max_boost ? virus_max_boost : newBoost;
+                                cell->boostX = cell->boostX * cell->boost + other->boostX * virus_boost;
+                                cell->boostY = cell->boostY * cell->boost + other->boostY * virus_boost;
                                 float norm = sqrtf(cell->boostX * cell->boostX + cell->boostY * cell->boostY);
                                 cell->boostX /= norm;
                                 cell->boostY /= norm;
@@ -622,7 +622,7 @@ unsigned int resolve(Cell cells[],
             continue;
         } else if (flags & POP_BIT) {
             if (IS_VIRUS(type)) {
-                cell->r = virusSize;
+                cell->r = virus_size;
                 split_virus(cell->x, cell->y, cell->boostX, cell->boostY);
             } else {
                 pop_player(id, type, cell->r * cell->r * 0.01f);
