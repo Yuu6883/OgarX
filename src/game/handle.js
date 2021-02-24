@@ -6,6 +6,8 @@ module.exports = class Handle {
         this.controller = null; 
         /** @type {Set<number>} */
         this.pids = new Set();
+        /** @type {Handle} */
+        this.spectate = null;
         
         this.onTick = this.onTick.bind(this);
         this.onJoin = this.onJoin.bind(this);
@@ -32,6 +34,9 @@ module.exports = class Handle {
         this.showonMinimap = false;
         this.showonLeaderboard = false;
     };
+
+    get alive() { return this.controller.alive; }
+    get score() { return this.controller.score; }
     
     join() { 
         this.game.addHandler(this); 
@@ -139,6 +144,6 @@ module.exports = class Handle {
     onLeave(controller) {};
     onSpawn(controller) {};
     onError(err) {};
-    onMinimap(controllers) {};
-    onLeaderboard(controllers) {};
+    onMinimap(handles) {};
+    onLeaderboard(handles) {};
 }

@@ -8,8 +8,6 @@ module.exports = class Controller {
         this.__skin = "";
         this.spawn = false;
         this.updated = false;
-        /** @type {Controller} */
-        this.spectate = null;
         this.__mouseX = 0;
         this.__mouseY = 0;
         this.lockDir = false;
@@ -87,7 +85,6 @@ module.exports = class Controller {
         this.updated = false;
 
         this.handle = null;
-        this.spectate = null;
         this.lockDir = false;
         this.splitAttempts = 0;
         this.ejectAttempts = 0;
@@ -108,7 +105,6 @@ module.exports = class Controller {
     }
 
     afterSpawn() {
-        this.spectate = null;
         this.ejectAttempts = 0;
         this.ejectMarco = false;
         this.lastPoppedTick = 0;

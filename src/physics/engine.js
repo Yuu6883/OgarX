@@ -215,14 +215,18 @@ module.exports = class Engine {
 
         this.lbDelay = 1000 / this.options.LEADERBOARD_TPS;
         this.leaderboardInterval = setInterval(() => {
-            const lb = this.game.controls.filter(c => c.alive && c.handle && c.handle.showonLeaderboard)
+            const lb = this.game.controls
+                .map(c => c.handle)
+                .filter(h => h && h.alive && h.showonLeaderboard)
                 .sort((a, b) => b.score - a.score);
             this.game.emit("leaderboard", lb);
         }, this.lbDelay);
 
         this.minimapDelay = 1000 / this.options.MINIMAP_TPS;
         this.minimapInterval = setInterval(() => {
-            const minimap = this.game.controls.filter(c => c.alive && c.handle && c.handle.showonMinimap);
+            const minimap = this.game.controls
+                .map(c => c.handle)
+                .filter(h => h && h.alive && h.showonMinimap);
             this.game.emit("minimap", minimap);
         }, this.minimapDelay);
     }
@@ -484,21 +488,24 @@ module.exports = class Engine {
     }
 
     updateTree() {
+        const AUTO_SIZE = this.options.PLAYER_AUTOSPLIT_SIZE;
+        const AUTO_DELAY = this.options.PLAYER_AUTOSPLIT_DELAY;
+        const AUTO_DIV = 1 / AUTO_SIZE / AUTO_SIZE;
+        const AUTO_BOOST = this.options.PLAYER_SPLIT_BOOST;
         // Autosplit and update quadtree
-        if (this.options.PLAYER_AUTOSPLIT_SIZE) {
+        if (AUTO_SIZE) {
             // starting after removed cells
             for (let i = this.removedCells.length; i < this.indices - 1; i++) {
                 const index = this.resolveIndices.getUint16(i * 2, true);
                 const cell = this.cells[index];
 
-                if (cell.shouldAuto && cell.age > this.options.PLAYER_AUTOSPLIT_DELAY) {
-                    // const cellsLeft = 1 + this.options.PLAYER_MAX_CELLS - this.counters[cell.type].size;
-                    // if (cellsLeft <= 0) continue;
-                    const splitTimes = Math.ceil(cell.r * cell.r / this.options.PLAYER_AUTOSPLIT_SIZE / this.options.PLAYER_AUTOSPLIT_SIZE);
-                    const splitSizes = Math.min(Math.sqrt(cell.r * cell.r / splitTimes), this.options.PLAYER_AUTOSPLIT_SIZE);
+                if (cell.shouldAuto && cell.age > AUTO_DELAY) {
+                    const r = cell.r;
+                    const splitTimes = Math.ceil(r * r * AUTO_DIV);
+                    const splitSizes = Math.min(Math.sqrt(r * r / splitTimes), AUTO_SIZE);
                     for (let i = 1; i < splitTimes; i++) {
                         const angle = Math.random() * 2 * Math.PI;
-                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), this.options.PLAYER_SPLIT_BOOST);
+                        this.splitFromCell(cell, splitSizes, Math.sin(angle), Math.cos(angle), AUTO_BOOST);
                     }
                     cell.r = splitSizes;
                     cell.updated = true;
@@ -533,7 +540,7 @@ module.exports = class Engine {
      * @param {boolean} replace
      */
     kill(id, replace) {
-        const dead_set = this.counters[251];
+        const dead_set = this.counters[DEAD_CELL_TYPE];
         if (replace) {
             for (const cell_id of this.counters[id]) {
                 const dead_cell_id = this.__next_cell_id = this.wasm.kill_cell(0, cell_id, this.__next_cell_id);

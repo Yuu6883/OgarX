@@ -58,7 +58,12 @@ extern void pop_player(unsigned short id, unsigned char type, float mass);
 extern void tree_update(unsigned short id);
 
 size_t bytes_per_cell() { return sizeof(Cell); }
-unsigned char get_cell_updated(Cell ptr[], unsigned short id) { return IS_PLAYER(ptr[id].type) || (ptr[id].flags & UPDATE_BIT); };
+
+#define UPDATE_BITS 0x12
+unsigned char get_cell_updated(Cell ptr[], unsigned short id) { 
+    return IS_PLAYER(ptr[id].type) || (ptr[id].flags & UPDATE_BITS); 
+};
+
 float get_cell_x(Cell ptr[], unsigned short id) { return ptr[id].x; };
 float get_cell_y(Cell ptr[], unsigned short id) { return ptr[id].y; };
 unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
@@ -563,7 +568,11 @@ unsigned int resolve(Cell cells[],
                             other->eatenBy = cell - cells;
                         }
 
+                        // Mark the cells as updated/removed
+                        cell->flags |= UPDATE_BIT;
                         other->flags |= REMOVE_BIT;
+                        if (NOT_PLAYER(type)) cell->flags |= AUTOSPLIT_BIT;
+
                         if (IS_PLAYER(type) && IS_EJECTED(other->type)) {
                             float ratio = other->r / (r1 + 100.f);
                             cell->boost += ratio * 0.025f * other->boost;
@@ -574,10 +583,10 @@ unsigned int resolve(Cell cells[],
                             cell->boostY = by / norm;
                         }
                         if (IS_VIRUS(other->type)) // || IS_MOTHER_CELL(other->type))
-                            cell->flags |= 0x80; // Mark this cell as popped
+                            cell->flags |= POP_BIT; // Mark this cell as popped
                         if (IS_VIRUS(type) && IS_EJECTED(other->type)) {
                             if (virus_max_size && r1 >= virus_max_size) {
-                                cell->flags |= 0x80; // Mark this as virus to be split
+                                cell->flags |= POP_BIT; // Mark this as virus to be split
                                 cell->boostX = other->boostX;
                                 cell->boostY = other->boostY;
                             }

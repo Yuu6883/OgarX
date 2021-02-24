@@ -59,6 +59,7 @@ module.exports = class OgarXProtocol extends Protocol {
         this.game.emit("join", this.controller);
 
         if (this.game.options.DUAL_ENABLED) {
+            /** @type {DualHandle} */
             this.dual = new DualHandle(this);
             this.dual.controller.name = this.controller.name;
             this.dual.controller.skin = reader.readUTF16String();
@@ -114,8 +115,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.mouseX = reader.readFloat32();
                 controller.mouseY = reader.readFloat32();
                 const spectate = reader.readUInt8();
-                if ((this.dual && (controller.alive || this.dual.controller.alive)) 
-                    || (!this.dual && controller.alive)) {
+                if (this.alive) {
                     const splits = reader.readUInt8();
                     const ejects = reader.readUInt8();
                     const macro  = reader.readUInt8();
@@ -139,22 +139,21 @@ module.exports = class OgarXProtocol extends Protocol {
                             }
                         }
                     }
-                } else if ((this.dual && 
-                    !controller.alive && !this.dual.controller.alive)
-                    || (!this.dual && !controller.alive)) {
-
+                } else { // We are DEAD
                     if (spectate && spectate <= 250) {
-                        controller.spectate = this.game.controls[spectate];
+                        const c = this.game.controls[spectate];
+                        if (!c.handle) break; // ??
+                        if (!c.handle.alive) break; // Can't spectate dead handle??
+                        this.spectate = c.handle.owner || c.handle;
                     } else if (spectate === 255) {
                         let score = 0;
-                        let toSpec = null;
                         for (const c of this.game.controls) {
-                            if (c.score > score) {
+                            if (!c.handle) continue;
+                            if (c.handle.score > score) {
                                 score = c.score;
-                                toSpec = c;
-                            } 
+                                this.spectate = c.handle;
+                            }
                         }
-                        if (toSpec) this.controller.spectate = toSpec;
                     }
                 }
                 break;
@@ -189,39 +188,45 @@ module.exports = class OgarXProtocol extends Protocol {
         if (this.dual && this.dual.controller == c) this.switchTo(c);
     }
 
-    /** @param {import("../../game/controller")[]} controllers */
-    onLeaderboard(controllers) {
-        const LB_COUNT = 10;
-        const count = Math.min(LB_COUNT, controllers.length);
+    get alive() {
+        if (this.dual) return this.controller.alive || this.dual.controller.alive;
+        else return this.controller.alive;
+    }
 
+    get score() {
+        if (this.dual) return this.controller.score + this.dual.controller.score;
+        else return this.controller.score;
+    }
+
+    /** @param {import("../../game/handle")[]} handles */
+    onLeaderboard(handles) {
+        const LB_COUNT = 10;
+        const count = Math.min(LB_COUNT, handles.length);
         const writer = new Writer();
         writer.writeUInt8(5);
-        writer.writeInt16(controllers.indexOf(this.controller));
+        writer.writeInt16(handles.indexOf(this));
         writer.writeUInt8(count);
         for (let i = 0; i < count; i++)
-            writer.writeUInt8(controllers[i].id);
+            writer.writeUInt8(handles[i].controller.id);
         this.ws.send(writer.finalize(), true);
     }
 
-    /** @param {import("../../game/controller")[]} controllers */
-    onMinimap(controllers) {
+    /** @param {import("../../game/handle")[]} handles */
+    onMinimap(handles) {
         const writer = new Writer();
         writer.writeUInt8(6);
-        writer.writeUInt8(controllers.length);
-        for (const c of controllers) {
-            writer.writeUInt8(c.id);
-            writer.writeFloat32(c.viewportX);
-            writer.writeFloat32(c.viewportY);
-            writer.writeFloat32(c.score);
+        writer.writeUInt8(handles.length);
+        for (const h of handles) {
+            writer.writeUInt8(h.controller.id);
+            writer.writeFloat32(h.controller.viewportX);
+            writer.writeFloat32(h.controller.viewportY);
+            writer.writeFloat32(h.score);
         }
         this.ws.send(writer.finalize(), true);
     }
 
     onTick() {
-        if (!this.controller) return; // ??
-        if (this.controller.spectate && (
-            (this.controller.spectate instanceof OgarXProtocol) || 
-            (this.controller.spectate.handle instanceof DualHandle))) return; // Spectating someone
+        if (!this.controller) return; // ??????
 
         const engine = this.game.engine;
         const c1 = this.controller;
@@ -246,28 +251,30 @@ module.exports = class OgarXProtocol extends Protocol {
             }
         }
 
-        // Backpressure higher than watermark
-        if (this.ws.getBufferedAmount() > engine.options.SOCKET_WATERMARK) return;
+        let target = this.controller;
+        if (!this.alive && this.spectate) {
+            // Some other handler will take care of this
+            if (this.spectate instanceof OgarXProtocol) return;
+            else target = this.spectate.controller;
+        }
 
-        const target = this.controller.spectate || this.controller;
-
-        // Query visible cells from the controller
         const vlist = engine.query(target);
+        // Query visible cells from the controller
         this.processVisibleList(vlist, target);
-
+        
         for (const c of this.game.controls) {
-            if (c.alive &&
-                c !== this.controller &&
-                c.spectate === this.controller && 
-                c.handle instanceof OgarXProtocol &&
-                c.handle.ws.getBufferedAmount() > engine.options.SOCKET_WATERMARK) {
-                c.handle.processVisibleList(vlist, this.controller);
-            }
+            if (!c.handle) continue;
+            if (c.handle.spectate === this) 
+                c.handle.processVisibleList(vlist, target);
         }
     }
 
     /** @param {Uint16Array} vlist */
     processVisibleList(vlist, controller = this.controller) {
+        if (!vlist.length) return;
+        // Backpressure higher than watermark
+        if (this.ws.getBufferedAmount() > this.game.options.SOCKET_WATERMARK) return;
+
         // Step 1
         this.wasm.exports.move_hashtable();
         // Step 2
