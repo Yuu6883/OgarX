@@ -197,6 +197,16 @@ module.exports = class OgarXProtocol extends Protocol {
         if (this.dual) return this.controller.score + this.dual.controller.score;
         else return this.controller.score;
     }
+    
+    get maxScore() {
+        if (this.dual) return Math.max(this.controller.maxScore, this.dual.controller.maxScore);
+        else return this.controller.maxScore;
+    }
+
+    get kills() {
+        if (this.dual) return this.controller.kills + this.dual.controller.kills;
+        else this.controller.kills;
+    }
 
     /** @param {import("../../game/handle")[]} handles */
     onLeaderboard(handles) {
@@ -227,6 +237,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
     onTick() {
         if (!this.controller) return; // ??????
+        if (!this.wasAlive && this.alive) this.actualSpawnTick = this.game.engine.__now;
 
         const engine = this.game.engine;
         const c1 = this.controller;
@@ -236,23 +247,21 @@ module.exports = class OgarXProtocol extends Protocol {
 
             if (!c1.alive && c2.alive) this.switchTo(c2);
             if (c1.alive && !c2.alive) this.switchTo(c1);
-            if (c1.dead && c2.dead) {
-                c1.surviveTime = c2.surviveTime = engine.__now - c1.lastSpawnTick;
+            if (this.wasAlive && !this.alive) {
                 c1.lastSpawnTick = c2.lastSpawnTick = engine.__now;
-                c1.dead = c2.dead = false;
                 this.sendStats();
             }
         } else {
-            if (c1.dead) {
-                c1.surviveTime = engine.__now - c1.lastSpawnTick;
+            if (this.wasAlive && !this.alive) {
                 c1.lastSpawnTick = engine.__now;
-                c1.dead = false;
                 this.sendStats();
             }
         }
+        this.wasAlive = this.alive;
 
         let target = this.controller;
-        if (!this.alive && this.spectate) {
+        if (this.alive) this.spectate = null;
+        if (this.spectate) {
             // Some other handler will take care of this
             if (this.spectate instanceof OgarXProtocol) return;
             else target = this.spectate.controller;
@@ -264,6 +273,10 @@ module.exports = class OgarXProtocol extends Protocol {
         
         for (const c of this.game.controls) {
             if (!c.handle) continue;
+            if (c.handle.alive) {
+                c.handle.spectate = null;
+                continue;
+            }
             if (c.handle.spectate === this) 
                 c.handle.processVisibleList(vlist, target);
         }
@@ -336,24 +349,13 @@ module.exports = class OgarXProtocol extends Protocol {
         this.ws.send(this.memory.buffer.slice(AUED_end_ptr, buffer_end), true);
     }
 
-    get maxScore() {
-        if (this.dual) return Math.max(this.controller.maxScore, this.dual.controller.maxScore);
-        else return this.controller.maxScore;
-    }
-
     sendStats() {
-        if (!this.maxScore) return;
+        if (!this.maxScore || this.controller.spawn) return;
         const writer = new Writer();
         writer.writeUInt8(7);
-        if (this.dual) {
-            writer.writeUInt32(this.controller.kills + this.dual.controller.kills);
-            writer.writeFloat32(this.maxScore);
-            writer.writeFloat32(this.game.engine.__now - this.controller.lastSpawnTick);
-        } else {
-            writer.writeUInt32(this.controller.kills);
-            writer.writeFloat32(this.maxScore);
-            writer.writeFloat32(this.controller.surviveTime);
-        }
+        writer.writeUInt32(this.kills);
+        writer.writeFloat32(this.maxScore);
+        writer.writeFloat32(this.game.engine.__now - this.actualSpawnTick);
         this.ws.send(writer.finalize(), true);
     }
 

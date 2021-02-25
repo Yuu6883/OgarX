@@ -584,7 +584,6 @@ module.exports = class Engine {
         this.cellCount--;
         if (type <= 250 && !this.counters[type].size) {
             eatenBy && this.game.controls[eatenByType].kills++;
-            this.game.controls[type].dead = true;
             this.game.controls[type].score = 0;
         }
     }

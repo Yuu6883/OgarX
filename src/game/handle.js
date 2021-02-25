@@ -33,6 +33,8 @@ module.exports = class Handle {
 
         this.showonMinimap = false;
         this.showonLeaderboard = false;
+        this.wasAlive = false;
+        this.actualSpawnTick = 0;
     };
 
     get alive() { return this.controller.alive; }

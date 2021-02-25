@@ -23,11 +23,9 @@ module.exports = class Controller {
         this.viewportHW = 0;
         this.viewportHH = 0;
         this.maxScore = 0;
-        this.dead = false;
         this.autoRespawn = false;
         this.kills = 0;
         this.score = 0;
-        this.surviveTime = 0;
 
         this.box = new Float32Array(4);
 
@@ -98,9 +96,7 @@ module.exports = class Controller {
         this.maxScore = 0;
         this.kills = 0;
         this.score = 0;
-        this.dead = false;
         this.autoRespawn = false;
-        this.surviveTime = 0;
         this.box.fill(0);
     }
 
@@ -113,13 +109,9 @@ module.exports = class Controller {
         this.lockDir = false; // reset line lock
         this.maxScore = 0;
         this.kills = 0;
-        this.dead = false;
         this.spawn = false;
         this.autoRespawn = false;
-        this.surviveTime = 0;
-        if (this.handle) {
-            this.handle.spectate = null;
-        }
+        if (this.handle) this.handle.spectate = null;
     }
 
     get canSpawn() {
