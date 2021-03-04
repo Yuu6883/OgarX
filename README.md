@@ -60,6 +60,7 @@ OgarII [world update function](https://github.com/Luka967/OgarII/blob/master/src
 4. Update player cells
 5. Solve player cells
 6. Handle players IO (eject, splits, viewport, protocol)
+
 OgarX [world update function](https://github.com/Yuu6883/OgarX/blob/master/src/physics/engine.js#L263) does it in a similar manner but different order:
 1. Add new cells
 2. Handle players IO
@@ -87,3 +88,6 @@ OgarX's main physics solver is very different from what Old Systems have. It's j
 2. QuadTree is usually used for a broad phase collision solver and taking a callback argument which will resolve the narrow phase collisions later. But in OgarX, broad phase and narrow phase is combined into one since there are **only** circle objects inside the tree. Cell interactability are also checked **before** checking if they intersects geometrically, which reduces the computation by **a lot**.
 3. Double resolution is avoided in OgarX. Old System would push A->B and B->A into the result array and try to resolve them which is inefficient and unnessary. OgarX will only solve A->B when A has bigger radius than B, and this change does not have obvious effect on the result.
 With these optimizations, the physics resolve perform at least x3-x10 faster than Old Systems (benchmark needed).
+
+#### Handle Player IO
+This includes handling player inputs (ejects, splits, etc) and outputs (sending cell and player data to client). The function is basically same as Old Systems, done in JS with nothing special about it. The outputs aka the protocol serialization will be furthur discussed below.
