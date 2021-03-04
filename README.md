@@ -2,7 +2,7 @@
 This project is an *optimized* rewrite of [OgarII](https://github.com/Luka967/OgarII). A lot of features from the original project are not implemented (while I focused on other features that serve my interests the best).
 
 ## Disclaimer
-You can not use this server as a substiture for OgarII or any clones since I've only implemented its own protocol. The only client that works with the server is the **WebGL2** client which might not be supported or run smoothly on extremely lowend laptop. The physics are not idententical even though most formula and calculations are the same. The differences & optimization will be further discussed.
+You can not use this server as a substitute for OgarII or any clones since I've only implemented its own protocol. The only client that works with the server is the **WebGL2** client which might not be supported or run smoothly on extremely lowend laptop. The physics are not idententical even though most formula and calculations are the same. The differences & optimization will be further discussed.
 
 ## Features
  - [x] Public server list
@@ -41,3 +41,4 @@ Build is not required since all the client files are already built into `public`
 Serve the files from `public` folder with whatever service you want and visit the page.
 
 ## Project Highlights
+There are quite a few techniques I've used in this project to achieve such level of optimization. 
