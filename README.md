@@ -41,4 +41,13 @@ Build is not required since all the client files are already built into `public`
 Serve the files from `public` folder with whatever service you want and visit the page.
 
 ## Project Highlights
-There are quite a few techniques I've used in this project to achieve such level of optimization. 
+There are quite a few techniques I've used in this project to achieve such level of optimization.
+
+### Data oriented design
+In traditional way, memory is allocated whenever a new cell is added to the engine. However, in this project, there's fixed size (65536) cell pool where all the memory are pre-allocated. Each cell has a bit flag indicating whether it exists or not. Whenever we want to add a new cell, we just need to find the index of the next sparse spot (non-existing cell) in the pool. This way we can minimize memory footprint and put less stress on the garbage collector. Another benefit of this design is that cell id is limited to an unsigned short (16 bits) instead of the traditional way of using an unsigned int (32 bits) for it, thus reducing the bandwidth usage (will be discussed more). This is also good for the client because we can also use this design to pre-allocate the cell pool.
+
+### WebAssembly
+Wasm is a great tool for optimization, if you know what you are doing. Using c++ for compiling to wasm or generating a huge js glue file from emscripten is out of the question, since calls between js and wasm is still relatively slow and those tools usually generate a huge amount of calls between js and wasm. Then I found out that there's a build flag in emcc called **SUBMODULE=1** which builds the wasm file only, without the stupidly long js glue. This is perfect for the project since I want to optimize to the fullest, and I don't want code in my project that I do not understand. I don't need and I don't want to know how they manage which section of the wasm memory is used or not; I can handle the memory and pointers myself. It makes profiling a lot easier this way. Thus I wrote the entire core for the physics engine in c and compiled it as a wasm side module.
+
+### Quadtree
+This project still use the same data structure, quadtree, as the broad phase physic resolver. But the main difference is that I serialize it to the wasm memory while keeping the structure on the js side. This design is intended for speeding up the viewport querying and the actual physics resolution. You might think that serializing the entire quad tree to wasm memory is slow and the speed gained because of it does not justify it. In reality it's quite the opposite, with 10k items in the quadtree, it only takes ~1ms to serialize to wasm and the performance gain from it is HUGE. The wasm quadtree viewport querying is about 5-10 times faster than a normal js quadtree query, meaning it can handle more players and bigger viewports.
