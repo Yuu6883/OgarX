@@ -143,7 +143,7 @@ class Renderer {
             preserveDrawingBuffer: true
         });
 
-        if (!gl) return console.error("WebGL2 Not Supported");
+        if (!gl) return self.postMessage({ event: "webgl2" });
 
         gl.enable(gl.BLEND);
 

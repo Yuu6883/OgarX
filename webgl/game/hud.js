@@ -65,6 +65,7 @@ module.exports = class HUD {
                 if (data.event === "replay") this.onReplay(data.state);
                 if (data.event === "error") this.onError(data.message || "Unknown Error");
                 if (data.event === "warning") this.onWarning(data.message || "Unknown Warning");
+                if (data.event === "webgl2") window.location.assign("/webgl2notsupported");
             }
         }
     }
