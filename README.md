@@ -35,6 +35,7 @@ FFA | Classic Agar-Like server, with auto-split
 Mega | 64 max cells, with solo-trick
 Omega | 256 max cells, with solo-trick
 Extreme Omega | Omega but no decay or virus
+
 There are also ones in the default mode folder but **not tested**.
 
 Name | Description
