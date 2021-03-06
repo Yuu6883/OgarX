@@ -3,8 +3,16 @@ const OgarXProtocol = require("./network/protocols/ogarx");
 
 const server = new Server();
 const engine = server.game.engine;
+const options = require("./modes/default/omega");
 
-engine.setOptions(require("./modes/default/mega"));
+// Scale down the local server from omega since browser probably can't handle it
+options.BOTS >>= 2;
+options.MAP_HH >>= 1;
+options.MAP_HW >>= 1;
+options.VIRUS_COUNT >>= 2;
+options.PELLET_COUNT >>= 2;
+
+engine.setOptions(options);
 server.open();
 
 (async () => {
@@ -16,7 +24,7 @@ server.open();
     res = await fetch("/static/wasm/ogarx.wasm");
     buffer = await res.arrayBuffer();
 
-    await OgarXProtocol.init(buffer);
+    await OgarXProtocol.init(buffer, 4);
 
     engine.start();
     
