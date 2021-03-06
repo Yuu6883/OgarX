@@ -25,7 +25,7 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
 
 (async () => {
     await engine.init(fs.readFileSync(CORE_PATH));
-    await OgarXProtocol.init(fs.readFileSync(PROTOCOL_PATH));
+    await OgarXProtocol.init(fs.readFileSync(PROTOCOL_PATH), 100); // 100mb
 
     const opened = await server.open({ 
         sslOptions, 
@@ -36,9 +36,4 @@ if (fs.existsSync(SSL_PATH)) sslOptions = require(SSL_PATH);
 
     if (!opened) process.exit(1);
     engine.start();
-
-    setInterval(() => {
-        if (engine.usage > 0.8)
-            console.warn(`Load: ${~~(engine.usage * 100)} %, collisions: ${engine.collisions}`);
-    }, 1000);
 })();

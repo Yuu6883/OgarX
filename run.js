@@ -36,7 +36,7 @@ const procToStart = [];
 for (const proc of config) {
     proc.cwd = __dirname;
     proc.script = "./src/index.js";
-    proc.max_memory_restart = "250M";
+    proc.max_memory_restart = "300M";
     proc.kill_timeout = 3000;
 
     if (validateMode(proc.env.OGARX_MODE)) {

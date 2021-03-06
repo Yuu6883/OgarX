@@ -9,6 +9,8 @@ const SOCKET_FILE = path.resolve(__dirname, "..", "unix.sock");
 const Protocols = require("./protocols");
 const Game = require("../game");
 
+const CONN_THROTTLE = 0;
+
 module.exports = class SocketServer {
 
     constructor(name) {
@@ -62,11 +64,25 @@ module.exports = class SocketServer {
                     name: g.name,
                     endpoint: `${port}/${endpoint}`,
                     bot: g.engine.bots.length,
+                    real: g.playerCount,
                     players: g.handles,
                     total: 250 // Number in theory
                 }));
             } catch (_) {}
         }, 1000);
+
+        let conn = 0;
+        /** @type {[uWS.HttpResponse, string, string, string, string, uWS.us_socket_context_t][]} */
+        const upgradeQueue = [];
+
+        this.upgradeInterval = setInterval(() => {
+            conn = 0;
+            if (!upgradeQueue.length) return;
+            for (let i = Math.min(CONN_THROTTLE || 1, upgradeQueue.length); i > 0; i--) {
+                const [res, url, key, protocol, ext, context] = upgradeQueue.shift();
+                res.upgrade({ url }, key, protocol, ext, context);
+            }
+        }, 250);
 
         return new Promise(resolve => {
             (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App()).ws(`/${endpoint}`, {
@@ -75,14 +91,29 @@ module.exports = class SocketServer {
                 maxPayloadLength: 512,
                 compression: uWS.DEDICATED_COMPRESSOR_4KB,
                 upgrade: (res, req, context) => {
-                    console.log('Connection received from: "' + req.getUrl() + '" ip: ' + new Uint8Array(res.getRemoteAddress()).join("."));
-                    res.upgrade({ url: req.getUrl() },
-                        req.getHeader('sec-websocket-key'),
-                        req.getHeader('sec-websocket-protocol'),
-                        req.getHeader('sec-websocket-extensions'),
-                        context);
+
+                    const url = req.getUrl();
+                    const key = req.getHeader("sec-websocket-key");
+                    const pro = req.getHeader('sec-websocket-protocol');
+                    const ext = req.getHeader('sec-websocket-extensions');
+
+                    if (conn < CONN_THROTTLE) {
+                        res.upgrade({ url }, key, pro, ext, context);
+                        conn++;
+                    } else {
+                        upgradeQueue.push([res, url, key, pro, ext, context]);
+                        res.onAborted(() => {
+                            const index = upgradeQueue.findIndex(item => item[0] === res);
+                            upgradeQueue.splice(index, 1);
+                        });
+                    }
                 },
-                open: ws => () => ws.ip = new Uint8Array(ws.getRemoteAddress()).join("."), // save ip
+                open: ws => () => {
+                    ws.ip = new Uint8Array(ws.getRemoteAddress()).join("."); // save ip
+                    console.log(`WS connected from ${ws.ip}`);
+                    // Client does not exchange protocol info within 3 seconds
+                    setTimeout(() => ws.p || ws.end(1003), 3000);
+                },
                 message: (ws, message, isBinary) => {
                     if (!isBinary) ws.end(1003);
                     if (!ws.p) {
@@ -135,6 +166,7 @@ module.exports = class SocketServer {
         this.sock && uWS.us_listen_socket_close(this.sock);
         this.sock = null;
         clearInterval(this.ipcInterval);
+        clearInterval(this.upgradeInterval);
         try { this.ipcClient.destroy(); } catch (e) {}
         console.log(`Server closed`);
     }

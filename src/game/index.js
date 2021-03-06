@@ -2,6 +2,7 @@ const { EventEmitter } = require("events");
 
 const Controller = require("./controller");
 const Engine = require("../physics/engine");
+const OgarXProtocol = require("../network/protocols/ogarx");
 
 const MAX_PLAYER = 250;
 
@@ -26,11 +27,17 @@ module.exports = class Game extends EventEmitter {
         this.on("restart", () => this.emit("chat", null, "Restarting Server..."));
     }
 
+    get playerCount() {
+        return this.controls.reduce((prev, c) => (c.handle instanceof OgarXProtocol ? 1 : 0) + prev, 0);
+    }
+
     get options() { return this.engine.options; }
+    get isFull() { return this.handles >= MAX_PLAYER; }
 
     /** @param {import("./handle")} handle */
     addHandler(handle) {
-        if (this.isFull) handle.onError("Server full");
+        if (this.handles + (this.engine.options.DUAL_ENABLED ? 2 : 1) >= MAX_PLAYER) 
+            return handle.onError("Server full");
         if (handle.controller) return;
         let id = 1; // 0 is occupied ig
         while (this.controls[id].handle) id++;
@@ -51,6 +58,4 @@ module.exports = class Game extends EventEmitter {
         handle.controller = null;
         this.handles--;
     }
-
-    get isFull() { return this.handles == MAX_PLAYER; }
 }

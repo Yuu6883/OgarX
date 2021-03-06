@@ -3,6 +3,32 @@ const Reader = require("../reader");
 const Writer = require("../writer");
 const DualHandle = require("../../game/dual");
 
+class WebAssemblyPool {
+
+    /** @param {number} size */
+    static init(size) {
+        /** @type {number[]} */
+        this.used = new Array(size).fill(0);
+        this.blocks = Array.from({ length: size }, _ => 
+            new WebAssembly.Memory({ initial: 16, maximum: 32 })); // 1mb, 2mb
+    }
+
+    static get() {
+        let index = 0;
+        while (this.used[index]) index++;
+        if (index >= this.used.length) this.used.push(1);
+        else this.used[index] = 1;
+        return this.blocks[index];
+    }
+
+    /** @param {WebAssembly.Memory} mem */
+    static free(mem) {
+        const index = this.blocks.indexOf(mem);
+        if (index < 0 || index >= this.used.length) return; // ???
+        this.used[index] = 0;
+    }
+}
+
 module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {DataView} view */
@@ -14,8 +40,9 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     /** @param {BufferSource} buffer */
-    static async init(buffer) {
+    static async init(buffer, pool_size = 10) {
         this.Module = await WebAssembly.compile(buffer);
+        WebAssemblyPool.init(pool_size);
     }
 
     /**
@@ -39,10 +66,10 @@ module.exports = class OgarXProtocol extends Protocol {
         const { get_cell_updated, get_cell_x, get_cell_y, get_cell_r, 
             get_cell_type, get_cell_eatenby } = this.game.engine.wasm;
 
-        const memory = this.memory = new WebAssembly.Memory({ initial: 16, maximum: 32 }); // 1mb, 2mb
+        this.memory = WebAssemblyPool.get();
         this.wasm = await WebAssembly.instantiate(OgarXProtocol.Module, {
             env: { 
-                memory,
+                memory: this.memory,
                 get_cell_updated, get_cell_x, get_cell_y, get_cell_r, 
                 get_cell_type, get_cell_eatenby 
             }
@@ -73,8 +100,10 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     off() {
+        delete this.ws;
         super.off();
         if (this.dual) this.dual.off();
+        WebAssemblyPool.free(this.memory);
     }
 
     sendInitPacket() {
@@ -92,6 +121,7 @@ module.exports = class OgarXProtocol extends Protocol {
         const CLEAR_SCREEN = new ArrayBuffer(1);
         new Uint8Array(CLEAR_SCREEN)[0] = 2;
         this.ws.send(CLEAR_SCREEN, true);
+        if (!this.last_vlist_len && !this.curr_vlist_len) return;
         this.wasm.exports.clean(0, this.memory.buffer.byteLength);
     }
 
@@ -172,6 +202,10 @@ module.exports = class OgarXProtocol extends Protocol {
             default:
                 console.warn(`Unknown OP: ${OP}`);
         }
+    }
+
+    onError(message) {
+        if (this.ws) this.ws.end(1000, message);
     }
 
     /** @param {import("../../game/controller")} c */
