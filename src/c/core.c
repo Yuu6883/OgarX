@@ -197,7 +197,7 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
     unsigned char lock_dir, float a, float b, float c, 
     float dt,
     float merge_initial, float merge_increase, float player_speed, float normalizer,
-    unsigned int merge_time, unsigned int no_merge_delay, unsigned char merge_version_new) {
+    float merge_time,    float no_merge_delay, unsigned char merge_version_new) {
     
     if (!n) return;
 

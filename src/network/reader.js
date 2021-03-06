@@ -71,12 +71,20 @@ module.exports = class Reader {
         return chars.join("");
     }
 
-    readUTF16String() {
+    readUTF16String(force_utf_8 = false) {
         const chars = [];
-        while (this.offset < this.view.byteLength) {
-            const ch = this.readUInt16();
-            if (!ch) break;
-            chars.push(String.fromCharCode(ch));
+        if (force_utf_8) {
+            while (this.offset < this.view.byteLength) {
+                const ch = this.readUInt16();
+                if (!ch) break;
+                chars.push(String.fromCharCode(ch & 255));
+            }
+        } else {
+            while (this.offset < this.view.byteLength) {
+                const ch = this.readUInt16();
+                if (!ch) break;
+                chars.push(String.fromCharCode(ch));
+            }
         }
         return chars.join("");
     }

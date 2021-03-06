@@ -92,7 +92,8 @@ const DefaultSettings = {
     EAT_MULT: 1.140175425099138,
     DUAL_ENABLED: false,
     SOCKET_WATERMARK: 1024 * 512, // 500kb
-    IGNORE_TYPE: 253
+    IGNORE_TYPE: 253,
+    FORCE_UTF8: true // No funky unicode clowning
 }
 
 const DEAD_CELL_TYPE = 251;

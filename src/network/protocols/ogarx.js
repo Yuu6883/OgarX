@@ -32,7 +32,7 @@ class WebAssemblyPool {
 module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {DataView} view */
-    static handshake(view) { 
+    static handshake(view) {
         const reader = new Reader(view);
         return reader.length >= 7 && // 3 bytes of funni and at least 2 * 2 bytes of zero
             reader.readUInt8() == 69 &&
@@ -81,15 +81,15 @@ module.exports = class OgarXProtocol extends Protocol {
         const reader = new Reader(new DataView(initMessage));
         reader.skip(3); // Skip handshake bytes
 
-        this.controller.name = reader.readUTF16String();
-        this.controller.skin = reader.readUTF16String();
+        this.controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
+        this.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
         this.game.emit("join", this.controller);
 
         if (this.game.options.DUAL_ENABLED) {
             /** @type {DualHandle} */
             this.dual = new DualHandle(this);
             this.dual.controller.name = this.controller.name;
-            this.dual.controller.skin = reader.readUTF16String();
+            this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
             this.pids.add(this.dual.controller.id);
             this.game.emit("join", this.dual.controller);
         }
@@ -135,9 +135,9 @@ module.exports = class OgarXProtocol extends Protocol {
 
         switch (OP) {
             case 1:
-                controller.name = reader.readUTF16String();
-                controller.skin = reader.readUTF16String();
-                if (this.dual) this.dual.controller.skin = reader.readUTF16String();
+                controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                if (this.dual) this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
                 controller.requestSpawn();
                 controller.lastSpawnTick = this.game.engine.__now;
                 break;
@@ -191,7 +191,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 controller.autoRespawn = true;
                 break;
             case 10:
-                const message = reader.readUTF16String();
+                const message = reader.readUTF16String(this.game.options.FORCE_UTF8);
                 this.game.emit("chat", this.controller, message);
                 break;
             case 69:
