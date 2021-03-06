@@ -429,14 +429,14 @@ module.exports = class HUD {
 
         for (const i in players) {
             const e = document.createElement("p");
-            e.textContent = `${~~i + 1}. ${players[i] ? players[i].name : ""}`;
+            e.textContent = `${~~i + 1}. ${players[i] ? (players[i].name || "") : ""}`;
             if (i == rank) e.classList.add("me");
             this.lbElem.appendChild(e);
         }
 
         if (!players[rank] && rank != 65535) {
             const e = document.createElement("p");
-            e.textContent = `${rank + 1}. ${me.name || ""}`;
+            e.textContent = `${rank + 1}. ${me ? (me.name || "") : ""}`;
             e.classList.add("me");
             this.lbElem.appendChild(e);
         }

@@ -512,9 +512,9 @@ module.exports = class Protocol extends EventEmitter {
 
         const writer = new Writer();
         writer.writeUInt8(1);
-        writer.writeUTF16String(name);
-        writer.writeUTF16String(skin1);
-        writer.writeUTF16String(skin2);
+        writer.writeUTF16String(name || "");
+        writer.writeUTF16String(skin1 || "");
+        writer.writeUTF16String(skin2 || "");
         this.send(writer.finalize());
     }
 
