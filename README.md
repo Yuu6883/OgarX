@@ -18,11 +18,10 @@ You can not use this server as a substitute for OgarII or any clones since I've 
  - [x] Custom keybinds
  - [x] Customizable render options
  - [x] Main menu UI
- - [x]  Game chat
+ - [x] Game chat
  - [x] Leaderboard
- - [x]  Display stats (FPS, net delay, etc)
+ - [x] Display stats (FPS, net delay, etc)
  - [x] Better shader (performance & correctness issues)
- - [x] Dual mode
  - [ ] ~~Commands~~ (lot of limitation on the engine already and there's not many commands to implement)
  - [ ] ~~Configurable local server~~ (some options should not be modifiable)
  - [ ] ~~Peer-to-peer connection~~ (WebRTC API is terrible)
