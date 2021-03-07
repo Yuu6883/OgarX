@@ -137,7 +137,10 @@ module.exports = class OgarXProtocol extends Protocol {
             case 1:
                 controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
                 controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
-                if (this.dual) this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                if (this.dual) {
+                    this.dual.controller.name = controller.name;
+                    this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                }
                 controller.requestSpawn();
                 controller.lastSpawnTick = this.game.engine.__now;
                 break;

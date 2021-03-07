@@ -789,6 +789,7 @@ module.exports = class Engine {
 
     /** @param {Controller} controller */
     query(controller) {
+        if (!controller) return [];
         // 4 = pointer size, second 4 is because 4 nodes per level so we need to reserve enough space for the stack
         let listPtr = this.stackPtr + 4 * 4 * this.options.QUADTREE_MAX_LEVEL;
         listPtr % 2 && listPtr++; // Multiple of 2
