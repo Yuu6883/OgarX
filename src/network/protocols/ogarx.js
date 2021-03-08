@@ -223,6 +223,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
     onSpawn(c) {
         if (this.dual && this.dual.controller == c) this.switchTo(c);
+        this.sendPlayerInfo(c);
     }
 
     get alive() {
