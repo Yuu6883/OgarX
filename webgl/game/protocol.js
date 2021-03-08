@@ -282,8 +282,6 @@ module.exports = class Protocol extends EventEmitter {
             this.bandwidth = 0;
             delete this.ping;
             delete this.dualIDs;
-            delete this.lastName;
-            delete this.lastSkins;
 
             this.emit("close");
 
@@ -341,7 +339,7 @@ module.exports = class Protocol extends EventEmitter {
 
             this.send(writer.finalize());
 
-            if (currState.respawn) this.spawn();
+            if (currState.respawn) this.spawn(this.lastName, this.lastSkin1, this.lastSkin2);
             if (currState.clip && !this.replaying) this.replay.save();
         }, 1000 / 33); // TODO?
     }
@@ -500,22 +498,20 @@ module.exports = class Protocol extends EventEmitter {
 
     /**
      * @param {string} name 
-     * @param {string} skin 
+     * @param {string} skin1
+     * @param {string} skin2
      */
-    spawn(name = this.lastName, skin1, skin2) {
-        this.lastName = name;
-        if (this.lastSkins) {
-            skin1 = this.lastSkins[0];
-            skin2 = this.lastSkins[1];
-        }
-        this.lastSkins = [skin1, skin2];
-
+    spawn(name, skin1, skin2) {
         const writer = new Writer();
         writer.writeUInt8(1);
         writer.writeUTF16String(name || "");
         writer.writeUTF16String(skin1 || "");
         writer.writeUTF16String(skin2 || "");
         this.send(writer.finalize());
+
+        this.lastName = name;
+        this.lastSkin1 = skin1;
+        this.lastSkin2 = skin2;
     }
 
     sendChat(message) {

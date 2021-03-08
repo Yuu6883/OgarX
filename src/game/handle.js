@@ -12,6 +12,7 @@ module.exports = class Handle {
         this.onTick = this.onTick.bind(this);
         this.onJoin = this.onJoin.bind(this);
         this.onChat = this.onChat.bind(this);
+        this.onInfo = this.onInfo.bind(this);
         this.onLeave = this.onLeave.bind(this);
         this.onSpawn = this.onSpawn.bind(this);
         this.onError = this.onError.bind(this);
@@ -22,6 +23,7 @@ module.exports = class Handle {
             .on("tick", this.onTick)
             .on("join", this.onJoin)
             .on("chat", this.onChat)
+            .on("info", this.onInfo)
             .on("leave", this.onLeave)
             .on("spawn", this.onSpawn)
             .on("error", this.onError)
@@ -129,6 +131,7 @@ module.exports = class Handle {
             .off("tick", this.onTick)
             .off("join", this.onJoin)
             .off("chat", this.onChat)
+            .off("info", this.onInfo)
             .off("leave", this.onLeave)
             .off("spawn", this.onSpawn)
             .off("error", this.onError)
@@ -137,6 +140,7 @@ module.exports = class Handle {
         for (const [event, cb] of this.extraEvents)
             this.game.off(event, cb);
         this.extraEvents = [];
+        this.wasAlive = false;
     }
 
     // Virtual methods
@@ -145,6 +149,7 @@ module.exports = class Handle {
     onChat(sender, message) {};
     onLeave(controller) {};
     onSpawn(controller) {};
+    onInfo(controller) {};
     onError(err) {};
     onMinimap(handles) {};
     onLeaderboard(handles) {};

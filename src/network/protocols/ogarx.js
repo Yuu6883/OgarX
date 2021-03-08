@@ -137,9 +137,11 @@ module.exports = class OgarXProtocol extends Protocol {
             case 1:
                 controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
                 controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                this.game.emit("info", controller);
                 if (this.dual) {
                     this.dual.controller.name = controller.name;
                     this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                    this.game.emit("info", this.dual.controller);
                 }
                 controller.requestSpawn();
                 controller.lastSpawnTick = this.game.engine.__now;
@@ -223,6 +225,9 @@ module.exports = class OgarXProtocol extends Protocol {
 
     onSpawn(c) {
         if (this.dual && this.dual.controller == c) this.switchTo(c);
+    }
+
+    onInfo(c) {
         this.sendPlayerInfo(c);
     }
 
@@ -402,6 +407,7 @@ module.exports = class OgarXProtocol extends Protocol {
         if (this.controller == controller) {
             // Send every controller's info to client
             for (const c of this.game.controls) c.handle && this.sendPlayerInfo(c);
+            this.clear();
         } else {
             // Send controller info to client since it just joined
             this.sendPlayerInfo(controller);
@@ -423,13 +429,14 @@ module.exports = class OgarXProtocol extends Protocol {
     sendPlayerInfo(controller) {
         if (!controller.name && !controller.skin) return;
 
+        console.log(`sending info#${controller.id} ${controller.name} ${controller.skin}`);
+
         const writer = new Writer();
         writer.writeUInt8(3);
         writer.writeUInt16(controller.id);
         writer.writeUTF16String(controller.name);
         writer.writeUTF16String(controller.skin);
         this.ws.send(writer.finalize(), true);
-        if (this.controller == controller) this.clear();
     }
 
     /** 
