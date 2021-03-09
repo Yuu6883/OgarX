@@ -64,11 +64,28 @@ module.exports = class Options {
             this.save();
         }
         
-        slider.addEventListener("change", updateDrawDelay);
+        slider.addEventListener("change",    updateDrawDelay);
         slider.addEventListener("mousemove", updateDrawDelay);
         slider.value = this.hud.state.draw;
         updateDrawDelay();
+
+        this.borders = [document.getElementById("border-color-1"), document.getElementById("border-color-2")];
+        this.borders.forEach(b => b.addEventListener("change", () => this.updateBorderColors()));
+        this.borders[0].value = localStorage.getItem("ogarx-border-1") || "#5779dd";
+        this.borders[1].value = localStorage.getItem("ogarx-border-2") || "#e64ca6";
+        this.updateBorderColors();
     }
+
+    updateBorderColors() {
+        console.log("Updating Border Colors");
+        this.hud.worker && this.hud.worker.postMessage({ dual: this.borders.map(b => b.value) });
+        document.documentElement.style.setProperty('--border-color-1', this.borders[0].value);
+        document.documentElement.style.setProperty('--border-color-2', this.borders[1].value);
+        localStorage.setItem("ogarx-border-1", this.borders[0].value);
+        localStorage.setItem("ogarx-border-2", this.borders[1].value);
+    }
+
+    get borderColors() { return this.borders.map(b => b.value); }
 
     save() {
         const obj = {};

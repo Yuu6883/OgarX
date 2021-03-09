@@ -65,12 +65,14 @@ void deserialize(CellData data[], unsigned short* packet) {
     while (update_data->id) {
         unsigned short id = update_data->id;
 
-        data[id].oldX = data[id].currX;
-        data[id].oldY = data[id].currY;
-        data[id].oldSize = data[id].currSize;
-        data[id].netX = update_data->x;
-        data[id].netY = update_data->y;
-        data[id].netSize = update_data->size;
+        if (data[id].type) {
+            data[id].oldX = data[id].currX;
+            data[id].oldY = data[id].currY;
+            data[id].oldSize = data[id].currSize;
+            data[id].netX = update_data->x;
+            data[id].netY = update_data->y;
+            data[id].netSize = update_data->size;
+        }
 
         update_data++;
     }
@@ -90,7 +92,7 @@ void deserialize(CellData data[], unsigned short* packet) {
             data[eat_data->id].oldY = 0.0f;
             data[eat_data->id].netSize = 0.0f;
         } else {
-            data[eat_data->id].type = 0;
+            memset(&data[eat_data->id], 0, sizeof(CellData));
         }
 
         eat_data++;
@@ -102,7 +104,7 @@ void deserialize(CellData data[], unsigned short* packet) {
     DeletePacket* delete_data = (DeletePacket*) packet;
 
     while (delete_data->id) {
-        data[delete_data->id].type = 0;
+        memset(&data[delete_data->id], 0, sizeof(CellData));
         delete_data++;
     }
 }
@@ -179,14 +181,15 @@ unsigned int update_cells(
                 node->currY = lerp * (node->netY - node->currY) + node->currY;
                 node->currSize = lerp * (node->netSize - node->currSize) + node->currSize;
                 node->oldX += lerp * 0.5f;
-                if (node->oldX >= 2.0f) node->type = 0;
+                if (node->oldX >= 2.0f) memset(node, 0, sizeof(CellData));
             } else {
                 node->currX = lerp * (node->netX - node->oldX) + node->oldX;
                 node->currY = lerp * (node->netY - node->oldY) + node->oldY;
                 node->currSize = lerp * (node->netSize - node->oldSize) + node->oldSize;
             }
 
-            if (node->currX - node->currSize < r &&
+            if (node->type &&
+                node->currX - node->currSize < r &&
                 node->currX + node->currSize > l &&
                 node->currY - node->currSize < t &&
                 node->currY + node->currSize > b) {
@@ -196,7 +199,6 @@ unsigned int update_cells(
                 } else {
                     indices[count++] = node - data;
                 }
-
             }
         }
         node++;

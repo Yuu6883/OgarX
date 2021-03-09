@@ -36,7 +36,7 @@ module.exports = class HUD {
         this.state = new State();
         this.viewport = new Viewport();
         this.server = "";
-        
+
         this.registerEvents();
         this.initUIComponents();
         
@@ -49,7 +49,8 @@ module.exports = class HUD {
                 stats: this.stats.sharedBuffer,
                 mouse: this.mouse.sharedBuffer, 
                 state: this.state.sharedBuffer,
-                viewport: this.viewport.sharedBuffer 
+                viewport: this.viewport.sharedBuffer,
+                dual: this.options.borderColors
             };
     
             this.worker.postMessage(initObject, [offscreen]);
@@ -400,6 +401,9 @@ module.exports = class HUD {
         elem.classList.add(`player-${pid}`);
         this.chatElem.appendChild(elem);
         this.chatElem.scrollTo(0, this.chatElem.scrollHeight);
+
+        while (this.chatElem.children.length > 100)
+            this.chatElem.firstChild.remove();
     }
 
     /** @param {"success"|"failed"|"starting"} state */

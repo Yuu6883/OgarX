@@ -9,6 +9,7 @@ module.exports = class Handle {
         /** @type {Handle} */
         this.spectate = null;
         
+        this.onLog = this.onLog.bind(this);
         this.onTick = this.onTick.bind(this);
         this.onJoin = this.onJoin.bind(this);
         this.onChat = this.onChat.bind(this);
@@ -128,6 +129,7 @@ module.exports = class Handle {
     off() {
         this.remove();
         this.game
+            .off("log", this.onLog)
             .off("tick", this.onTick)
             .off("join", this.onJoin)
             .off("chat", this.onChat)
@@ -144,6 +146,7 @@ module.exports = class Handle {
     }
 
     // Virtual methods
+    onLog() {};
     onTick() {};
     onJoin(controller) {};
     onChat(sender, message) {};

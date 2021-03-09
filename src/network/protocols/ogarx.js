@@ -90,9 +90,14 @@ module.exports = class OgarXProtocol extends Protocol {
         this.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
         this.game.emit("join", this.controller);
 
-        if (!this.dual && this.game.options.DUAL_ENABLED) {
-            /** @type {DualHandle} */
-            this.dual = new DualHandle(this);
+        if (this.game.options.DUAL_ENABLED) {
+            if (!this.dual) {
+                /** @type {DualHandle} */
+                this.dual = new DualHandle(this);
+                this.dualActive = false;
+            } else {
+                
+            }
         }
 
         if (this.dual) {
@@ -141,24 +146,26 @@ module.exports = class OgarXProtocol extends Protocol {
     onMessage(view) {
         const reader = new Reader(view);
         const OP = reader.readUInt8();
-        const controller = this.controller;
+        const a = this.active;
 
         switch (OP) {
             case 1:
-                controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
-                controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
-                this.game.emit("info", controller);
+                this.controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                this.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
+                this.game.emit("info", this.controller);
+
                 if (this.dual) {
-                    this.dual.controller.name = controller.name;
+                    this.dual.controller.name = this.controller.name;
                     this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
                     this.game.emit("info", this.dual.controller);
                 }
-                controller.requestSpawn();
-                controller.lastSpawnTick = this.game.engine.__now;
+
+                this.controller.requestSpawn();
+                this.controller.lastSpawnTick = this.game.engine.__now;
                 break;
             case 3:
-                controller.mouseX = ~~reader.readFloat32();
-                controller.mouseY = ~~reader.readFloat32();
+                a.mouseX = ~~reader.readFloat32();
+                a.mouseY = ~~reader.readFloat32();
                 const spectate = reader.readUInt8();
                 if (this.alive) {
                     const splits = reader.readUInt8();
@@ -166,21 +173,21 @@ module.exports = class OgarXProtocol extends Protocol {
                     const macro  = reader.readUInt8();
                     const lock   = reader.readUInt8();
                     const s_tab  = reader.readUInt8();
-                    controller.splitAttempts += splits;
-                    controller.ejectAttempts += ejects;
-                    controller.ejectMarco = Boolean(macro);
-                    if (lock) controller.toggleLock();
+                    a.splitAttempts += splits;
+                    a.ejectAttempts += ejects;
+                    a.ejectMarco = Boolean(macro);
+                    if (lock) a.toggleLock();
                     if (s_tab) {
                         if (!this.dual) return;
-                        if (!controller.alive && !this.dual.controller.alive) {
-                            controller.requestSpawn();
+                        if (!this.controller.alive && !this.dual.controller.alive) {
+                            this.controller.requestSpawn();
                         } else {
-                            if (!controller.alive) {
-                                controller.requestSpawn();
+                            if (!this.controller.alive) {
+                                this.controller.requestSpawn();
                             } else if (!this.dual.controller.alive) {
                                 this.dual.controller.requestSpawn();
                             } else {
-                                this.switchTo(this.dual.controller);                  
+                                this.dualActive = !this.dualActive; // toggle            
                             }
                         }
                     }
@@ -193,7 +200,7 @@ module.exports = class OgarXProtocol extends Protocol {
                     } else if (spectate === 255) {
                         let score = 0;
                         for (const c of this.game.controls) {
-                            if (!c.handle) continue;
+                            if (!(c.handle instanceof OgarXProtocol)) continue;
                             if (c.handle.score > score) {
                                 score = c.score;
                                 this.spectate = c.handle;
@@ -203,11 +210,11 @@ module.exports = class OgarXProtocol extends Protocol {
                 }
                 break;
             case 7:
-                controller.autoRespawn = true;
+                this.controller.autoRespawn = true;
                 break;
             case 10:
                 const message = reader.readUTF16String(this.game.options.FORCE_UTF8);
-                this.game.emit("chat", this.controller, message);
+                this.game.emit("chat", `${this.controller.name}: ${message}`);
                 break;
             case 69:
                 const PONG = new ArrayBuffer(1);
@@ -223,20 +230,23 @@ module.exports = class OgarXProtocol extends Protocol {
         if (this.ws) this.ws.end(1000, message);
     }
 
+    get active() {
+        if (this.dual && this.dualActive) return this.dual.controller;
+        else return this.controller;
+    }
+
     /** @param {import("../../game/controller")} c */
     switchTo(c) {
-        if (!this.dual) return;
-        if (this.controller === c) return;
-        // Swap controller
-        this.dual.controller = this.controller;     
-        /** @type {import("../../game/controller")} somehow I have to type this again here vscode dumb */
-        this.controller = c;
+        if (this.active == c) return;
+        this.dualActive = !this.dualActive;
     }
 
+    /** @param {import("../../game/controller")} c */
     onSpawn(c) {
-        if (this.dual && this.dual.controller == c) this.switchTo(c);
+        if (this.pids.has(c.id)) this.switchTo(c);
     }
 
+    /** @param {import("../../game/controller")} c */
     onInfo(c) {
         this.sendPlayerInfo(c);
     }
@@ -312,7 +322,7 @@ module.exports = class OgarXProtocol extends Protocol {
         }
         this.wasAlive = this.alive;
 
-        let target = this.controller;
+        let target = this.active;
         if (this.alive) this.spectate = null;
         if (this.spectate) {
             // Some other handler will take care of this
@@ -382,15 +392,13 @@ module.exports = class OgarXProtocol extends Protocol {
         }
 
         const o = this.game.options;
-        let score = controller.score;
-        this.dual && (score += this.dual.controller.score);
 
         // Step 4 serialize
         const buffer_end = this.wasm.exports.serialize(
             controller.id,
             this.game.engine.counters[controller.id].size,
             controller.lockDir,
-            score,
+            controller.handle.score,
             controller.mouseX, controller.mouseY,
             controller.viewportX, controller.viewportY,
             AUED_table_ptr, AUED_table_ptr + 16, AUED_end_ptr,
@@ -456,7 +464,6 @@ module.exports = class OgarXProtocol extends Protocol {
 
         const writer = new Writer();
         writer.writeUInt8(10);
-        writer.writeUInt16(controller ? controller.id : 0); // 0 is server
         writer.writeUTF16String(message);
 
         this.send(writer.finalize());

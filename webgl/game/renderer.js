@@ -219,7 +219,6 @@ class Renderer {
         this.generateBorderVAO();
 
         this.generateDeadcellTexture();
-        this.generateDualTextures("rgb(87, 121, 221)", "rgb(230, 76, 166)");
         this.generateCircleTextures();
         this.generateMassTextures();
 
@@ -402,7 +401,10 @@ class Renderer {
 
     generateDualTextures(color1 = "", color2 = "") {
         const gl = this.gl;
-        if (!this.dualTextures) this.dualTextures = [gl.createTexture(), gl.createTexture()];
+        if (!this.dualTextures) {
+            this.dualTextures = [gl.createTexture(), gl.createTexture()];
+            this.dualTextureColors = ["", ""];
+        }
 
         const R = this.CIRCLE_RADIUS;
         const r = R * 0.95;
@@ -413,28 +415,36 @@ class Renderer {
         path.arc(R, R, R, 0, 2 * Math.PI, false);
         path.arc(R, R, r, 0, 2 * Math.PI, false);
         
-        temp_ctx.fillStyle = color1;
-        temp_ctx.fill(path, "evenodd");
+        if (this.dualTextureColors[0] != color1) {
+            this.dualTextureColors[1] = color1;
+            
+            temp_ctx.fillStyle = color1;
+            temp_ctx.fill(path, "evenodd");
 
-        gl.bindTexture(gl.TEXTURE_2D, this.dualTextures[0]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.bindTexture(gl.TEXTURE_2D, this.dualTextures[0]);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        }
 
-        temp_ctx.clearRect(0, 0, temp.width, temp.height);
-        temp_ctx.fillStyle = color2;
-        temp_ctx.fill(path, "evenodd");
+        if (this.dualTextureColors[1] != color2) {
+            this.dualTextureColors[1] = color2;
 
-        gl.bindTexture(gl.TEXTURE_2D, this.dualTextures[1]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            temp_ctx.clearRect(0, 0, temp.width, temp.height);
+            temp_ctx.fillStyle = color2;
+            temp_ctx.fill(path, "evenodd");
+    
+            gl.bindTexture(gl.TEXTURE_2D, this.dualTextures[1]);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        }
     }
 
     generateCircleTextures() {
@@ -1051,6 +1061,7 @@ self.addEventListener("message", async e => {
     renderer.state.setBuffer(data.state);
     renderer.viewport.setBuffer(data.viewport);
     await renderer.initEngine();
+    renderer.generateDualTextures(...data.dual);
 
     self.addEventListener("message", e => {
         const p = renderer.protocol;
