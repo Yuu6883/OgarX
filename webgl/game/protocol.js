@@ -364,8 +364,9 @@ module.exports = class Protocol extends EventEmitter {
                 this.map.hh = reader.readUInt16();
                 console.log(`Map Dimension: ${this.map.hw << 1}x${this.map.hh << 1}`);
                 const server = reader.readUTF16String();
+                const uid = reader.readUTF8String();
                 this.emit("protocol");
-                self.postMessage({ event: "connect", server });
+                if (!this.replaying) self.postMessage({ event: "connect", server, uid });
                 break;
             case 2:
                 this.renderer.clearCells();

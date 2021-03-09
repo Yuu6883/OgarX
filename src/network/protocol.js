@@ -4,6 +4,7 @@ module.exports = class Protocol extends Handle {
 
     constructor(game) {
         super(game);
+        this.disconnectTime = 0;
     }
 
     /** @param {DataView} view */

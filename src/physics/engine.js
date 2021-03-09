@@ -91,7 +91,8 @@ const DefaultSettings = {
     EAT_OVERLAP: 3,
     EAT_MULT: 1.140175425099138,
     DUAL_ENABLED: false,
-    SOCKET_WATERMARK: 1024 * 512, // 500kb
+    SOCKET_RECONNECT: 15 * 1000, // reconnect time out
+    SOCKET_WATERMARK: 1024 * 1024, // 1mb
     IGNORE_TYPE: 253,
     FORCE_UTF8: true // No funky unicode clowning
 }
@@ -269,8 +270,8 @@ module.exports = class Engine {
             this.bots.push(new Bot(this.game));
         }
 
-        // Has 0 player
-        if (this.game.handles <= this.bots.length) return;
+        // Has 0 player and all dead cells are gone
+        if (this.game.handles <= this.bots.length && !this.counters[DEAD_CELL_TYPE].size) return;
 
         this.alivePlayers = this.game.controls.filter(c => c.alive && !(c.handle instanceof Bot));
 

@@ -1055,7 +1055,7 @@ self.addEventListener("message", async e => {
     self.addEventListener("message", e => {
         const p = renderer.protocol;
         if (e.data.connect && !p.connecting) {
-            p.connect(e.data.connect, e.data.name, e.data.skin1, e.data.skin2);
+            p.connect(`${e.data.connect}?${e.data.uid || ""}`, e.data.name, e.data.skin1, e.data.skin2);
         }
         if (e.data.spawn) {
             if (p.connecting) {

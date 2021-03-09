@@ -9,7 +9,7 @@ const SOCKET_FILE = path.resolve(__dirname, "..", "unix.sock");
 const Protocols = require("./protocols");
 const Game = require("../game");
 
-const CONN_THROTTLE = 0;
+const CONN_THROTTLE = 5;
 
 module.exports = class SocketServer {
 
@@ -55,6 +55,9 @@ module.exports = class SocketServer {
 
         this.ipcConnect();
 
+        /** @type {import("./protocol")[]} */
+        let disconnectedPool = [];
+
         const g = this.game;
         this.ipcInterval = setInterval(() => {
             try {
@@ -68,19 +71,27 @@ module.exports = class SocketServer {
                     players: g.handles,
                     total: 250 // Number in theory
                 }));
+
+                disconnectedPool = disconnectedPool.filter(p => {
+                    if (g.engine.__now > p.disconnectTime + g.options.SOCKET_RECONNECT) {
+                        console.log(`Removing handle`);
+                        p.off();
+                        return false;
+                    } else return true;
+                });
             } catch (_) {}
         }, 1000);
 
         let conn = 0;
-        /** @type {[uWS.HttpResponse, string, string, string, string, uWS.us_socket_context_t][]} */
+        /** @type {[uWS.HttpResponse, Object, string, string, string, uWS.us_socket_context_t][]} */
         const upgradeQueue = [];
 
         this.upgradeInterval = setInterval(() => {
             conn = 0;
             if (!upgradeQueue.length) return;
             for (let i = Math.min(CONN_THROTTLE || 1, upgradeQueue.length); i > 0; i--) {
-                const [res, url, key, protocol, ext, context] = upgradeQueue.shift();
-                res.upgrade({ url }, key, protocol, ext, context);
+                const [res, data, key, protocol, ext, context] = upgradeQueue.shift();
+                res.upgrade(data, key, protocol, ext, context);
             }
         }, 250);
 
@@ -91,28 +102,26 @@ module.exports = class SocketServer {
                 maxPayloadLength: 512,
                 compression: uWS.DEDICATED_COMPRESSOR_4KB,
                 upgrade: (res, req, context) => {
-
                     const url = req.getUrl();
                     const key = req.getHeader("sec-websocket-key");
-                    const pro = req.getHeader('sec-websocket-protocol');
-                    const ext = req.getHeader('sec-websocket-extensions');
+                    const pro = req.getHeader("sec-websocket-protocol");
+                    const ext = req.getHeader("sec-websocket-extensions");
+                    const uid = req.getQuery();
+
+                    const index = uid && disconnectedPool.findIndex(p => p.uid == uid);
+                    const p = index >= 0 ? disconnectedPool.splice(index, 1)[0] : null;
+                    const userData = { url, p, ip: new Uint8Array(res.getRemoteAddress()).join(".") };
 
                     if (conn < CONN_THROTTLE) {
-                        res.upgrade({ url }, key, pro, ext, context);
+                        res.upgrade(userData, key, pro, ext, context);
                         conn++;
                     } else {
-                        upgradeQueue.push([res, url, key, pro, ext, context]);
+                        upgradeQueue.push([res, userData, key, pro, ext, context]);
                         res.onAborted(() => {
                             const index = upgradeQueue.findIndex(item => item[0] === res);
                             upgradeQueue.splice(index, 1);
                         });
                     }
-                },
-                open: ws => () => {
-                    ws.ip = new Uint8Array(ws.getRemoteAddress()).join("."); // save ip
-                    console.log(`WS connected from ${ws.ip}`);
-                    // Client does not exchange protocol info within 3 seconds
-                    setTimeout(() => ws.p || ws.end(1003), 3000);
                 },
                 message: (ws, message, isBinary) => {
                     if (!isBinary) ws.end(1003);
@@ -122,12 +131,23 @@ module.exports = class SocketServer {
                         else ws.p = new Protocol(this.game, ws, message);
                     } else {
                         try {
-                            ws.p.onMessage(new DataView(message));
+                            if (!ws.p.ws) {
+                                ws.p.ws = ws;
+                                ws.p.init && ws.p.init(message);
+                            } else {
+                                ws.p.onMessage(new DataView(message));
+                            }
                         } catch (e) {}
                     }
                 },
                 drain: ws => ws.p && ws.p.onDrain(),
-                close: (ws, code, message) => ws.p && ws.p.off()
+                close: (ws, code, message) => {
+                    if (!ws.p) return;
+                    // console.log(`Disconnect code: ${code}, message: ${message}`);
+                    ws.p.disconnectTime = g.engine.__now;
+                    disconnectedPool.push(ws.p);
+                    delete ws.p.ws;
+                }
             })
             .get("/restart/:token", (res, req) => {
                 const authorization = req.getParameter(0);

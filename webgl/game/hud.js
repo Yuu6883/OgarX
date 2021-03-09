@@ -58,7 +58,7 @@ module.exports = class HUD {
                 if (data.event === "ready") this.ready = true;
                 if (data.event === "chat") this.onChat(data.pid, data.player, data.message);
                 if (data.event === "leaderboard") this.onLeaderboard(data.lb);
-                if (data.event === "connect") this.onConnect(data.server);
+                if (data.event === "connect") this.onConnect(data.server, data.uid);
                 if (data.event === "disconnect") this.onDisconnect();
                 if (data.event === "minimap") this.minimap.onData(data.minimap);
                 if (data.event === "stats") this.onStats(data.kills, data.score, data.surviveTime);
@@ -499,7 +499,12 @@ module.exports = class HUD {
         this.hide(document.getElementById("stats3"));
     }
 
-    onConnect(serverName = "Server") {
+    get uid() { return localStorage.getItem("ogarx-uid"); }
+    set uid(v) { localStorage.setItem("ogarx-uid", v); }
+
+    onConnect(serverName = "Server", uid = "") {
+        if (this.uid == uid) this.hide();
+        this.uid = uid;
         this.resize(); // ???
         this.serverInput.value = this.server;
         this.show(this.playButton);
@@ -545,6 +550,6 @@ module.exports = class HUD {
 
     connectToURL(url) {
         const [skin1, skin2] = this.skins.current;
-        this.worker.postMessage({ connect: url, name: this.nameText, skin1, skin2 });
+        this.worker.postMessage({ connect: url, name: this.nameText, skin1, skin2, uid: this.uid });
     }
 }
