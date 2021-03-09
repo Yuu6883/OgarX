@@ -2,6 +2,10 @@
     font-family: "Lato";
     src: url("/static/font/Lato-Bold.ttf") format("truetype");
 }
+:root {
+    --border-color-1: #5779dd;
+    --border-color-2: #e64ca6;
+}
 body {
     font-family: "Lato";
     color: #eee;
@@ -39,6 +43,9 @@ body {
     border-radius: 50%;
     background-color: #00000044;
 }
+.ogarx-icon {
+    outline: none;
+}
 .ogarx-icon svg {
     color: rgba(238, 238, 238, 0.5)!important;
     fill: rgba(238, 238, 238, 0.5)!important;
@@ -72,11 +79,11 @@ body {
     height: 100%;
     border-radius: 50%;
 }
-.skin-item .selected-1 {
-    border: solid 5px #5779dd;
+.skin-item .selected-1, #skin-1 {
+    border: solid 5px var(--border-color-1);
 }
-.skin-item .selected-2 {
-    border: solid 5px #e64ca6;
+.skin-item .selected-2, #skin-2 {
+    border: solid 5px var(--border-color-2);
 }
 .skin-item .selected-1.selected-2 {
     border: solid 5px #ffffff;
@@ -355,6 +362,22 @@ input[type="text"]:focus, #server-input:hover, .servers:hover {
     color: #eee;
     background-color: #22222277;
     border-bottom: solid 3px #93a7e1;
+}
+input[type="color"] {
+    -webkit-appearance: none;
+    margin-top: 0px;
+    padding: 2px;
+    width: 15px;
+    height: 15px;
+    border: none;
+    outline: none;
+    cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+	border: none;
 }
 .player-0, .me {
     color:  #93a7e1;

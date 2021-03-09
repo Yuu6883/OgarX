@@ -28,7 +28,15 @@
     </div>
     <div id="skin-menu-offcanvas" uk-offcanvas="flip: true; bg-close: false;">
         <div id="offcanvas-menu" class="uk-offcanvas-bar">
-            <h3><button id="add-skin">Add Skin</button></h3>
+            <h3>
+                <button id="add-skin">Add Skin</button>
+                <span class="ogarx-icon" uk-icon="question" uk-tooltip="left click to set primary skin, right click to set secondary skin"></span>
+            </h3>
+            <p class="uk-inline">
+                Border Colors: 
+                <input id="border-color-1" type="color">
+                <input id="border-color-2" type="color">
+            </p>
             <div id="skins"></div>
             <a class="uk-offcanvas-close" type="button" href="#" uk-close></a>
         </div>
