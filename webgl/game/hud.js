@@ -57,7 +57,8 @@ module.exports = class HUD {
             this.worker.onmessage = e => {
                 const { data } = e;
                 if (data.event === "ready") this.ready = true;
-                if (data.event === "chat") this.onChat(data.pid, data.player, data.message);
+                if (data.event === "chat") this.onChat(data.message);
+                if (data.event === "server-log") this.onChat(data.message, true);
                 if (data.event === "leaderboard") this.onLeaderboard(data.lb);
                 if (data.event === "connect") this.onConnect(data.server, data.uid);
                 if (data.event === "disconnect") this.onDisconnect();
@@ -390,18 +391,13 @@ module.exports = class HUD {
         if (this.worker) this.worker.postMessage({ chat });
     }
 
-    /**
-     * @param {number} pid 
-     * @param {{ name: string, skin: string }} player 
-     * @param {string} message 
-     */
-    onChat(pid, player, message) {
+    /** @param {string} message */
+    onChat(message, isServer = false) {
         const elem = document.createElement("p");
-        elem.textContent = pid ? `${player.name || "Unnamed"}: ${message}` : message;
-        elem.classList.add(`player-${pid}`);
+        elem.textContent = message;
         this.chatElem.appendChild(elem);
         this.chatElem.scrollTo(0, this.chatElem.scrollHeight);
-
+        if (isServer) elem.classList.add("server-log");
         while (this.chatElem.children.length > 100)
             this.chatElem.firstChild.remove();
     }
@@ -513,8 +509,8 @@ module.exports = class HUD {
         this.serverInput.value = this.server;
         this.show(this.playButton);
         this.show(this.spectateButton);
+        console.log("CLEARING CHAT");
         this.chatElem.innerHTML = "";
-        this.onChat(0, null, "Connected");
         this.showStats();
         this.show(document.getElementById("leaderboard"));
         document.getElementById("server-name").innerText = serverName;

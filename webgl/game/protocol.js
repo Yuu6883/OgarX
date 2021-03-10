@@ -399,11 +399,11 @@ module.exports = class Protocol extends EventEmitter {
                 break;
             // Chat
             case 10:
-                const pid = reader.readUInt16();
-                const message = reader.readUTF16String();
-                const player = this.renderer.playerData[pid];
-                if (!player) return console.warn(`Received unknown pid: ${pid}, message: ${message}`);
-                self.postMessage({ event: "chat", pid, player, message });
+                self.postMessage({ event: "chat", message: reader.readUTF16String() });
+                break;
+            // Log
+            case 11:
+                self.postMessage({ event: "server-log", message: reader.readUTF16String() });
                 break;
             // PONG
             case 69:
@@ -520,13 +520,6 @@ module.exports = class Protocol extends EventEmitter {
         writer.writeUInt8(10);
         writer.writeUTF16String(message);
         this.send(writer.finalize());
-
-        if (this.pid) self.postMessage({ 
-            event: "chat",
-            pid: Array.isArray(this.dualIDs) ? this.dualIDs[0] : this.pid, 
-            player: this.player, 
-            message 
-        });
     }
 
     get replaying() { return !!this.replay.curr; }

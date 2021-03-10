@@ -379,7 +379,7 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
 	border: none;
 }
-.player-0, .me {
+.server-log, .me {
     color:  #93a7e1;
 }
 #server-input:hover { cursor: pointer; }

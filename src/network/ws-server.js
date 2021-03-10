@@ -74,7 +74,6 @@ module.exports = class SocketServer {
 
                 disconnectedPool = disconnectedPool.filter(p => {
                     if (g.engine.__now > p.disconnectTime + g.options.SOCKET_RECONNECT) {
-                        console.log(`Removing handle`);
                         p.off();
                         return false;
                     } else return true;
@@ -133,7 +132,7 @@ module.exports = class SocketServer {
                         try {
                             if (!ws.p.ws) {
                                 ws.p.ws = ws;
-                                ws.p.init && ws.p.init(message);
+                                ws.p.init && ws.p.init(message, true);
                             } else {
                                 ws.p.onMessage(new DataView(message));
                             }
@@ -146,6 +145,9 @@ module.exports = class SocketServer {
                     // console.log(`Disconnect code: ${code}, message: ${message}`);
                     ws.p.disconnectTime = g.engine.__now;
                     disconnectedPool.push(ws.p);
+                    try {
+                        this.game.emit("log", `${ws.p.controller.name} disconnected`);
+                    } catch (e) {}
                     delete ws.p.ws;
                 }
             })

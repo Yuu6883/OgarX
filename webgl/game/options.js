@@ -77,7 +77,6 @@ module.exports = class Options {
     }
 
     updateBorderColors() {
-        console.log("Updating Border Colors");
         this.hud.worker && this.hud.worker.postMessage({ dual: this.borders.map(b => b.value) });
         document.documentElement.style.setProperty('--border-color-1', this.borders[0].value);
         document.documentElement.style.setProperty('--border-color-2', this.borders[1].value);

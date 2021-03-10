@@ -64,7 +64,7 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     /** @param {ArrayBuffer} initMessage */
-    async init(initMessage) {
+    async init(initMessage, reconnect = false) {
 
         if (!this.memory) {
             const { get_cell_updated, get_cell_x, get_cell_y, get_cell_r, 
@@ -79,7 +79,6 @@ module.exports = class OgarXProtocol extends Protocol {
                 }
             });
             this.view = new DataView(this.memory.buffer);
-    
             this.join();
         }
         
@@ -88,7 +87,6 @@ module.exports = class OgarXProtocol extends Protocol {
 
         this.controller.name = reader.readUTF16String(this.game.options.FORCE_UTF8);
         this.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
-        this.game.emit("join", this.controller);
 
         if (this.game.options.DUAL_ENABLED) {
             if (!this.dual) {
@@ -96,7 +94,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 this.dual = new DualHandle(this);
                 this.dualActive = false;
             } else {
-                
+                // ??
             }
         }
 
@@ -104,10 +102,17 @@ module.exports = class OgarXProtocol extends Protocol {
             this.dual.controller.name = this.controller.name;
             this.dual.controller.skin = reader.readUTF16String(this.game.options.FORCE_UTF8);
             this.pids.add(this.dual.controller.id);
-            this.game.emit("join", this.dual.controller);
         }
 
         this.sendInitPacket();
+        
+        for (const { message, isServer } of this.game.history)
+            isServer ? this.onLog(message) : this.onChat(message);
+
+        this.game.emit("join", this.controller);
+        this.dual && this.game.emit("join", this.dual.controller);
+
+        this.game.emit("log", this.controller.name + (reconnect ? " reconnected" : " joined the game"))
 
         this.showonMinimap = true;
         this.showonLeaderboard = true;
@@ -430,17 +435,11 @@ module.exports = class OgarXProtocol extends Protocol {
             // Send controller info to client since it just joined
             this.sendPlayerInfo(controller);
         }
-        // Greetings to same protocol
-        if (controller.handle instanceof OgarXProtocol)
-            this.onChat(null, `${controller.name} joined the game`);
     }
 
     /** @param {import("../../game/controller")} controller */
     onLeave(controller) {
-        if (controller == this.controller) return;
-        // Bye bye to same protocol
-        if (controller.handle instanceof OgarXProtocol)
-            this.onChat(null, `${controller.name} left the game`);
+        if (controller == this.controller) this.game.emit("log", `${controller.name} rage quit`);
     }
 
     /** @param {import("../../game/controller")} controller */
@@ -454,18 +453,19 @@ module.exports = class OgarXProtocol extends Protocol {
         this.send(writer.finalize());
     }
 
-    /** 
-     * @param {import("../../game/controller")} controller
-     * @param {string} message
-     */
-    onChat(controller, message) {
-        // Igore own chat
-        if (controller == this.controller) return;
+    /** @param {string} message */
+    onLog(message) {
+        const writer = new Writer();
+        writer.writeUInt8(11);
+        writer.writeUTF16String(message);
+        this.send(writer.finalize());
+    }
 
+    /** @param {string} message */
+    onChat(message) {
         const writer = new Writer();
         writer.writeUInt8(10);
         writer.writeUTF16String(message);
-
         this.send(writer.finalize());
     }
 

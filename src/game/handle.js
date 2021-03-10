@@ -21,6 +21,7 @@ module.exports = class Handle {
         this.onLeaderboard = this.onLeaderboard.bind(this);
 
         this.game
+            .on("log", this.onLog)
             .on("tick", this.onTick)
             .on("join", this.onJoin)
             .on("chat", this.onChat)
@@ -149,7 +150,7 @@ module.exports = class Handle {
     onLog() {};
     onTick() {};
     onJoin(controller) {};
-    onChat(sender, message) {};
+    onChat(message) {};
     onLeave(controller) {};
     onSpawn(controller) {};
     onInfo(controller) {};

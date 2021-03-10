@@ -86,9 +86,6 @@ module.exports = class Bot extends Handle {
 
     /** @param {string} err */
     onError(err) {};
-    /**
-     * @param {import("./controller")} sender 
-     * @param {string} message 
-     */
-    onChat(sender, message) {};
+    /** @param {string} message */
+    onChat(message) {};
 }

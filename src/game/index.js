@@ -10,7 +10,7 @@ module.exports = class Game extends EventEmitter {
 
     constructor(name = "Server") {
         super();
-        this.setMaxListeners(MAX_PLAYER);
+        this.setMaxListeners(MAX_PLAYER + 1);
         this.name = name;
         this.engine = new Engine(this);
         this.controls = Array.from({ length: MAX_PLAYER }, (_, i) => new Controller(this.engine, i));
@@ -25,6 +25,16 @@ module.exports = class Game extends EventEmitter {
         });
 
         this.on("restart", () => this.emit("log", "Restarting Server..."));
+
+        /** @type {{ message: string, isServer: boolean }[]} */
+        this.history = [];
+        this.on("chat", message => this.addChatHistory(message));
+        this.on("log", message => this.addChatHistory(message, true));
+    }
+
+    addChatHistory(message, isServer = false) {
+        this.history.push({ message, isServer });
+        while (this.history.length > this.engine.options.CHAT_HISTORY) this.history.shift();
     }
 
     get playerCount() {
