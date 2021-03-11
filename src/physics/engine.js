@@ -24,7 +24,7 @@ const QuadTree = require("./quadtree");
 const Controller = require("../game/controller");
 const Bot = require("../bot");
 
-const CELL_LIMIT = 65536;
+const CELL_LIMIT = 1 << 16; // 65536
 
 const DefaultSettings = {
     TIME_SCALE: 1,
@@ -692,8 +692,6 @@ module.exports = class Engine {
         
         this.tree.insert(cell);
         this.counters[cell.type].add(id);
-        this.cellCount++;
-        return cell;
     }
 
     /** @param {number} size */
