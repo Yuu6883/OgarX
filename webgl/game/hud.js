@@ -235,7 +235,8 @@ module.exports = class HUD {
 
         this.lbElem = document.getElementById("leaderboard-data");
 
-        document.querySelector('[server="local"]').addEventListener("click", () => this.connectToLocal());
+        document.querySelectorAll('[server="local"]').forEach(s => 
+            s.addEventListener("click", () => this.connectToLocal(s.getAttribute("mode"))));
 
         this.gameoverElem = document.getElementById("game-over");
         this.respawnSpinner = document.getElementById("respawn-spinner");
@@ -542,8 +543,8 @@ module.exports = class HUD {
         this.worker.postMessage({ spawn: true, name, skin1, skin2 });
     }
 
-    connectToLocal() {
-        this.sw = new SharedWorker("js/sw.min.js", "ogar-x-server");
+    connectToLocal(mode = "") {
+        this.sw = new SharedWorker(`js/sw.min.js?mode=${mode}`, "ogar-x-server");
         const [skin1, skin2] = this.skins.current;
         this.worker.postMessage({ connect: this.sw.port, name: this.nameText, skin1, skin2 }, [this.sw.port]);
     }

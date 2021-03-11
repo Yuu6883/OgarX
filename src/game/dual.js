@@ -10,6 +10,8 @@ module.exports = class DualHandle extends Handle {
         this.join();
     }
 
+    get score() { return this.controller.score + this.owner.controller.score; }
+
     // Do nothing
     calculateViewport() {};
 };

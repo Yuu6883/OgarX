@@ -250,10 +250,10 @@ module.exports = class Protocol extends EventEmitter {
         this.replay.resetTrack();
     }
 
-    connect(urlOrPort, name = "", skin1 = "", skin2 = "") {
+    connect(urlOrPort, uid="", name = "", skin1 = "", skin2 = "") {
 
         this.disconnect();
-        const currWs = this.ws = typeof urlOrPort == "string" ? new WebSocket(urlOrPort) : new FakeSocket(urlOrPort);
+        const currWs = this.ws = (typeof urlOrPort == "string") ? new WebSocket(`${urlOrPort}?${uid}`) : new FakeSocket(urlOrPort);
         this.ws.binaryType = "arraybuffer";
 
         this.ws.onopen = () => {

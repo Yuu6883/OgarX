@@ -3,7 +3,14 @@ const OgarXProtocol = require("./network/protocols/ogarx");
 
 const server = new Server();
 const engine = server.game.engine;
-const options = require("./modes/default/omega");
+
+const modes = {
+    omega: require("./modes/default/omega"),
+    mega: require("./modes/default/mega")
+}
+
+const s = new URLSearchParams(self.location.search);
+const options = modes[s.get("mode")] || modes.mega;
 
 // Scale down the local server from omega since browser probably can't handle it
 options.BOTS >>= 2;

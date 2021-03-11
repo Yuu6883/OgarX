@@ -12,7 +12,7 @@ module.exports = {
     EJECT_SIZE: 38,
     EJECT_LOSS: 38.2,
     EJECT_DELAY: 50,
-    BOTS: 30,
+    BOTS: 50,
     BOT_SPAWN_SIZE: 1000,
     EJECT_DISPERSION: 0,
     PELLET_COUNT: 10000,
@@ -21,8 +21,8 @@ module.exports = {
     PLAYER_SPAWN_DELAY: 1500,
     DECAY_MIN: 500,
     STATIC_DECAY: 1.2,
-    DYNAMIC_DECAY: 1.5,
-    MAP_HW: 18000,
-    MAP_HH: 18000,
+    DYNAMIC_DECAY: 1.3,
+    MAP_HW: 19000,
+    MAP_HH: 19000,
     DUAL_ENABLED: true
 };
