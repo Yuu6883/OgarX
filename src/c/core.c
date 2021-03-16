@@ -70,7 +70,7 @@ unsigned short get_cell_r(Cell ptr[], unsigned short id) { return ptr[id].r; };
 unsigned char  get_cell_type(Cell ptr[], unsigned short id) { return ptr[id].type; };
 unsigned short get_cell_eatenby(Cell ptr[], unsigned short id) { return ptr[id].eatenBy; };
 
-unsigned short new_cell(Cell cells[], unsigned short next_id, float x, float y, float size, float type, 
+unsigned short new_cell(Cell cells[], unsigned short next_id, float x, float y, float size, unsigned char type, 
     float boost_x, float boost_y, float boost) {
     
     while (!next_id || (cells[next_id].flags & EXIST_BIT)) next_id++;
