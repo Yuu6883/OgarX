@@ -165,8 +165,8 @@ module.exports = class OgarXProtocol extends Protocol {
                     this.game.emit("info", this.dual.controller);
                 }
 
-                this.controller.requestSpawn();
-                this.controller.lastSpawnTick = this.game.engine.__now;
+                this.active.requestSpawn();
+                this.active.lastSpawnTick = this.game.engine.__now;
                 break;
             case 3:
                 a.mouseX = ~~reader.readFloat32();
