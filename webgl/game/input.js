@@ -111,7 +111,7 @@ module.exports = class Keyboard {
 
     /** @param {KeyboardEvent} e */
     keyUp(e) {
-        if (e.ctrlKey) return;
+        if (e.ctrlKey || !e.key) return;
         this.pressing.delete(e.key);
 
         const key = e.key.toLowerCase();

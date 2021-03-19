@@ -227,43 +227,28 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
     // Move player cells
     if (lock_dir) {
         unsigned char all_flags = 0;
-        // ax + by = c
-        if (a) {
-            for (unsigned int i = 0; i < n; i++) {
-                Cell* cell = &cells[indices[i]];
-                all_flags |= cell->flags;
-                cell->flags |= LOCK_BIT;
+        
+        float line_a_b_sqr_sum_inv = 1.f / (a * a + b * b);
 
-                float dx = mouse_x - cell->x;
-                float dy = mouse_y - cell->y;
-                float d = sqrtf(dx * dx + dy * dy);
-                if (d < 1) continue; dy /= d;
+        for (unsigned int i = 0; i < n; i++) {
+            Cell* cell = &cells[indices[i]];
+            all_flags |= cell->flags;
+            cell->flags |= LOCK_BIT;
 
-                float speed = 1.76f * powf(cell->r, -0.4396754) * player_speed;
-                float m = (speed < d ? speed : d) * dt;
-                cell->y += dy * m;
-                // Project x
-                cell->x = (-c - b * cell->y) / a;
-            }
-        } else if (b) {
-            for (unsigned int i = 0; i < n; i++) {
-                Cell* cell = &cells[indices[i]];
-                all_flags |= cell->flags;
-                cell->flags |= LOCK_BIT;
-
-                float dx = mouse_x - cell->x;
-                float dy = mouse_y - cell->y;
-                float d = sqrtf(dx * dx + dy * dy);
-                if (d < 1) continue; dx /= d;
-
-                float speed = 1.76f * powf(cell->r, -0.4396754) * player_speed;
-                float m = (speed < d ? speed : d) * dt;
-                cell->x += dx * m;
-                cell->y = (-c - a * cell->x) / b;
-            }
-        } else {
-            // End of world.
+            float dx = mouse_x - cell->x;
+            float dy = mouse_y - cell->y;
+            float d = sqrtf(dx * dx + dy * dy);
+            if (d < 1) continue; dx /= d; dy /= d;
+            float speed = 1.76f * powf(cell->r, -0.4396754) * player_speed;
+            float m = (speed < d ? speed : d) * dt;
+            cell->x += dx * m;
+            cell->y += dy * m;
+            
+            // Project point back to line
+            // cell->x = (b * ( b * x - a * y) - a * c) * line_a_b_sqr_sum_inv;
+            // cell->y = (a * (-b * x + a * y) - b * c) * line_a_b_sqr_sum_inv;
         }
+
         // This bit is used for checking wall
         if (all_flags & UPDATE_BIT) {
             // IF ANY CELL TOUCHES THE WALL
