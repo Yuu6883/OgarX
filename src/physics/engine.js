@@ -64,7 +64,7 @@ const DefaultSettings = {
     PLAYER_MIN_EJECT_SIZE: 60,
     NORMALIZE_THRESH_MASS: 0,
     PLAYER_NO_MERGE_DELAY: 650,
-    PLAYER_NO_COLLI_DELAY: 550,
+    PLAYER_NO_COLLI_DELAY: 600,
     PLAYER_NO_EJECT_DELAY: 200,
     PLAYER_NO_EJECT_POP_DEALY: 500,
     PLAYER_MERGE_TIME: 1,
@@ -724,7 +724,7 @@ module.exports = class Engine {
             const f4 = Math.max(this.options.PLAYER_VIEW_MIN, 2 * (by_max - vy));
             let i = 0;
             while (++i < tries) {
-                const f = i / tries;
+                const f = 0.5 + 0.5 * i / tries;
                 const xmin = vx - f * f1;
                 const xmax = vx + f * f2;
                 const ymin = vy - f * f3;
