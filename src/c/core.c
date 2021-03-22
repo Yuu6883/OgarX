@@ -206,15 +206,15 @@ void update_player_cells(Cell cells[], unsigned short* indices, unsigned int n,
             for (unsigned int i = 0; i < n; i++) {
                 Cell* cell = &cells[indices[i]];
                 float increase = 25.f * cell->r * merge_increase;
-                float time = increase > no_merge_delay ? increase : no_merge_delay;
-                if (cell->age > merge_initial && cell->age > normalizer * time) cell->flags |= MERGE_BIT;
+                float time = increase > merge_initial ? increase : merge_initial;
+                if (cell->age > normalizer * time) cell->flags |= MERGE_BIT;
             }
         } else {
             for (unsigned int i = 0; i < n; i++) {
                 Cell* cell = &cells[indices[i]];
                 float increase = 25.f * cell->r * merge_increase;
                 float time = merge_initial + merge_increase;
-                if (cell->age > no_merge_delay && cell->age > normalizer * time) cell->flags |= MERGE_BIT;
+                if (cell->age > normalizer * time) cell->flags |= MERGE_BIT;
             }
         }
     } else {

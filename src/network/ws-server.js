@@ -96,7 +96,7 @@ module.exports = class SocketServer {
 
         return new Promise(resolve => {
             (sslOptions ? uWS.SSLApp(sslOptions) : uWS.App()).ws(`/${endpoint}`, {
-                idleTimeout: 10,
+                idleTimeout: 1,
                 maxBackpressure: 1024,
                 maxPayloadLength: 512,
                 compression: uWS.DEDICATED_COMPRESSOR_4KB,

@@ -30,15 +30,27 @@ module.exports.makeProgram = (gl, vs_src, fs_src) => {
    return prog;
 }
 
-module.exports.COLORS = [
-    [255,0,0],
-    [255,128,0],
-    [255,255,0],
-    [128,255,0],
-    [0,255,0],
-    [0,255,128],
-    [0,255,255],
-    [0,128,255],
-    [127,0,255],
-    [255,0,255],
-    [255,0,127]];
+const shuffleArray = array => {
+   for (var i = array.length - 1; i > 0; i--) {
+       var j = Math.floor(Math.random() * (i + 1));
+       var temp = array[i];
+       array[i] = array[j];
+       array[j] = temp;
+   }
+   return array;
+}
+
+module.exports.COLORS = shuffleArray([
+   [0, 255, 148],
+   [0, 246, 39],
+   [255, 68, 67],
+   [0, 240, 234],
+   [255, 0, 98],
+   [0, 169, 255],
+   [255, 226, 0],
+   [148, 0, 255],
+   [196, 4, 78],
+   [192, 255, 58],
+   [255, 106, 228],
+   [255, 142, 0]
+]);
