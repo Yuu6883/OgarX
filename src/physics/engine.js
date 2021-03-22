@@ -95,7 +95,8 @@ const DefaultSettings = {
     SOCKET_WATERMARK: 1024 * 1024, // 1mb
     IGNORE_TYPE: 253,
     CHAT_HISTORY: 25,
-    FORCE_UTF8: true // No funky unicode clowning
+    FORCE_UTF8: true, // No funky unicode clowning,
+    IGNORE_LOG: true
 }
 
 const DEAD_CELL_TYPE = 251;

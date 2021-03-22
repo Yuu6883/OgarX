@@ -455,6 +455,7 @@ module.exports = class OgarXProtocol extends Protocol {
 
     /** @param {string} message */
     onLog(message) {
+        if (this.game.engine.options.IGNORE_LOG) return;
         const writer = new Writer();
         writer.writeUInt8(11);
         writer.writeUTF16String(message);
