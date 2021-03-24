@@ -8,25 +8,26 @@ class WebAssemblyPool {
 
     /** @param {number} size */
     static init(size) {
-        /** @type {number[]} */
-        this.used = new Array(size).fill(0);
-        this.blocks = Array.from({ length: size }, _ => 
-            new WebAssembly.Memory({ initial: 16, maximum: 32 })); // 1mb, 2mb
+        this.blocks = Array.from({ length: size }, (_, index) => {
+            const mem = new WebAssembly.Memory({ initial: 16, maximum: 32 });
+            mem.used = false;
+            return mem;
+        }); // 1mb, 2mb
     }
 
     static get() {
-        let index = 0;
-        while (this.used[index]) index++;
-        if (index >= this.used.length) this.used.push(1);
-        else this.used[index] = 1;
-        return this.blocks[index];
+        let mem = this.blocks.find(b => !b.used);
+        if (mem) return mem;
+        
+        mem = new WebAssembly.Memory({ initial: 16, maximum: 32 });
+        mem.used = true;
+        this.blocks.push(mem);
+        return mem;
     }
 
     /** @param {WebAssembly.Memory} mem */
     static free(mem) {
-        const index = this.blocks.indexOf(mem);
-        if (index < 0 || index >= this.used.length) return; // ???
-        this.used[index] = 0;
+        mem.used = false;
     }
 }
 
