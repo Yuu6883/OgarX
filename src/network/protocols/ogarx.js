@@ -17,7 +17,11 @@ class WebAssemblyPool {
 
     static get() {
         let mem = this.blocks.find(b => !b.used);
-        if (mem) return mem;
+        
+        if (mem) {
+            mem.used = true;
+            return mem;
+        }
         
         mem = new WebAssembly.Memory({ initial: 16, maximum: 32 });
         mem.used = true;
