@@ -5,7 +5,7 @@ module.exports = {
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_AUTOSPLIT_SIZE: 0,
     PLAYER_MERGE_TIME: 5,
-    VIRUS_COUNT: 25,
+    VIRUS_COUNT: 20,
     VIRUS_SIZE: 150,
     VIRUS_PUSH: true,
     VIRUS_MONOTONE_POP: true,
@@ -22,7 +22,7 @@ module.exports = {
     DECAY_MIN: 500,
     STATIC_DECAY: 1.2,
     DYNAMIC_DECAY: 1.3,
-    MAP_HW: 19000,
-    MAP_HH: 19000,
+    MAP_HW: 22000,
+    MAP_HH: 22000,
     DUAL_ENABLED: true
 };
