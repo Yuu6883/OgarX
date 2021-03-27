@@ -121,6 +121,10 @@ module.exports = class OgarXProtocol extends Protocol {
 
         this.showonMinimap = true;
         this.showonLeaderboard = true;
+
+        if (!this.game.options.CHAT_ENABLED) {
+            this.onLog("Chat is disabled due to 🤡 activities", true);
+        }
     }
 
     off() {
@@ -460,8 +464,8 @@ module.exports = class OgarXProtocol extends Protocol {
     }
 
     /** @param {string} message */
-    onLog(message) {
-        if (this.game.engine.options.IGNORE_LOG) return;
+    onLog(message, bypass = false) {
+        if (!bypass && this.game.engine.options.IGNORE_LOG) return;
         const writer = new Writer();
         writer.writeUInt8(11);
         writer.writeUTF16String(message);
