@@ -1,7 +1,7 @@
 /** @type {typeof import("../../physics/engine").DefaultSettings} */
 module.exports = {
     TIME_SCALE: 1.2, // magic that make everything work like a certain ball game
-    PLAYER_MAX_CELLS: 256,
+    PLAYER_MAX_CELLS: 369,
     PLAYER_MERGE_NEW_VER: true,
     PLAYER_AUTOSPLIT_SIZE: 0,
     PLAYER_MERGE_TIME: 5,
@@ -23,8 +23,8 @@ module.exports = {
     PLAYER_NO_EJECT_DELAY: 250,
     MAP_HW: 26000,
     MAP_HH: 26000,
-    STATIC_DECAY: 1.1,
-    DYNAMIC_DECAY: 1.1,
+    STATIC_DECAY: 1,
+    DYNAMIC_DECAY: 1,
     DECAY_MIN: 800,
     NORMALIZE_THRESH_MASS: 100000,
     DUAL_ENABLED: true,
