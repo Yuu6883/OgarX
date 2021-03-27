@@ -101,6 +101,8 @@ module.exports = class SocketServer {
                 maxPayloadLength: 512,
                 compression: uWS.DEDICATED_COMPRESSOR_4KB,
                 upgrade: (res, req, context) => {
+                    if (this.game.isFull) return res.writeStatus("503").end();
+
                     const url = req.getUrl();
                     const key = req.getHeader("sec-websocket-key");
                     const pro = req.getHeader("sec-websocket-protocol");
