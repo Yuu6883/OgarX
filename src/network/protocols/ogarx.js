@@ -223,6 +223,7 @@ module.exports = class OgarXProtocol extends Protocol {
                 this.controller.autoRespawn = true;
                 break;
             case 10:
+                if (!this.game.engine.options.CHAT_ENABLED) return;
                 const message = reader.readUTF16String(this.game.options.FORCE_UTF8);
                 this.game.emit("chat", `${this.controller.name}: ${message}`);
                 break;
