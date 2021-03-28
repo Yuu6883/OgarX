@@ -94,10 +94,10 @@ const DefaultSettings = {
     SOCKET_RECONNECT: 15 * 1000, // reconnect time out
     SOCKET_WATERMARK: 1024 * 1024, // 1mb
     IGNORE_TYPE: 253,
-    CHAT_ENABLED: false,
+    CHAT_ENABLED: true,
     CHAT_HISTORY: 25,
-    FORCE_UTF8: true, // No funky unicode clowning,
-    IGNORE_LOG: true
+    FORCE_UTF8: false, // No funky unicode clowning,
+    IGNORE_LOG: false
 }
 
 const DEAD_CELL_TYPE = 251;

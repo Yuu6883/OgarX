@@ -6,7 +6,10 @@ const engine = server.game.engine;
 
 const modes = {
     omega: require("./modes/default/omega"),
-    mega: require("./modes/default/mega")
+    mega: require("./modes/default/mega"),
+    selfeed: require("./modes/default/selfeed"),
+    ffa: require("./modes/default/ffa"),
+    virus: require("./modes/default/virus")
 }
 
 const s = new URLSearchParams(self.location.search);

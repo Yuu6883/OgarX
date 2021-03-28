@@ -1,0 +1,31 @@
+/** @type {typeof import("../../physics/engine").DefaultSettings} */
+module.exports = {
+    TIME_SCALE: 1.2, // magic that make everything work like a certain ball game
+    PLAYER_MAX_CELLS: 128,
+    PLAYER_MERGE_NEW_VER: true,
+    PLAYER_AUTOSPLIT_SIZE: 0,
+    PLAYER_MERGE_TIME: 4,
+    VIRUS_COUNT: 4000,
+    VIRUS_PUSH: true,
+    VIRUS_MONOTONE_POP: true,
+    EJECT_SIZE: 38,
+    EJECT_LOSS: 38,
+    EJECT_DELAY: 50,
+    BOTS: 0,
+    BOT_SPAWN_SIZE: 100,
+    PELLET_COUNT: 5000,
+    PLAYER_SPAWN_SIZE: 1000,
+    PLAYER_NO_EJECT_POP_DEALY: 0,
+    MAP_HW: 10000,
+    MAP_HH: 10000,
+    SAFE_SPAWN_TRIES: 8,
+    WORLD_RESTART_MULT: 0.5,
+    WORLD_KILL_OVERSIZE: false,
+    WORLD_OVERSIZE_MESSAGE: "${c.name} died from covid overdose",
+    PLAYER_MERGE_INCREASE: 0.0001,
+    PLAYER_MERGE_TIME: 1,
+    DECAY_MIN: 1000,
+    DYNAMIC_DECAY: 3,
+    STATIC_DECAY: 3,
+    IGNORE_TYPE: 250
+};
