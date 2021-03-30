@@ -248,14 +248,15 @@ module.exports = class HUD {
         this.linelockElem = document.getElementById("linelock");
         this.scoreElem = document.getElementById("score");
 
-        const gateways = [...document.querySelectorAll('[gateway]').values()]
-            .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
+        const gateways = []; 
+        // [...document.querySelectorAll('[gateway]').values()]
+        // .map(node => ({ list: node, gateway: node.getAttribute("gateway") }));
 
         if (/^https?\:\/\/localhost$/.test(window.origin)) {
-            gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "localhost:6969" });
+            // gateways.push({ list: document.querySelector("[region='Dev']"), gateway: "localhost:6969" });
             this.mycellsElem.parentElement.hidden = false;
-            window.hud = this;
         }
+        window.connect = this.connectToURL.bind(this);
 
         /** @type {Map<string, { signal: HTMLElement, pie: SVGElement }>} */
         const elemTable = new Map();
