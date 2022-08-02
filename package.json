@@ -1,11 +1,9 @@
 {
     "name": "ogar69",
-    "version": "1.0.0",
-    "description": "Yeah it's OGAR 69\r Nothing really works yet...",
+    "version": "1.0.1",
     "main": "index.js",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "build": "node build.js"
+        "build": "node build.js --all"
     },
     "repository": {
         "type": "git",
