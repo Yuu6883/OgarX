@@ -9,7 +9,7 @@ src/modes/custom/*
 
 debug.log*
 
-public/client/js/*
+public/js/*
 
 ssl/*
 

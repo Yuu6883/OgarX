@@ -1,1 +1,0 @@
-This directory has nothing to do with the project. It's just a simple IPC benchmark against node-ipc and build-in net package. The result is quite funny since I was tempted to send the webassembly buffer to a peer process for paralleled computing.
